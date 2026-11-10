@@ -1,0 +1,3 @@
+#!/usr/bin/env bash
+# LifeOS privacy guard: refuses a commit that contains class C data (IDs, bank or card numbers, keys).
+exec lifeos guard --staged
