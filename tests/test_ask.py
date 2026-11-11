@@ -94,9 +94,10 @@ def test_cli_adapters_use_stdin_and_current_flags(monkeypatch):
     assert ask.ask_gemini("P") == "OUT"
     assert ask.ask_claude("P") == "OUT"
     assert calls[0][0] == ["codex", "exec", "--skip-git-repo-check", "-s", "read-only", "-"]
-    assert calls[1][0][:2] == ["gemini", "-p"]
+    assert calls[1][0] == ["agy", "--sandbox", "-p", "P"] and calls[1][1]["input"] is None
     assert calls[2][0] == ["claude", "-p", "--model", "sonnet"]
-    assert all(kw["input"] == "P" and kw["cwd"] for _, kw in calls)  # runs in an empty temp folder
+    assert all(kw["cwd"] for _, kw in calls)  # runs in an empty temp folder
+    assert calls[0][1]["input"] == "P" and calls[2][1]["input"] == "P"
 
 
 def test_cli_adapter_failure_is_reported(monkeypatch):
@@ -170,3 +171,14 @@ def test_personal_files_only_go_out_with_full(home):
     ask.run_ask(home, "fake", "T-261116", adapters={"fake": fake}, today=TODAY, full=True)
     assert "=== now.md" not in fake.prompts[0] and "=== me.md" not in fake.prompts[0]
     assert "=== now.md" in fake.prompts[1] and "=== me.md" in fake.prompts[1]
+
+
+def test_agy_refuses_a_prompt_too_long_for_a_command_line():
+    with pytest.raises(ask.AskError):
+        ask.ask_gemini("x" * 40000)
+
+
+def test_ollama_result_names_the_local_model(home, monkeypatch):
+    monkeypatch.setenv("LIFEOS_OLLAMA_MODEL", "deepseek-r1:1.5b")
+    path = ask.run_ask(home, "ollama", "T-261116", adapters={"ollama": fake}, today=TODAY)
+    assert "## Result · ollama:deepseek-r1:1.5b · 2026-11-20" in path.read_text(encoding="utf-8")

@@ -33,13 +33,16 @@ class ToolMissing(FileNotFoundError):
     """The command-line tool for this model is not installed."""
 
 
-def _run_cli(cmd, prompt, timeout=TIMEOUT):
+MAX_ARG_CHARS = 30000  # Windows allows about 32,767 characters on a command line
+
+
+def _run_cli(cmd, prompt, timeout=TIMEOUT, via_stdin=True):
     exe = shutil.which(cmd[0])  # finds codex.cmd and friends on Windows
     if not exe:
         raise ToolMissing(f"{cmd[0]} is not installed or not on PATH.")
     try:  # an empty temp folder: the model sees the pack and nothing else on disk
         with tempfile.TemporaryDirectory() as empty:
-            done = subprocess.run([exe, *cmd[1:]], input=prompt, capture_output=True, text=True, timeout=timeout,
+            done = subprocess.run([exe, *cmd[1:]], input=prompt if via_stdin else None, capture_output=True, text=True, timeout=timeout,
                                   encoding="utf-8", errors="replace", cwd=empty)
     except subprocess.TimeoutExpired:
         raise AskError(f"{cmd[0]} timed out after {timeout} s.") from None
@@ -53,7 +56,11 @@ def ask_codex(prompt):
 
 
 def ask_gemini(prompt):
-    return _run_cli(["gemini", "-p", "Follow the instruction and task given on stdin."], prompt)
+    """Gemini through Antigravity (agy): Google ended Gemini CLI sign-in for individuals. agy ignores stdin."""
+    if len(prompt) > MAX_ARG_CHARS:
+        raise AskError(f"The pack is {len(prompt)} characters; agy takes the prompt as an argument (limit {MAX_ARG_CHARS}). "
+                       "Use a smaller --budget.")
+    return _run_cli(["agy", "--sandbox", "-p", prompt], prompt, via_stdin=False)
 
 
 def ask_claude(prompt):
@@ -72,6 +79,13 @@ def ask_ollama(prompt):
             return json.loads(resp.read())["response"].strip()
     except OSError as error:
         raise ToolMissing(f"ollama is not reachable at {host}: {error}") from None
+
+
+def label(model):
+    """Name written into the result header; Ollama shows which local model answered."""
+    if model == "ollama":
+        return "ollama:" + os.environ.get("LIFEOS_OLLAMA_MODEL", "llama3.2")
+    return model
 
 
 ADAPTERS = {"codex": ask_codex, "gemini": ask_gemini, "claude": ask_claude, "ollama": ask_ollama}
@@ -105,5 +119,5 @@ def run_ask(home, model, task_id, budget=6000, dry_run=False, adapters=None, tod
     path = _task_file(home, task_id)
     text = adapters[model](f"{INSTRUCTION}\n\n{pack}")
     _check(text, "the answer", "Nothing was written to your files.")
-    _record(home, path, model, text, today or dt.date.today())
+    _record(home, path, label(model), text, today or dt.date.today())
     return path
