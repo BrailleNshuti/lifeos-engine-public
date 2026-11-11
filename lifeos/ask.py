@@ -6,6 +6,7 @@ Prompts go in through stdin, never as arguments, so they stay out of the process
 import datetime as dt
 import json
 import os
+import shutil
 import subprocess
 import urllib.request
 from pathlib import Path
@@ -31,10 +32,12 @@ class ToolMissing(FileNotFoundError):
 
 
 def _run_cli(cmd, prompt, timeout=TIMEOUT):
+    exe = shutil.which(cmd[0])  # finds codex.cmd and friends on Windows
+    if not exe:
+        raise ToolMissing(f"{cmd[0]} is not installed or not on PATH.")
     try:
-        done = subprocess.run(cmd, input=prompt, capture_output=True, text=True, timeout=timeout)
-    except FileNotFoundError:
-        raise ToolMissing(f"{cmd[0]} is not installed or not on PATH.") from None
+        done = subprocess.run([exe, *cmd[1:]], input=prompt, capture_output=True, text=True, timeout=timeout,
+                              encoding="utf-8", errors="replace")
     except subprocess.TimeoutExpired:
         raise AskError(f"{cmd[0]} timed out after {timeout} s.") from None
     if done.returncode != 0:
@@ -92,7 +95,7 @@ def run_ask(home, model, task_id, budget=6000, dry_run=False, adapters=None, tod
     adapters = adapters or ADAPTERS
     if model not in adapters:
         raise ValueError(f"Unknown model '{model}'. Choose one of: {', '.join(sorted(adapters))}.")
-    pack, tokens = build_pack(home, task_id, budget)
+    pack, tokens = build_pack(home, task_id, budget, task_first=True)
     _check(pack, "the context pack", "Nothing was sent.")
     if dry_run:
         return pack, tokens

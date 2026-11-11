@@ -89,6 +89,7 @@ def test_cli_adapters_use_stdin_and_current_flags(monkeypatch):
         return Done()
 
     monkeypatch.setattr(ask.subprocess, "run", fake_run)
+    monkeypatch.setattr(ask.shutil, "which", lambda name: name)
     assert ask.ask_codex("P") == "OUT"
     assert ask.ask_gemini("P") == "OUT"
     assert ask.ask_claude("P") == "OUT"
@@ -103,6 +104,7 @@ def test_cli_adapter_failure_is_reported(monkeypatch):
         returncode, stdout, stderr = 1, "", "boom"
 
     monkeypatch.setattr(ask.subprocess, "run", lambda *a, **k: Bad())
+    monkeypatch.setattr(ask.shutil, "which", lambda name: name)
     with pytest.raises(ask.AskError):
         ask.ask_codex("P")
 
@@ -136,3 +138,27 @@ def test_class_c_data_in_the_answer_is_not_written(home):
     with pytest.raises(ask.Blocked):
         ask.run_ask(home, "fake", "T-261116", adapters={"fake": leaky}, today=TODAY)
     assert (home / "tasks" / "T-261116-demo-cli.md").read_text(encoding="utf-8") == before
+
+
+def test_windows_cmd_shim_is_found_and_run(monkeypatch):
+    seen = []
+
+    class Done:
+        returncode, stdout, stderr = 0, "OK", ""
+
+    monkeypatch.setattr(ask.shutil, "which", lambda name: r"C:\npm\codex.cmd")
+    monkeypatch.setattr(ask.subprocess, "run", lambda cmd, **kw: seen.append(cmd) or Done())
+    assert ask.ask_codex("P") == "OK" and seen[0] == [r"C:\npm\codex.cmd", "exec", "-"]
+
+
+def test_small_budget_keeps_the_task_in_ask(home):
+    fake.prompts.clear()
+    ask.run_ask(home, "fake", "T-261116", budget=300, adapters={"fake": fake}, today=TODAY)
+    assert "=== tasks/T-261116-demo-cli.md" in fake.prompts[0]
+
+
+def test_ambiguous_task_prefix_is_an_error(home):
+    (home / "tasks" / "T-261116-demo-cli-2.md").write_text("---\nid: x\n---\n", encoding="utf-8")
+    with pytest.raises(ValueError):
+        ask.run_ask(home, "fake", "T-261116-demo", adapters={"fake": fake}, today=TODAY)
+    ask.run_ask(home, "fake", "T-261116-demo-cli", adapters={"fake": fake}, today=TODAY)  # exact id still works
