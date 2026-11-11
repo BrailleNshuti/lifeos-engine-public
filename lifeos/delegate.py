@@ -8,6 +8,7 @@ import re
 
 from . import ask
 from .ask import ADAPTERS, run_ask  # noqa: F401  (ADAPTERS is patched in tests)
+from .check import check_answer
 from .context import _task_file
 
 # First match wins, so private work stays local before anything else is looked at.
@@ -16,11 +17,12 @@ ROUTES = [
      r"private|local(ly)?|csv|sort|classify|categori[sz]e|rename|tidy|offline"),
     ("gemini", "live facts and long reading go to Gemini (Grok is not wired yet)",
      r"price|news|latest|today|job posting|long|pdf|paper|research|summari[sz]e|bulk|read all"),
-    ("codex", "code and learning go to the ChatGPT seat (Codex)",
-     r"code|bug|test|pytest|implement|refactor|script|python|function|module|cli|command|ship|merge|"
-     r"german|exam|quiz|learn|teach|vocabulary|\.py\b|\.js\b|\.ts\b"),
+    ("codex", "testing, review and learning go to the ChatGPT seat (Codex)",
+     r"bug|test|pytest|review|adversarial|ship|merge|command|german|exam|quiz|learn|teach|vocabulary"),
+    ("claude", "Claude writes the code (Codex checks it afterwards)",
+     r"code|implement|refactor|script|python|function|module|cli|\.py\b|\.js\b|\.ts\b"),
     ("claude", "plans, writing and decisions stay with Claude",
-     r"plan|write|draft|decide|decision|review|memo|strategy|email"),
+     r"plan|write|draft|decide|decision|memo|strategy|email"),
 ]
 DEFAULT = ("claude", "no clear kind of work, so Claude takes it")
 FALLBACK = {"qwen": ["ollama", "claude"], "ollama": ["claude"], "codex": ["claude"], "gemini": ["claude"], "claude": []}
@@ -59,7 +61,7 @@ def run_delegate(home, task_id, model=None, budget=6000, full=False, adapters=No
         chosen, reason = pick(task_text(path))
     chain = [chosen] + [m for m in FALLBACK.get(chosen, []) if m in adapters]
     if dry_run:
-        return {"model": chosen, "reason": reason, "tried": [], "path": path, "text": ""}
+        return {"model": chosen, "reason": reason, "tried": [], "path": path, "text": "", "flags": []}
     tried = []
     for name in chain:
         tried.append(name)
@@ -70,4 +72,5 @@ def run_delegate(home, task_id, model=None, budget=6000, full=False, adapters=No
                 raise
             reason += f" · {name} is not available ({error}); fell back"
             continue
-        return {"model": name, "reason": reason, "tried": tried, "path": path, "text": last_result(path)}
+        return {"model": name, "reason": reason, "tried": tried, "path": path, "text": last_result(path),
+                "flags": check_answer(last_result(path))}
