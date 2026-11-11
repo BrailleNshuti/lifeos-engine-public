@@ -101,3 +101,27 @@ def test_serve_speaks_json_lines(home):
 def test_cli_wiring(home, monkeypatch):
     monkeypatch.setattr(mcp, "serve", lambda h, i, o: print("served", h.name))
     assert main(["--home", str(home), "mcp"]) == 0
+
+
+def test_cli_tools_never_inherit_the_mcp_input_stream(monkeypatch):
+    """agy reads stdin when it is inherited; inside `lifeos mcp` that stream is the chat connection."""
+    seen = {}
+
+    def fake_run(cmd, **kw):
+        seen.update(kw)
+        return type("R", (), {"returncode": 0, "stdout": "ok", "stderr": ""})()
+
+    monkeypatch.setattr(ask.subprocess, "run", fake_run)
+    monkeypatch.setattr(ask.shutil, "which", lambda c: c)
+    ask._run_cli(["agy", "-p", "x"], "x", via_stdin=False)
+    assert seen["stdin"] is ask.subprocess.DEVNULL
+
+
+def test_an_unexpected_error_in_a_tool_does_not_kill_the_server(home, monkeypatch):
+    def boom(*a, **k):
+        raise RuntimeError("unexpected")
+
+    monkeypatch.setattr(ask, "run_ask", boom)
+    reply = mcp.handle(home, {"jsonrpc": "2.0", "id": 9, "method": "tools/call",
+                              "params": {"name": "lifeos_ask", "arguments": {"task": "T-261116", "model": "codex"}}})
+    assert reply["result"]["isError"] and "unexpected" in reply["result"]["content"][0]["text"]

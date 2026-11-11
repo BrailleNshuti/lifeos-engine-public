@@ -44,7 +44,8 @@ def _run_cli(cmd, prompt, timeout=TIMEOUT, via_stdin=True):
         raise ToolMissing(f"{cmd[0]} is not installed or not on PATH.")
     try:  # an empty temp folder: the model sees the pack and nothing else on disk
         with tempfile.TemporaryDirectory() as empty:
-            done = subprocess.run([exe, *cmd[1:]], input=prompt if via_stdin else None, capture_output=True, text=True, timeout=timeout,
+            done = subprocess.run([exe, *cmd[1:]], input=prompt if via_stdin else None,
+                                  stdin=None if via_stdin else subprocess.DEVNULL, capture_output=True, text=True, timeout=timeout,
                                   encoding="utf-8", errors="replace", cwd=empty)
     except subprocess.TimeoutExpired:
         raise AskError(f"{cmd[0]} timed out after {timeout} s.") from None
