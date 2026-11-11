@@ -89,13 +89,15 @@ def test_cli_adapters_use_stdin_and_current_flags(monkeypatch):
         return Done()
 
     monkeypatch.setattr(ask.subprocess, "run", fake_run)
+    monkeypatch.setattr(ask.shutil, "which", lambda name: name)
     assert ask.ask_codex("P") == "OUT"
     assert ask.ask_gemini("P") == "OUT"
     assert ask.ask_claude("P") == "OUT"
-    assert calls[0][0] == ["codex", "exec", "-"]
-    assert calls[1][0][:2] == ["gemini", "-p"]
+    assert calls[0][0] == ["codex", "exec", "--skip-git-repo-check", "-s", "read-only", "-"]
+    assert calls[1][0] == ["agy", "--sandbox", "-p", "P"] and calls[1][1]["input"] is None
     assert calls[2][0] == ["claude", "-p", "--model", "sonnet"]
-    assert all(kw["input"] == "P" for _, kw in calls)
+    assert all(kw["cwd"] for _, kw in calls)  # runs in an empty temp folder
+    assert calls[0][1]["input"] == "P" and calls[2][1]["input"] == "P"
 
 
 def test_cli_adapter_failure_is_reported(monkeypatch):
@@ -103,6 +105,7 @@ def test_cli_adapter_failure_is_reported(monkeypatch):
         returncode, stdout, stderr = 1, "", "boom"
 
     monkeypatch.setattr(ask.subprocess, "run", lambda *a, **k: Bad())
+    monkeypatch.setattr(ask.shutil, "which", lambda name: name)
     with pytest.raises(ask.AskError):
         ask.ask_codex("P")
 
@@ -136,3 +139,46 @@ def test_class_c_data_in_the_answer_is_not_written(home):
     with pytest.raises(ask.Blocked):
         ask.run_ask(home, "fake", "T-261116", adapters={"fake": leaky}, today=TODAY)
     assert (home / "tasks" / "T-261116-demo-cli.md").read_text(encoding="utf-8") == before
+
+
+def test_windows_cmd_shim_is_found_and_run(monkeypatch):
+    seen = []
+
+    class Done:
+        returncode, stdout, stderr = 0, "OK", ""
+
+    monkeypatch.setattr(ask.shutil, "which", lambda name: r"C:\npm\codex.cmd")
+    monkeypatch.setattr(ask.subprocess, "run", lambda cmd, **kw: seen.append(cmd) or Done())
+    assert ask.ask_codex("P") == "OK" and seen[0][:2] == [r"C:\npm\codex.cmd", "exec"]
+
+
+def test_small_budget_keeps_the_task_in_ask(home):
+    fake.prompts.clear()
+    ask.run_ask(home, "fake", "T-261116", budget=300, adapters={"fake": fake}, today=TODAY)
+    assert "=== tasks/T-261116-demo-cli.md" in fake.prompts[0]
+
+
+def test_ambiguous_task_prefix_is_an_error(home):
+    (home / "tasks" / "T-261116-demo-cli-2.md").write_text("---\nid: x\n---\n", encoding="utf-8")
+    with pytest.raises(ValueError):
+        ask.run_ask(home, "fake", "T-261116-demo", adapters={"fake": fake}, today=TODAY)
+    ask.run_ask(home, "fake", "T-261116-demo-cli", adapters={"fake": fake}, today=TODAY)  # exact id still works
+
+
+def test_personal_files_only_go_out_with_full(home):
+    fake.prompts.clear()
+    ask.run_ask(home, "fake", "T-261116", adapters={"fake": fake}, today=TODAY)
+    ask.run_ask(home, "fake", "T-261116", adapters={"fake": fake}, today=TODAY, full=True)
+    assert "=== now.md" not in fake.prompts[0] and "=== me.md" not in fake.prompts[0]
+    assert "=== now.md" in fake.prompts[1] and "=== me.md" in fake.prompts[1]
+
+
+def test_agy_refuses_a_prompt_too_long_for_a_command_line():
+    with pytest.raises(ask.AskError):
+        ask.ask_gemini("x" * 40000)
+
+
+def test_ollama_result_names_the_local_model(home, monkeypatch):
+    monkeypatch.setenv("LIFEOS_OLLAMA_MODEL", "deepseek-r1:1.5b")
+    path = ask.run_ask(home, "ollama", "T-261116", adapters={"ollama": fake}, today=TODAY)
+    assert "## Result · ollama:deepseek-r1:1.5b · 2026-11-20" in path.read_text(encoding="utf-8")

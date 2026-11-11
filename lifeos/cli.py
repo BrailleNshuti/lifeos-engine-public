@@ -43,7 +43,7 @@ def cmd_context(args):
 def cmd_ask(args):
     home = find_home(args.home)
     try:
-        result = run_ask(home, args.model, args.task, args.budget, args.dry_run)
+        result = run_ask(home, args.model, args.task, args.budget, args.dry_run, full=args.full)
     except Blocked as error:
         print(f"lifeos: BLOCKED. {error}", file=sys.stderr)
         return 1
@@ -131,6 +131,7 @@ def build_parser():
     ask.add_argument("model", choices=sorted(ADAPTERS))
     ask.add_argument("task", help="task id or prefix, for example T-261116")
     ask.add_argument("--budget", type=int, default=6000)
+    ask.add_argument("--full", action="store_true", help="also send now.md and me.md (default: task and rules only)")
     ask.add_argument("--dry-run", action="store_true", help="show the pack and token cost; send nothing")
     ask.set_defaults(func=cmd_ask)
 

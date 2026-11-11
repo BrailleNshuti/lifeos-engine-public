@@ -6,7 +6,9 @@ Prompts go in through stdin, never as arguments, so they stay out of the process
 import datetime as dt
 import json
 import os
+import shutil
 import subprocess
+import tempfile
 import urllib.request
 from pathlib import Path
 
@@ -14,6 +16,7 @@ from .context import _task_file, build_pack
 from .guard import _private_patterns, scan_text
 
 TIMEOUT = 600
+MINIMAL = ("TASK", "rules.md")  # now.md and me.md only go out with --full
 INSTRUCTION = ("You are helping with the task below. Use only the context given. Answer with the result only: "
                "what was done, evidence, open issues, next step. Never ask for class C data (IDs, bank, passwords, health).")
 
@@ -30,11 +33,17 @@ class ToolMissing(FileNotFoundError):
     """The command-line tool for this model is not installed."""
 
 
-def _run_cli(cmd, prompt, timeout=TIMEOUT):
-    try:
-        done = subprocess.run(cmd, input=prompt, capture_output=True, text=True, timeout=timeout)
-    except FileNotFoundError:
-        raise ToolMissing(f"{cmd[0]} is not installed or not on PATH.") from None
+MAX_ARG_CHARS = 30000  # Windows allows about 32,767 characters on a command line
+
+
+def _run_cli(cmd, prompt, timeout=TIMEOUT, via_stdin=True):
+    exe = shutil.which(cmd[0])  # finds codex.cmd and friends on Windows
+    if not exe:
+        raise ToolMissing(f"{cmd[0]} is not installed or not on PATH.")
+    try:  # an empty temp folder: the model sees the pack and nothing else on disk
+        with tempfile.TemporaryDirectory() as empty:
+            done = subprocess.run([exe, *cmd[1:]], input=prompt if via_stdin else None, capture_output=True, text=True, timeout=timeout,
+                                  encoding="utf-8", errors="replace", cwd=empty)
     except subprocess.TimeoutExpired:
         raise AskError(f"{cmd[0]} timed out after {timeout} s.") from None
     if done.returncode != 0:
@@ -43,11 +52,15 @@ def _run_cli(cmd, prompt, timeout=TIMEOUT):
 
 
 def ask_codex(prompt):
-    return _run_cli(["codex", "exec", "-"], prompt)
+    return _run_cli(["codex", "exec", "--skip-git-repo-check", "-s", "read-only", "-"], prompt)
 
 
 def ask_gemini(prompt):
-    return _run_cli(["gemini", "-p", "Follow the instruction and task given on stdin."], prompt)
+    """Gemini through Antigravity (agy): Google ended Gemini CLI sign-in for individuals. agy ignores stdin."""
+    if len(prompt) > MAX_ARG_CHARS:
+        raise AskError(f"The pack is {len(prompt)} characters; agy takes the prompt as an argument (limit {MAX_ARG_CHARS}). "
+                       "Use a smaller --budget.")
+    return _run_cli(["agy", "--sandbox", "-p", prompt], prompt, via_stdin=False)
 
 
 def ask_claude(prompt):
@@ -66,6 +79,13 @@ def ask_ollama(prompt):
             return json.loads(resp.read())["response"].strip()
     except OSError as error:
         raise ToolMissing(f"ollama is not reachable at {host}: {error}") from None
+
+
+def label(model):
+    """Name written into the result header; Ollama shows which local model answered."""
+    if model == "ollama":
+        return "ollama:" + os.environ.get("LIFEOS_OLLAMA_MODEL", "llama3.2")
+    return model
 
 
 ADAPTERS = {"codex": ask_codex, "gemini": ask_gemini, "claude": ask_claude, "ollama": ask_ollama}
@@ -87,17 +107,17 @@ def _record(home, path, model, text, today):
             f.write(f"{today:%Y-%m-%d},{path.stem},{model},,asked via lifeos ask\n")
 
 
-def run_ask(home, model, task_id, budget=6000, dry_run=False, adapters=None, today=None):
+def run_ask(home, model, task_id, budget=6000, dry_run=False, adapters=None, today=None, full=False):
     """Return the task path after writing the answer, or (pack, tokens) for a dry run."""
     adapters = adapters or ADAPTERS
     if model not in adapters:
         raise ValueError(f"Unknown model '{model}'. Choose one of: {', '.join(sorted(adapters))}.")
-    pack, tokens = build_pack(home, task_id, budget)
+    pack, tokens = build_pack(home, task_id, budget, task_first=True, names=None if full else MINIMAL)
     _check(pack, "the context pack", "Nothing was sent.")
     if dry_run:
         return pack, tokens
     path = _task_file(home, task_id)
     text = adapters[model](f"{INSTRUCTION}\n\n{pack}")
     _check(text, "the answer", "Nothing was written to your files.")
-    _record(home, path, model, text, today or dt.date.today())
+    _record(home, path, label(model), text, today or dt.date.today())
     return path
