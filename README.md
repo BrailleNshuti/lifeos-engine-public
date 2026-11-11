@@ -13,6 +13,7 @@ The engine is code only. Your life lives in a separate **private data repo** (`l
 | `lifeos week [--week 2026-W47]` | Proofs and net time saved from the logs, as the start of the Sunday review | Numbers come from data, never from a model's guess |
 | `lifeos context [TASK] [--budget 6000]` | Prints rules, the task, now and me in priority order, trimmed to a token budget | Paste once, pay little; shows the token cost before you send |
 | `lifeos ask <model> <task> [--budget N] [--full] [--dry-run]` | Guards the context pack (task and rules only; `--full` adds now.md and me.md), sends it to that model (codex, claude, ollama, or gemini through Antigravity `agy`) through its command-line tool (ollama: local address), appends `## Result · <model> · <date>` to the task file and one ledger line. A guard BLOCK sends nothing (exit 1); a missing tool exits 2 | Work moves between models without copy and paste, and off the Claude limit |
+| `lifeos mcp` | Runs a local MCP server (standard library only) with five tools: list tasks, new task, context, write result, ask. Writes go through the privacy guard and stay inside tasks/ and the ledger | Chat apps read and write your task files with no copy and paste |
 | `lifeos guard [files] / --staged` | Blocks IBANs, card numbers, ID and passport numbers, keys and private keys; warns on emails, phone numbers and possible secrets | Class C data never reaches a repo |
 | `lifeos doctor` | Checks the data repo and shows how many tokens its always-loaded files cost | Keeps the core small |
 
@@ -59,3 +60,16 @@ CI runs both on every push and pull request.
 Standard library only unless a pull request explains why. Tests first. No personal data, ever. Work on a branch; the owner merges.
 
 Licence: to be chosen before the repo goes public.
+
+## Chat apps without copy and paste (`lifeos mcp`)
+
+Claude Desktop: add this to `claude_desktop_config.json` under `mcpServers`, then restart the app.
+Use your own path for LIFEOS_HOME.
+
+```json
+"lifeos": {"command": "python", "args": ["-m", "lifeos.cli", "mcp"], "env": {"LIFEOS_HOME": "C:\\Users\\you\\lifeos"}}
+```
+
+Claude Code: `claude mcp add lifeos -e LIFEOS_HOME=<path> -- python -m lifeos.cli mcp`.
+Other MCP apps (Codex, agy) have their own `mcp add` command with the same program and environment variable.
+`lifeos_ask` can take minutes; some apps stop waiting after about a minute. Screenshots stay in the chat.

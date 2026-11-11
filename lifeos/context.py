@@ -1,4 +1,5 @@
 """Context packs: the smallest set of LifeOS files a model needs, with a token estimate and a budget."""
+import re
 from pathlib import Path
 
 from .home import estimate_tokens
@@ -8,6 +9,8 @@ TASK_FIRST = ("TASK", "rules.md", "now.md", "me.md")
 
 
 def _task_file(home, task_id):
+    if not re.fullmatch(r"T-[A-Za-z0-9-]+", task_id or ""):
+        raise ValueError(f"'{task_id}' is not a task id (expected something like T-261116 or T-261116-demo-cli).")
     folder = Path(home) / "tasks"
     if (folder / f"{task_id}.md").exists():
         return folder / f"{task_id}.md"

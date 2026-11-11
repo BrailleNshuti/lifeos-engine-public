@@ -5,6 +5,7 @@ import sys
 from pathlib import Path
 
 from . import __version__
+from . import mcp
 from .ask import ADAPTERS, AskError, Blocked, run_ask
 from .context import build_pack
 from .guard import scan_paths, staged_files
@@ -55,6 +56,15 @@ def cmd_ask(args):
         print(f"[dry run: about {result[1]} tokens, nothing sent]", file=sys.stderr)
     else:
         print(f"{args.model} answered; result appended to {result.relative_to(home)}")
+    return 0
+
+
+def cmd_mcp(args):
+    home = find_home(args.home)
+    for stream in (sys.stdin, sys.stdout):
+        if hasattr(stream, "reconfigure"):
+            stream.reconfigure(encoding="utf-8")
+    mcp.serve(home, sys.stdin, sys.stdout)
     return 0
 
 
@@ -134,6 +144,9 @@ def build_parser():
     ask.add_argument("--full", action="store_true", help="also send now.md and me.md (default: task and rules only)")
     ask.add_argument("--dry-run", action="store_true", help="show the pack and token cost; send nothing")
     ask.set_defaults(func=cmd_ask)
+
+    serve = sub.add_parser("mcp", help="run a local MCP server so chat apps can read and write task files")
+    serve.set_defaults(func=cmd_mcp)
 
     guard = sub.add_parser("guard", help="block class C data before it enters a repo")
     guard.add_argument("paths", nargs="*")

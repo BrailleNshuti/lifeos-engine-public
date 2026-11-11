@@ -98,13 +98,21 @@ def _check(text, where, action):
         raise Blocked(f"{len(blocks)} finding(s) of class C data in {where} ({kinds}). {action}")
 
 
-def _record(home, path, model, text, today):
+def _record(home, path, model, text, today, note="asked via lifeos ask"):
     with open(path, "a", encoding="utf-8") as f:
         f.write(f"\n## Result · {model} · {today:%Y-%m-%d}\n{text}\n")
     ledger = Path(home) / "logs" / "ledger.csv"
     if ledger.exists():
         with open(ledger, "a", encoding="utf-8") as f:
-            f.write(f"{today:%Y-%m-%d},{path.stem},{model},,asked via lifeos ask\n")
+            f.write(f"{today:%Y-%m-%d},{path.stem},{model},,{note}\n")
+
+
+def write_result(home, task_id, who, text, today=None, note="written via lifeos mcp"):
+    """Append a result written by someone else (a chat, a person) to a task file. The guard checks it first."""
+    _check(text, "the result", "Nothing was written to your files.")
+    path = _task_file(home, task_id)
+    _record(home, path, who, text, today or dt.date.today(), note)
+    return path
 
 
 def run_ask(home, model, task_id, budget=6000, dry_run=False, adapters=None, today=None, full=False):
