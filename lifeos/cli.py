@@ -5,7 +5,7 @@ import sys
 from pathlib import Path
 
 from . import __version__
-from . import mcp
+from . import mcp, sortcsv
 from .delegate import run_delegate
 from .ask import ADAPTERS, AskError, Blocked, ToolMissing, run_ask
 from .context import build_pack
@@ -78,6 +78,25 @@ def cmd_delegate(args):
         print(f"\n{out['text']}\n\n[result appended to {out['path'].relative_to(home)}]")
         if out["flags"]:
             print("CHECK (free, no model): " + "; ".join(out["flags"]))
+    return 0
+
+
+def cmd_sort_csv(args):
+    cats = [c.strip() for c in args.categories.split(",") if c.strip()] if args.categories else None
+    try:
+        sortcsv.require_local()
+        info = sortcsv.sort_csv(args.file, args.out, args.column, cats)
+    except sortcsv.Refused as error:
+        print(f"lifeos: {error}", file=sys.stderr)
+        return 1
+    except ToolMissing as error:
+        print(f"lifeos: {error}", file=sys.stderr)
+        return 2
+    except AskError as error:
+        print(f"lifeos: {error}", file=sys.stderr)
+        return 3
+    print(f"sorted {info['rows']} rows -> {info['out']} (rules: {info['by_rule']}, local model: {info['by_model']}, "
+          f"to check: {info['flagged']}). Open the file and review rows where lifeos_check is 'yes'.")
     return 0
 
 
@@ -174,6 +193,13 @@ def build_parser():
     dele.add_argument("--full", action="store_true", help="also send now.md and me.md")
     dele.add_argument("--dry-run", action="store_true", help="show which model would take it; send nothing")
     dele.set_defaults(func=cmd_delegate)
+
+    srt = sub.add_parser("sort-csv", help="add a spending category to a bank CSV, fully local (Ollama), never in a repo")
+    srt.add_argument("file")
+    srt.add_argument("--out", help="default: <file>.sorted.csv beside the input")
+    srt.add_argument("--column", help="the text column (default: found by name)")
+    srt.add_argument("--categories", help="comma separated; default: groceries,rent,transport,...")
+    srt.set_defaults(func=cmd_sort_csv)
 
     serve = sub.add_parser("mcp", help="run a local MCP server so chat apps can read and write task files")
     serve.set_defaults(func=cmd_mcp)

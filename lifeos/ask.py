@@ -70,11 +70,14 @@ def ask_claude(prompt):
     return _run_cli(["claude", "-p", "--model", "sonnet"], prompt)
 
 
-def _ollama(prompt, model):
+def _ollama(prompt, model, options=None):
     host = os.environ.get("OLLAMA_HOST", "http://localhost:11434")
     if "://" not in host:
         host = "http://" + host
-    body = json.dumps({"model": model, "prompt": prompt, "stream": False}).encode()
+    payload = {"model": model, "prompt": prompt, "stream": False}
+    if options:
+        payload["options"] = options
+    body = json.dumps(payload).encode()
     req = urllib.request.Request(f"{host}/api/generate", data=body, headers={"Content-Type": "application/json"})
     try:
         with urllib.request.urlopen(req, timeout=TIMEOUT) as resp:

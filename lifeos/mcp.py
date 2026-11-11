@@ -36,6 +36,8 @@ INSTRUCTIONS = ("You are the lead. Work happens in task files. For work that fit
                 "private sorting), call lifeos_delegate with the task id; read the answer it returns, check it against "
                 "rules.md (proof, sources, how it could be wrong), then say plainly if the CHECK line flags anything or you see nonsense, and write your decision or next step with "
                 "lifeos_result_write. Never delegate class C data (IDs, bank, passwords, health, tenant data). "
+                "Private files such as a bank CSV never go into this chat or to any cloud model: tell the owner to run "
+                "`lifeos sort-csv <file>` in PowerShell (local, offline). "
                 "The owner makes the final call; sending, buying, deleting and publishing need his yes.")
 
 
