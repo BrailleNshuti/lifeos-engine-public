@@ -6,7 +6,8 @@ from pathlib import Path
 
 from . import __version__
 from . import mcp
-from .ask import ADAPTERS, AskError, Blocked, run_ask
+from .delegate import run_delegate
+from .ask import ADAPTERS, AskError, Blocked, ToolMissing, run_ask
 from .context import build_pack
 from .guard import scan_paths, staged_files
 from .home import CORE_FILES, HomeError, estimate_tokens, find_home
@@ -56,6 +57,25 @@ def cmd_ask(args):
         print(f"[dry run: about {result[1]} tokens, nothing sent]", file=sys.stderr)
     else:
         print(f"{args.model} answered; result appended to {result.relative_to(home)}")
+    return 0
+
+
+def cmd_delegate(args):
+    home = find_home(args.home)
+    try:
+        out = run_delegate(home, args.task, args.model, args.budget, args.full, dry_run=args.dry_run)
+    except Blocked as error:
+        print(f"lifeos: BLOCKED. {error}", file=sys.stderr)
+        return 1
+    except ToolMissing as error:
+        print(f"lifeos: {error}", file=sys.stderr)
+        return 2
+    except AskError as error:
+        print(f"lifeos: {error}", file=sys.stderr)
+        return 3
+    print(f"{out['model']}: {out['reason']}" + (" [dry run, nothing sent]" if args.dry_run else ""))
+    if out["text"]:
+        print(f"\n{out['text']}\n\n[result appended to {out['path'].relative_to(home)}]")
     return 0
 
 
@@ -144,6 +164,14 @@ def build_parser():
     ask.add_argument("--full", action="store_true", help="also send now.md and me.md (default: task and rules only)")
     ask.add_argument("--dry-run", action="store_true", help="show the pack and token cost; send nothing")
     ask.set_defaults(func=cmd_ask)
+
+    dele = sub.add_parser("delegate", help="let LifeOS pick the best-fitting model for a task, run it, and print the answer")
+    dele.add_argument("task", help="task id or prefix, for example T-261116")
+    dele.add_argument("--model", choices=sorted(ADAPTERS), help="override the pick")
+    dele.add_argument("--budget", type=int, default=6000)
+    dele.add_argument("--full", action="store_true", help="also send now.md and me.md")
+    dele.add_argument("--dry-run", action="store_true", help="show which model would take it; send nothing")
+    dele.set_defaults(func=cmd_delegate)
 
     serve = sub.add_parser("mcp", help="run a local MCP server so chat apps can read and write task files")
     serve.set_defaults(func=cmd_mcp)

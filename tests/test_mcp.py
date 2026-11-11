@@ -29,7 +29,7 @@ def test_initialize_and_tool_list(home):
     assert reply["result"]["protocolVersion"] == "2025-06-18"
     assert "tools" in reply["result"]["capabilities"] and reply["result"]["serverInfo"]["name"] == "lifeos"
     names = {t["name"] for t in call(home, "tools/list")["result"]["tools"]}
-    assert names == {"lifeos_task_list", "lifeos_task_new", "lifeos_context", "lifeos_result_write", "lifeos_ask"}
+    assert names == {"lifeos_task_list", "lifeos_task_new", "lifeos_context", "lifeos_result_write", "lifeos_ask", "lifeos_delegate"}
 
 
 def test_notifications_get_no_reply(home):

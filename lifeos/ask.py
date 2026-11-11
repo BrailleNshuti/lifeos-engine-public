@@ -6,9 +6,11 @@ Prompts go in through stdin, never as arguments, so they stay out of the process
 import datetime as dt
 import json
 import os
+import re
 import shutil
 import subprocess
 import tempfile
+import urllib.error
 import urllib.request
 from pathlib import Path
 
@@ -67,28 +69,47 @@ def ask_claude(prompt):
     return _run_cli(["claude", "-p", "--model", "sonnet"], prompt)
 
 
-def ask_ollama(prompt):
+def _ollama(prompt, model):
     host = os.environ.get("OLLAMA_HOST", "http://localhost:11434")
     if "://" not in host:
         host = "http://" + host
-    body = json.dumps({"model": os.environ.get("LIFEOS_OLLAMA_MODEL", "llama3.2"), "prompt": prompt,
-                       "stream": False}).encode()
+    body = json.dumps({"model": model, "prompt": prompt, "stream": False}).encode()
     req = urllib.request.Request(f"{host}/api/generate", data=body, headers={"Content-Type": "application/json"})
     try:
         with urllib.request.urlopen(req, timeout=TIMEOUT) as resp:
-            return json.loads(resp.read())["response"].strip()
+            text = json.loads(resp.read())["response"]
+    except urllib.error.HTTPError as error:
+        if error.code == 404:
+            raise ToolMissing(f"ollama has no model '{model}'. Run: ollama pull {model}") from None
+        raise AskError(f"ollama returned HTTP {error.code}.") from None
     except OSError as error:
         raise ToolMissing(f"ollama is not reachable at {host}: {error}") from None
+    return re.sub(r"<think>.*?</think>", "", text, flags=re.S).strip()  # reasoning models: keep the answer only
+
+
+def ask_ollama(prompt):
+    return _ollama(prompt, os.environ.get("LIFEOS_OLLAMA_MODEL", "llama3.2"))
+
+
+def ask_qwen(prompt):
+    """Qwen through Ollama, local and private. Change the size with LIFEOS_QWEN_MODEL."""
+    return _ollama(prompt, _qwen_model())
+
+
+def _qwen_model():
+    return os.environ.get("LIFEOS_QWEN_MODEL", "qwen2.5:3b")
 
 
 def label(model):
     """Name written into the result header; Ollama shows which local model answered."""
     if model == "ollama":
         return "ollama:" + os.environ.get("LIFEOS_OLLAMA_MODEL", "llama3.2")
+    if model == "qwen":
+        return "qwen:" + _qwen_model()
     return model
 
 
-ADAPTERS = {"codex": ask_codex, "gemini": ask_gemini, "claude": ask_claude, "ollama": ask_ollama}
+ADAPTERS = {"codex": ask_codex, "gemini": ask_gemini, "claude": ask_claude, "ollama": ask_ollama, "qwen": ask_qwen}
 
 
 def _check(text, where, action):
