@@ -8,6 +8,7 @@ import json
 import os
 import shutil
 import subprocess
+import tempfile
 import urllib.request
 from pathlib import Path
 
@@ -15,6 +16,7 @@ from .context import _task_file, build_pack
 from .guard import _private_patterns, scan_text
 
 TIMEOUT = 600
+MINIMAL = ("TASK", "rules.md")  # now.md and me.md only go out with --full
 INSTRUCTION = ("You are helping with the task below. Use only the context given. Answer with the result only: "
                "what was done, evidence, open issues, next step. Never ask for class C data (IDs, bank, passwords, health).")
 
@@ -35,9 +37,10 @@ def _run_cli(cmd, prompt, timeout=TIMEOUT):
     exe = shutil.which(cmd[0])  # finds codex.cmd and friends on Windows
     if not exe:
         raise ToolMissing(f"{cmd[0]} is not installed or not on PATH.")
-    try:
-        done = subprocess.run([exe, *cmd[1:]], input=prompt, capture_output=True, text=True, timeout=timeout,
-                              encoding="utf-8", errors="replace")
+    try:  # an empty temp folder: the model sees the pack and nothing else on disk
+        with tempfile.TemporaryDirectory() as empty:
+            done = subprocess.run([exe, *cmd[1:]], input=prompt, capture_output=True, text=True, timeout=timeout,
+                                  encoding="utf-8", errors="replace", cwd=empty)
     except subprocess.TimeoutExpired:
         raise AskError(f"{cmd[0]} timed out after {timeout} s.") from None
     if done.returncode != 0:
@@ -46,7 +49,7 @@ def _run_cli(cmd, prompt, timeout=TIMEOUT):
 
 
 def ask_codex(prompt):
-    return _run_cli(["codex", "exec", "-"], prompt)
+    return _run_cli(["codex", "exec", "--skip-git-repo-check", "-s", "read-only", "-"], prompt)
 
 
 def ask_gemini(prompt):
@@ -90,12 +93,12 @@ def _record(home, path, model, text, today):
             f.write(f"{today:%Y-%m-%d},{path.stem},{model},,asked via lifeos ask\n")
 
 
-def run_ask(home, model, task_id, budget=6000, dry_run=False, adapters=None, today=None):
+def run_ask(home, model, task_id, budget=6000, dry_run=False, adapters=None, today=None, full=False):
     """Return the task path after writing the answer, or (pack, tokens) for a dry run."""
     adapters = adapters or ADAPTERS
     if model not in adapters:
         raise ValueError(f"Unknown model '{model}'. Choose one of: {', '.join(sorted(adapters))}.")
-    pack, tokens = build_pack(home, task_id, budget, task_first=True)
+    pack, tokens = build_pack(home, task_id, budget, task_first=True, names=None if full else MINIMAL)
     _check(pack, "the context pack", "Nothing was sent.")
     if dry_run:
         return pack, tokens

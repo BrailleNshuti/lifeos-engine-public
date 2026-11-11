@@ -19,11 +19,13 @@ def _task_file(home, task_id):
     return matches[0]
 
 
-def build_pack(home, task_id=None, budget=6000, task_first=False):
+def build_pack(home, task_id=None, budget=6000, task_first=False, names=None):
     """Return (pack_text, token_estimate). Files are added in priority order; the last ones are trimmed to fit."""
     home = Path(home)
     files = []
     for name in (TASK_FIRST if task_first else PRIORITY):
+        if names is not None and name not in names:
+            continue
         if name == "TASK":
             if task_id:
                 path = _task_file(home, task_id)
