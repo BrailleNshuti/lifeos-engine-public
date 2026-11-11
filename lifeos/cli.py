@@ -5,6 +5,7 @@ import sys
 from pathlib import Path
 
 from . import __version__
+from .ask import ADAPTERS, AskError, Blocked, run_ask
 from .context import build_pack
 from .guard import scan_paths, staged_files
 from .home import CORE_FILES, HomeError, estimate_tokens, find_home
@@ -36,6 +37,24 @@ def cmd_context(args):
     pack, tokens = build_pack(find_home(args.home), args.task, args.budget)
     print(pack)
     print(f"[context pack: about {tokens} tokens, budget {args.budget}]", file=sys.stderr)
+    return 0
+
+
+def cmd_ask(args):
+    home = find_home(args.home)
+    try:
+        result = run_ask(home, args.model, args.task, args.budget, args.dry_run)
+    except Blocked as error:
+        print(f"lifeos: BLOCKED. {error}", file=sys.stderr)
+        return 1
+    except AskError as error:
+        print(f"lifeos: {error}", file=sys.stderr)
+        return 3
+    if args.dry_run:
+        print(result[0])
+        print(f"[dry run: about {result[1]} tokens, nothing sent]", file=sys.stderr)
+    else:
+        print(f"{args.model} answered; result appended to {result.relative_to(home)}")
     return 0
 
 
@@ -107,6 +126,13 @@ def build_parser():
     ctx.add_argument("task", nargs="?", help="task id or prefix, for example T-261116")
     ctx.add_argument("--budget", type=int, default=6000)
     ctx.set_defaults(func=cmd_context)
+
+    ask = sub.add_parser("ask", help="send a task's context pack to another model and write the answer back")
+    ask.add_argument("model", choices=sorted(ADAPTERS))
+    ask.add_argument("task", help="task id or prefix, for example T-261116")
+    ask.add_argument("--budget", type=int, default=6000)
+    ask.add_argument("--dry-run", action="store_true", help="show the pack and token cost; send nothing")
+    ask.set_defaults(func=cmd_ask)
 
     guard = sub.add_parser("guard", help="block class C data before it enters a repo")
     guard.add_argument("paths", nargs="*")
