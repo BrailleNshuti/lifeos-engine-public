@@ -76,8 +76,8 @@ def cmd_delegate(args):
     print(f"{out['model']}: {out['reason']}" + (" [dry run, nothing sent]" if args.dry_run else ""))
     if out["text"]:
         print(f"\n{out['text']}\n\n[result appended to {out['path'].relative_to(home)}]")
-        if out["flags"]:
-            print("CHECK (free, no model): " + "; ".join(out["flags"]))
+    if out["flags"]:  # also when the answer is empty, the case CHECK exists for (a dry run has no flags)
+        print("CHECK (free, no model): " + "; ".join(out["flags"]))
     return 0
 
 

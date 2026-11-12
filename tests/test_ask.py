@@ -5,6 +5,7 @@ import pytest
 
 from lifeos import ask
 from lifeos.cli import main
+from lifeos.week import week_numbers
 
 TODAY = dt.date(2026, 11, 20)
 
@@ -182,3 +183,14 @@ def test_ollama_result_names_the_local_model(home, monkeypatch):
     monkeypatch.setenv("LIFEOS_OLLAMA_MODEL", "deepseek-r1:1.5b")
     path = ask.run_ask(home, "ollama", "T-261116", adapters={"ollama": fake}, today=TODAY)
     assert "## Result · ollama:deepseek-r1:1.5b · 2026-11-20" in path.read_text(encoding="utf-8")
+
+
+def test_ledger_without_a_final_newline_keeps_its_rows_apart(home):
+    """Editors often save logs/ledger.csv without a last newline; the new row must not be glued to the old one."""
+    ledger = home / "logs" / "ledger.csv"
+    rows = ledger.read_text(encoding="utf-8").splitlines()
+    ledger.write_text("\n".join(rows), encoding="utf-8")  # the same rows, no newline at the end
+    ask.run_ask(home, "fake", "T-261116", adapters={"fake": fake}, today=TODAY)
+    lines = ledger.read_text(encoding="utf-8").splitlines()
+    assert lines[:-1] == rows and lines[-1].startswith("2026-11-20,T-261116-demo-cli,fake,")
+    assert week_numbers(home, "2026-W47")["ledger_lines"] == 4  # the 3 rows already in that week plus the new one

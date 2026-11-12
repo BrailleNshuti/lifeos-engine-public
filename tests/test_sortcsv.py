@@ -125,3 +125,19 @@ def test_cli_refuses_a_remote_model(src, tmp_path, monkeypatch, capsys):
     monkeypatch.setenv("OLLAMA_HOST", "http://elsewhere.example.com")
     assert main(["sort-csv", str(src), "--out", str(tmp_path / "o.csv")]) == 1
     assert not (tmp_path / "o.csv").exists()
+
+
+def test_custom_categories_are_found_whatever_case_umlauts_or_hyphens_the_model_answers(tmp_path):
+    """German category names are capitalised and have umlauts; a model that echoes them must not become 'other'."""
+    src = tmp_path / "de.csv"
+    src.write_text("Datum;Beschreibung;Betrag\n"
+                   "03.11.2026;Quarkbude Köln GmbH;-9,90\n"
+                   "04.11.2026;Kontoführung Entgelt;-3,00\n"
+                   "05.11.2026;Carsharing Bonn;-12,00\n", encoding="utf-8")
+    answers = {"Quarkbude": "lebensmittel", "Entgelt": "Gebühren.", "Carsharing": "car-sharing"}
+    out = tmp_path / "o.csv"
+    info = sortcsv.sort_csv(src, out, categories=["Lebensmittel", "Gebühren", "car-sharing", "Sonstiges"],
+                            ask_fn=lambda prompt: next(a for key, a in answers.items() if key in prompt))
+    rows = out.read_text(encoding="utf-8-sig").splitlines()[1:]
+    assert [r.split(";")[-2:] for r in rows] == [["Lebensmittel", ""], ["Gebühren", ""], ["car-sharing", ""]]
+    assert info["flagged"] == 0

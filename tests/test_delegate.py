@@ -124,6 +124,15 @@ def test_cli_delegate_dry_run_sends_nothing(home, monkeypatch, capsys):
     assert "codex" in capsys.readouterr().out
 
 
+def test_cli_delegate_shows_the_check_line_when_the_answer_is_empty(home, monkeypatch, capsys):
+    """An empty answer is the case CHECK exists for. The MCP tool shows it; the command line must not stay silent."""
+    silent = {m: (lambda prompt: "") for m in ADAPTERS}
+    monkeypatch.setattr(ask, "ADAPTERS", silent)
+    monkeypatch.setattr(delegate, "ADAPTERS", silent)
+    assert main(["--home", str(home), "delegate", "T-261116"]) == 0
+    assert "CHECK (free, no model): empty answer" in capsys.readouterr().out
+
+
 def test_mcp_has_a_delegate_tool_and_boss_instructions(home):
     init = mcp.handle(home, {"jsonrpc": "2.0", "id": 1, "method": "initialize", "params": {}})["result"]
     assert "lifeos_delegate" in init["instructions"] and "decision" in init["instructions"]
