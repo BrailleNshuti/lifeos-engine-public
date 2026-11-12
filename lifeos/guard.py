@@ -60,10 +60,13 @@ def _private_patterns():
     if not PRIVATE_PATTERNS.exists():
         return []
     patterns = []
-    for line in PRIVATE_PATTERNS.read_text(encoding="utf-8").splitlines():
+    for number, line in enumerate(PRIVATE_PATTERNS.read_text(encoding="utf-8-sig").splitlines(), 1):  # -sig: Notepad's BOM
         line = line.strip()
         if line and not line.startswith("#"):
-            patterns.append(re.compile(line, re.I))
+            try:
+                patterns.append(re.compile(line, re.I))
+            except re.error as error:  # fail closed: a pattern that silently does nothing would hide a leak
+                raise ValueError(f"private-patterns file {PRIVATE_PATTERNS}, line {number}: bad pattern ({error})") from error
     return patterns
 
 
@@ -98,7 +101,7 @@ def scan_text(text, private=()):
 
 
 def staged_files():
-    out = subprocess.run(["git", "diff", "--cached", "--name-only", "-z", "--diff-filter=ACM"],  # -z: names are not C-quoted
+    out = subprocess.run(["git", "diff", "--cached", "--name-only", "-z", "--diff-filter=ACMR"],  # -z: names are not C-quoted
                          capture_output=True, encoding="utf-8", errors="surrogateescape", check=True).stdout
     return [name for name in out.split("\0") if name]
 

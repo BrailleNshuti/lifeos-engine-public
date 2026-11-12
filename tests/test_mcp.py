@@ -133,3 +133,19 @@ def test_task_new_refuses_class_c_text_and_creates_no_file(home):
     text, err = tool(home, "lifeos_task_new", sentence=f"Pay rent to {iban}")
     assert err and "IBAN" in text
     assert sorted(p.name for p in (home / "tasks").iterdir()) == before
+
+
+def test_json_that_is_not_an_object_gets_an_error_reply(home):
+    for bad in ([1, 2], 5, "text", None):
+        reply = mcp.handle(home, bad)
+        assert reply["error"]["code"] == -32600
+
+
+def test_a_model_name_cannot_inject_ledger_rows(home):
+    ledger = home / "logs" / "ledger.csv"
+    before = len(ledger.read_text(encoding="utf-8").splitlines())
+    tool(home, "lifeos_result_write", task="T-261116", model="x\n2026-11-20,T-1,claude,999,injected", text="Plan: A.")
+    lines = ledger.read_text(encoding="utf-8").splitlines()
+    assert len(lines) == before + 1 and "999" not in lines[-1].split(",")[3:4]
+    task = (home / "tasks" / "T-261116-demo-cli.md").read_text(encoding="utf-8")
+    assert "\n2026-11-20,T-1" not in task

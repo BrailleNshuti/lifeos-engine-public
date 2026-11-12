@@ -136,6 +136,7 @@ def _record(home, path, model, text, today, note="asked via lifeos ask"):
 
 def write_result(home, task_id, who, text, today=None, note="written via lifeos mcp"):
     """Append a result written by someone else (a chat, a person) to a task file. The guard checks it first."""
+    who = " ".join(str(who).replace(",", " ").split())  # one line, no commas: a name can never add a ledger row or a heading
     _check(text, "the result", "Nothing was written to your files.")
     path = _task_file(home, task_id)
     _record(home, path, who, text, today or dt.date.today(), note)

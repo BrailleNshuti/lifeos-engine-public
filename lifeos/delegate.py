@@ -1,6 +1,6 @@
 """lifeos delegate: Claude is the lead. A task goes to the model that fits it, and the answer comes back.
 
-Routing follows rules.md (code -> Codex, long reading -> Gemini, private sorting -> local Qwen, plans -> Claude).
+Routing follows rules.md (code -> Claude writes and Codex checks, long reading -> Gemini, private sorting -> local Qwen, plans -> Claude).
 Grok is not wired yet, so live facts go to Gemini. If a tool is missing, the next model in the chain takes over.
 A failed call is never retried on another model: the error is shown instead.
 """

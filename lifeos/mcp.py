@@ -72,6 +72,8 @@ def _reply(id, result=None, error=None):
 
 def handle(home, msg):
     """Return the JSON-RPC reply for one message, or None for notifications."""
+    if not isinstance(msg, dict):
+        return _reply(None, error={"code": -32600, "message": "Invalid Request: a JSON object is expected"})
     id, method, params = msg.get("id"), msg.get("method", ""), msg.get("params") or {}
     if id is None:
         return None

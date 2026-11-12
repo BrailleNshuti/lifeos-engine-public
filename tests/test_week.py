@@ -88,3 +88,9 @@ def test_cli_prints_the_delegation_line_after_the_numbers(home, capsys):
     out = capsys.readouterr().out
     line = "Delegation: 1 calls (claude 1); flagged answers: 0 of 1"
     assert out.index("Net time saved") < out.index(line) < out.index("## Proof links")
+
+
+def test_a_week_in_the_wrong_format_gives_a_usage_hint(home, capsys):
+    assert main(["--home", str(home), "week", "--week", "2026-47"]) != 0
+    err = capsys.readouterr().err
+    assert "2026-W47" in err and "Traceback" not in err
