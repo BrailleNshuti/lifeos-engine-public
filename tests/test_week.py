@@ -1,4 +1,28 @@
+import datetime as dt
+import json
+import shutil
+
+import pytest
+
+from lifeos import ask
+from lifeos.cli import main
 from lifeos.week import render_markdown, week_bounds, week_numbers
+
+TODAY = dt.date(2026, 11, 20)  # a Friday in 2026-W47, the demo week
+HEDGY = "All done, it works. I think it should work, probably; next step: none."  # 2 flags
+CLEAN = "Added the check in lifeos/ask.py and tests/test_ask.py. Next step: review the diff."  # 0 flags
+
+
+@pytest.fixture
+def home(tmp_path, demo):
+    target = tmp_path / "home"
+    shutil.copytree(demo, target)
+    return target
+
+
+def ask_with(home, model, answer):
+    """One lifeos ask call with a fake adapter: no network, no command-line tool."""
+    ask.run_ask(home, model, "T-261116", adapters={model: lambda prompt: answer}, today=TODAY)
 
 
 def test_week_bounds():
@@ -15,3 +39,52 @@ def test_week_numbers_come_only_from_the_logs(demo):
 
 def test_empty_week_says_none(demo):
     assert "none this week" in render_markdown(week_numbers(demo, "2026-W40"))
+
+
+def test_delegation_line_counts_calls_per_model_and_flagged_answers(home):
+    ask_with(home, "claude", CLEAN)
+    ask_with(home, "claude", HEDGY)
+    ask_with(home, "codex", CLEAN)
+    n = week_numbers(home, "2026-W47")
+    assert n["delegation"] == {"calls": 3, "by_model": {"claude": 2, "codex": 1}, "flagged": 1}
+    assert "Delegation: 3 calls (claude 2, codex 1); flagged answers: 1 of 3" in render_markdown(n)
+
+
+def test_most_used_model_comes_first(home):
+    for model in ("claude", "codex", "codex"):
+        ask_with(home, model, CLEAN)
+    assert "(codex 2, claude 1)" in render_markdown(week_numbers(home, "2026-W47"))
+
+
+def test_a_week_without_model_calls_says_none(demo):
+    for week in ("2026-W47", "2026-W40"):  # W47 has ledger lines but no lifeos ask; W40 has no lines at all
+        n = week_numbers(demo, week)
+        assert n["delegation"] == {"calls": 0, "by_model": {}, "flagged": 0}
+        assert "Delegation: none this week" in render_markdown(n)
+
+
+def test_json_has_the_delegation_keys_and_the_old_ones(home, capsys):
+    ask_with(home, "claude", HEDGY)
+    assert main(["--home", str(home), "week", "--week", "2026-W47", "--json"]) == 0
+    data = json.loads(capsys.readouterr().out)
+    assert data["delegation"] == {"calls": 1, "by_model": {"claude": 1}, "flagged": 1}
+    assert {"week", "from", "to", "ledger_lines", "net_hours_saved", "proofs", "proofs_by_area", "proof_links"} <= set(data)
+
+
+def test_old_ledger_lines_without_flags_still_parse(home):
+    with open(home / "logs" / "ledger.csv", "a", encoding="utf-8") as f:
+        f.write("2026-11-19,T-261116-demo-cli,claude,,asked via lifeos ask\n"  # written before flags existed
+                "2026-11-19,T-261116-demo-cli,codex,,asked via lifeos ask; flags: 1\n"
+                "2026-11-19,T-261116-demo-cli,chat,,written via lifeos mcp\n"  # not a model call
+                "2026-11-25,T-261116-demo-cli,claude,,asked via lifeos ask; flags: 3\n")  # another week
+    n = week_numbers(home, "2026-W47")
+    assert n["delegation"] == {"calls": 2, "by_model": {"claude": 1, "codex": 1}, "flagged": 1}
+    assert "Delegation: 2 calls (claude 1, codex 1); flagged answers: 1 of 2" in render_markdown(n)
+
+
+def test_cli_prints_the_delegation_line_after_the_numbers(home, capsys):
+    ask_with(home, "claude", CLEAN)
+    assert main(["--home", str(home), "week", "--week", "2026-W47"]) == 0
+    out = capsys.readouterr().out
+    line = "Delegation: 1 calls (claude 1); flagged answers: 0 of 1"
+    assert out.index("Net time saved") < out.index(line) < out.index("## Proof links")

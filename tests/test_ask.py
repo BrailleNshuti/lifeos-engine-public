@@ -1,3 +1,4 @@
+import csv
 import datetime as dt
 import shutil
 
@@ -182,3 +183,35 @@ def test_ollama_result_names_the_local_model(home, monkeypatch):
     monkeypatch.setenv("LIFEOS_OLLAMA_MODEL", "deepseek-r1:1.5b")
     path = ask.run_ask(home, "ollama", "T-261116", adapters={"ollama": fake}, today=TODAY)
     assert "## Result · ollama:deepseek-r1:1.5b · 2026-11-20" in path.read_text(encoding="utf-8")
+
+
+HEDGY = "All done, it works. I think it should work, probably; next step: none."  # 2 flags, one flag text has a comma
+CLEAN = "Added the check in lifeos/ask.py and tests/test_ask.py. Next step: review the diff."  # 0 flags
+
+
+def last_ledger_row(home):
+    with open(home / "logs" / "ledger.csv", newline="", encoding="utf-8") as f:
+        return list(csv.reader(f))[-1]
+
+
+def test_ledger_note_holds_the_number_of_flags(home):
+    ask.run_ask(home, "fake", "T-261116", adapters={"fake": lambda prompt: HEDGY}, today=TODAY)
+    assert last_ledger_row(home) == ["2026-11-20", "T-261116-demo-cli", "fake", "", "asked via lifeos ask; flags: 2"]
+
+
+def test_a_clean_answer_is_written_as_flags_zero(home):
+    ask.run_ask(home, "fake", "T-261116", adapters={"fake": lambda prompt: CLEAN}, today=TODAY)
+    assert last_ledger_row(home)[4] == "asked via lifeos ask; flags: 0"
+
+
+def test_ledger_never_holds_the_answer_or_the_flag_texts(home):
+    ask.run_ask(home, "fake", "T-261116", adapters={"fake": lambda prompt: HEDGY}, today=TODAY)
+    ledger = (home / "logs" / "ledger.csv").read_text(encoding="utf-8")
+    assert ledger.splitlines()[0] == "date,task,model,minutes_saved,note"  # columns unchanged
+    assert "probably" not in ledger and "guesses" not in ledger and "without evidence" not in ledger
+    assert len(last_ledger_row(home)) == 5  # the comma inside a flag text never became a column
+
+
+def test_commas_in_a_ledger_note_become_spaces(home):
+    ask.write_result(home, "T-261116", "chat", CLEAN, today=TODAY, note="written, then checked, by hand")
+    assert last_ledger_row(home) == ["2026-11-20", "T-261116-demo-cli", "chat", "", "written  then checked  by hand"]
