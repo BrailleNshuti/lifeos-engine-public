@@ -142,3 +142,25 @@ def test_a_bad_private_pattern_stops_the_guard_instead_of_being_ignored(tmp_path
     ok.write_text("text\n", encoding="utf-8")
     assert main(["guard", str(ok)]) != 0
     assert "private-patterns" in capsys.readouterr().err
+
+
+def test_a_very_long_line_without_an_at_sign_is_scanned_fast():
+    import time
+    start = time.time()
+    scan_text("a" * 60000)
+    assert time.time() - start < 1.0  # the e-mail pattern was quadratic on such a line
+
+
+def test_utf16_files_are_scanned_too(tmp_path):
+    """PowerShell 5.1 writes UTF-16 with a BOM when you redirect with >."""
+    path = tmp_path / "note.txt"
+    path.write_bytes(("token " + "ghp_" + "a1" * 18 + "\n").encode("utf-16"))
+    assert [p for p, _ in scan_paths([str(path)])] == [str(path)]
+
+
+def test_a_utf16_private_patterns_file_is_read(tmp_path, monkeypatch):
+    from lifeos import guard
+    patterns = tmp_path / "private-patterns.txt"
+    patterns.write_bytes("SecretCodename\n".encode("utf-16"))
+    monkeypatch.setattr(guard, "PRIVATE_PATTERNS", patterns)
+    assert ("BLOCK", "Private pattern") in kinds("the SecretCodename project", private=guard._private_patterns())

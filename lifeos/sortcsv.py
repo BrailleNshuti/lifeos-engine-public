@@ -78,16 +78,23 @@ def _column(header, name):
     names = [h.strip().lower() for h in header]
     if name:
         if name.lower() not in names:
-            raise Refused(f"No column '{name}'. Columns: {', '.join(header)}.")
+            raise Refused(f"No column '{name}' in the first line ({len(header)} columns). The first line must be a header; "
+                          f"its text is not printed because it may be a transaction.")
         return names.index(name.lower())
     for i, h in enumerate(names):
         if re.search(DESC_HINTS, h):
             return i
-    raise Refused(f"Could not find the text column. Use --column. Columns: {', '.join(header)}.")
+    raise Refused(f"Could not find the text column in the first line ({len(header)} columns). Use --column with a header "
+                  f"name; the first line must be a header (its text is not printed because it may be a transaction).")
 
 
 def _read(src):
     text = Path(src).read_text(encoding="utf-8-sig")
+    first = next((line for line in text.splitlines() if line.strip()), "")
+    counts = {d: first.count(d) for d in ",;\t|"}  # the header line decides: decimal commas in the data must not
+    if max(counts.values()) > 0:
+        delimiter = max(counts, key=counts.get)
+        return list(csv.reader(io.StringIO(text, newline=""), delimiter=delimiter)), delimiter
     try:
         dialect = csv.Sniffer().sniff(text[:4096], delimiters=",;\t|")
     except csv.Error:
@@ -126,7 +133,7 @@ def sort_csv(src, out=None, column=None, categories=None, ask_fn=None):
             category, check = cache[text]
             counts["by_model"] += 1
         counts["flagged"] += bool(check)
-        result.append(row + [category, check])
+        result.append(row + [""] * (len(header) - len(row)) + [category, check])  # a short row keeps its columns
     with open(out, "w", encoding="utf-8-sig", newline="") as f:
         csv.writer(f, delimiter=delimiter).writerows(result)
     return {**counts, "out": out}

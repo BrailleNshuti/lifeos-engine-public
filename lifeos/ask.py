@@ -71,6 +71,11 @@ def ask_claude(prompt):
     return _run_cli(["claude", "-p", "--model", "sonnet"], prompt)
 
 
+def _open_local(req, timeout):
+    """Open a request to the local model. The system proxy is bypassed: prompt text never leaves this computer."""
+    return urllib.request.build_opener(urllib.request.ProxyHandler({})).open(req, timeout=timeout)
+
+
 def _ollama(prompt, model, options=None):
     host = os.environ.get("OLLAMA_HOST", "http://localhost:11434")
     if "://" not in host:
@@ -81,12 +86,14 @@ def _ollama(prompt, model, options=None):
     body = json.dumps(payload).encode()
     req = urllib.request.Request(f"{host}/api/generate", data=body, headers={"Content-Type": "application/json"})
     try:
-        with urllib.request.urlopen(req, timeout=TIMEOUT) as resp:
+        with _open_local(req, TIMEOUT) as resp:
             text = json.loads(resp.read())["response"]
     except urllib.error.HTTPError as error:
         if error.code == 404:
             raise ToolMissing(f"ollama has no model '{model}'. Run: ollama pull {model}") from None
         raise AskError(f"ollama returned HTTP {error.code}.") from None
+    except TimeoutError:
+        raise AskError(f"ollama did not answer within {TIMEOUT} s (a slow or busy model, not a missing tool).") from None
     except OSError as error:
         raise ToolMissing(f"ollama is not reachable at {host}: {error}") from None
     return re.sub(r"<think>.*?</think>", "", text, flags=re.S).strip()  # reasoning models: keep the answer only

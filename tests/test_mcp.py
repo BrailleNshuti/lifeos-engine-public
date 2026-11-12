@@ -149,3 +149,9 @@ def test_a_model_name_cannot_inject_ledger_rows(home):
     assert len(lines) == before + 1 and "999" not in lines[-1].split(",")[3:4]
     task = (home / "tasks" / "T-261116-demo-cli.md").read_text(encoding="utf-8")
     assert "\n2026-11-20,T-1" not in task
+
+
+def test_odd_shapes_of_params_and_tool_name_get_an_error_not_a_crash(home):
+    for params in ([1], "x", {"name": ["lifeos_task_list"]}, {"name": {"a": 1}}):
+        reply = call(home, "tools/call", params)
+        assert reply["error"]["code"] == -32602

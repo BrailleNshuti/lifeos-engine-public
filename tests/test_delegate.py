@@ -169,7 +169,7 @@ def _fake_ollama(monkeypatch, payload=None, error=None):
             raise error
         return Resp()
 
-    monkeypatch.setattr(ask.urllib.request, "urlopen", fake_urlopen)
+    monkeypatch.setattr(ask, "_open_local", fake_urlopen)  # the adapter bypasses the proxy through _open_local
     return seen
 
 

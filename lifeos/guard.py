@@ -56,11 +56,24 @@ def _mask(value):
     return value[:4] + "…" if len(value) > 4 else "…"
 
 
+def _decode(raw):
+    """Text of a file's bytes, or None for a real binary. UTF-16 with a BOM (PowerShell's > redirect) is text too."""
+    if raw.startswith((b"\xff\xfe", b"\xfe\xff")):
+        try:
+            return raw.decode("utf-16")
+        except UnicodeDecodeError:
+            return None
+    try:
+        return raw.decode("utf-8-sig")
+    except UnicodeDecodeError:  # cp1252/latin-1 text (an Excel CSV) is scanned; only files with NUL bytes are binary
+        return None if b"\0" in raw else raw.decode("latin-1")
+
+
 def _private_patterns():
     if not PRIVATE_PATTERNS.exists():
         return []
     patterns = []
-    for number, line in enumerate(PRIVATE_PATTERNS.read_text(encoding="utf-8-sig").splitlines(), 1):  # -sig: Notepad's BOM
+    for number, line in enumerate((_decode(PRIVATE_PATTERNS.read_bytes()) or "").splitlines(), 1):  # BOM and UTF-16 safe
         line = line.strip()
         if line and not line.startswith("#"):
             try:
@@ -117,15 +130,10 @@ def scan_paths(paths, skipped=None):
                 skipped.append(name)
             continue
         try:
-            text = path.read_text(encoding="utf-8")
-        except UnicodeDecodeError:  # cp1252/latin-1 text (an Excel CSV) is scanned too; only files with NUL bytes are binary
-            raw = path.read_bytes()
-            if b"\0" in raw:
-                if skipped is not None:
-                    skipped.append(name)
-                continue
-            text = raw.decode("latin-1")
+            text = _decode(path.read_bytes())
         except OSError:
+            text = None
+        if text is None:
             if skipped is not None:
                 skipped.append(name)
             continue
@@ -142,14 +150,11 @@ def scan_staged(names, skipped=None):
     for name in names:
         proc = subprocess.run(["git", "show", f":{name}"], capture_output=True)
         raw = proc.stdout
-        if proc.returncode or len(raw) > MAX_BYTES or b"\0" in raw:
+        text = None if proc.returncode or len(raw) > MAX_BYTES else _decode(raw)
+        if text is None:
             if skipped is not None:
                 skipped.append(name)
             continue
-        try:
-            text = raw.decode("utf-8")
-        except UnicodeDecodeError:
-            text = raw.decode("latin-1")
         findings = scan_text(text, private)
         if findings:
             results.append((name, findings))
