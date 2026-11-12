@@ -9,7 +9,7 @@ from . import mcp, sortcsv
 from .delegate import run_delegate
 from .ask import ADAPTERS, AskError, Blocked, ToolMissing, run_ask
 from .context import build_pack
-from .guard import scan_paths, staged_files
+from .guard import scan_paths, scan_staged, staged_files
 from .home import CORE_FILES, HomeError, estimate_tokens, find_home
 from .tasks import list_tasks, new_task
 from .week import render_markdown, week_numbers
@@ -111,7 +111,8 @@ def cmd_mcp(args):
 
 def cmd_guard(args):
     paths = staged_files() if args.staged else args.paths
-    results = scan_paths(paths)
+    skipped = []
+    results = scan_staged(paths, skipped) if args.staged else scan_paths(paths, skipped)
     blocked = 0
     for path, findings in results:
         for line, severity, kind, excerpt in findings:
@@ -121,7 +122,8 @@ def cmd_guard(args):
         print(f"\nBlocked: {blocked} finding(s) that must never enter a repo. Remove them, or mark a false alarm "
               f"with 'lifeos-guard: allow' on that line.", file=sys.stderr)
         return 1
-    print(f"guard ok: {len(paths)} file(s) checked", file=sys.stderr)
+    note = f", {len(skipped)} skipped (missing, binary or over 1 MB)" if skipped else ""
+    print(f"guard ok: {len(paths) - len(skipped)} file(s) checked{note}", file=sys.stderr)
     return 0
 
 

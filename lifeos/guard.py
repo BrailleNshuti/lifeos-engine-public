@@ -103,24 +103,51 @@ def staged_files():
     return [name for name in out.split("\0") if name]
 
 
-def scan_paths(paths):
-    """Scan text files; return (path, findings) pairs for files with findings."""
+def scan_paths(paths, skipped=None):
+    """Scan text files; return (path, findings) pairs for files with findings. Skipped names go into `skipped`."""
     private = _private_patterns()
     results = []
     for name in paths:
         path = Path(name)
         if not path.is_file() or path.stat().st_size > MAX_BYTES:
+            if skipped is not None:
+                skipped.append(name)
             continue
         try:
             text = path.read_text(encoding="utf-8")
         except UnicodeDecodeError:  # cp1252/latin-1 text (an Excel CSV) is scanned too; only files with NUL bytes are binary
             raw = path.read_bytes()
             if b"\0" in raw:
+                if skipped is not None:
+                    skipped.append(name)
                 continue
             text = raw.decode("latin-1")
         except OSError:
+            if skipped is not None:
+                skipped.append(name)
             continue
         findings = scan_text(text, private)
         if findings:
             results.append((str(path), findings))
+    return results
+
+
+def scan_staged(names, skipped=None):
+    """Scan what is staged (the version a commit would carry), not the working file, which may differ."""
+    private = _private_patterns()
+    results = []
+    for name in names:
+        proc = subprocess.run(["git", "show", f":{name}"], capture_output=True)
+        raw = proc.stdout
+        if proc.returncode or len(raw) > MAX_BYTES or b"\0" in raw:
+            if skipped is not None:
+                skipped.append(name)
+            continue
+        try:
+            text = raw.decode("utf-8")
+        except UnicodeDecodeError:
+            text = raw.decode("latin-1")
+        findings = scan_text(text, private)
+        if findings:
+            results.append((name, findings))
     return results

@@ -125,3 +125,11 @@ def test_an_unexpected_error_in_a_tool_does_not_kill_the_server(home, monkeypatc
     reply = mcp.handle(home, {"jsonrpc": "2.0", "id": 9, "method": "tools/call",
                               "params": {"name": "lifeos_ask", "arguments": {"task": "T-261116", "model": "codex"}}})
     assert reply["result"]["isError"] and "unexpected" in reply["result"]["content"][0]["text"]
+
+
+def test_task_new_refuses_class_c_text_and_creates_no_file(home):
+    iban = "DE89 3704 " + "0044 0532 0130 00"
+    before = sorted(p.name for p in (home / "tasks").iterdir())
+    text, err = tool(home, "lifeos_task_new", sentence=f"Pay rent to {iban}")
+    assert err and "IBAN" in text
+    assert sorted(p.name for p in (home / "tasks").iterdir()) == before

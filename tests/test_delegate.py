@@ -189,3 +189,16 @@ def test_unpulled_model_says_how_to_pull_it(monkeypatch):
     _fake_ollama(monkeypatch, error=urllib.error.HTTPError("u", 404, "not found", {}, None))
     with pytest.raises(ask.ToolMissing, match="ollama pull"):
         ask.ask_qwen("hi")
+
+
+def test_a_private_task_never_falls_back_to_the_cloud(home):
+    """Private sorting stays on this laptop: if the local model is down, stop instead of asking cloud Claude."""
+    def down(prompt):
+        raise ask.ToolMissing("ollama is not running")
+
+    cloud = []
+    adapters = {**ADAPTERS, "qwen": down, "ollama": down, "claude": lambda prompt: cloud.append(prompt) or "cloud"}
+    for model in ("qwen", "ollama"):
+        with pytest.raises(ask.ToolMissing):
+            delegate.run_delegate(home, "T-261116", model=model, adapters=adapters)
+    assert cloud == []

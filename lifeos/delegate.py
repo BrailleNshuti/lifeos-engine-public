@@ -25,7 +25,8 @@ ROUTES = [
      r"plan|write|draft|decide|decision|memo|strategy|email"),
 ]
 DEFAULT = ("claude", "no clear kind of work, so Claude takes it")
-FALLBACK = {"qwen": ["ollama", "claude"], "ollama": ["claude"], "codex": ["claude"], "gemini": ["claude"], "claude": []}
+FALLBACK = {"qwen": ["ollama"], "ollama": [],  # private work never falls back to a cloud model
+             "codex": ["claude"], "gemini": ["claude"], "claude": []}
 
 
 def pick(text):

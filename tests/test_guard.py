@@ -73,3 +73,32 @@ def test_text_file_in_a_legacy_encoding_is_still_scanned(tmp_path):
     binary = tmp_path / "scan.bin"
     binary.write_bytes(b"\x00\x01\xff\xfe" + IBAN.encode() + b"\x00")
     assert scan_paths([str(binary)]) == []  # real binary files are still skipped
+
+
+def test_staged_scan_reads_the_staged_version_not_the_working_file(tmp_path, monkeypatch):
+    """Stage a token, then overwrite the file with clean text: the commit still carries the token."""
+    if not shutil.which("git"):
+        pytest.skip("git is not installed")
+    repo = tmp_path / "repo"
+    repo.mkdir()
+
+    def git(*args):
+        subprocess.run(["git", "-C", str(repo), *args], check=True, capture_output=True)
+
+    git("init", "-q")
+    note = repo / "note.md"
+    note.write_text("token " + "ghp_" + "a1" * 18 + "\n", encoding="utf-8")
+    git("add", "note.md")
+    note.write_text("clean now\n", encoding="utf-8")  # the working file no longer shows it
+    monkeypatch.chdir(repo)
+    assert main(["guard", "--staged"]) == 1
+
+
+def test_guard_says_how_many_files_it_skipped(tmp_path, capsys):
+    ok = tmp_path / "ok.md"
+    ok.write_text("plain text\n", encoding="utf-8")
+    binary = tmp_path / "bin.dat"
+    binary.write_bytes(b"\0\xff\xfe")  # NUL and not valid UTF-8: a real binary
+    assert main(["guard", str(ok), str(binary), str(tmp_path / "missing.md")]) == 0
+    err = capsys.readouterr().err
+    assert "1 file(s) checked" in err and "2 skipped" in err

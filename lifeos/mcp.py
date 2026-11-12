@@ -46,6 +46,7 @@ def _run_tool(home, name, a):
         rows = list_tasks(home, a.get("status"))
         return "\n".join(f"{t['id']}  {t['status']}  {t['due']}  {t['goal']}" for t in rows) or "No tasks."
     if name == "lifeos_task_new":
+        ask._check(a["sentence"], "the task sentence", "No task file was created.")  # same guard as lifeos_result_write
         return str(new_task(home, a["sentence"]).relative_to(home))
     if name == "lifeos_context":
         _task_file(home, a["task"])  # a missing, empty or unsafe id is an error, never a pack without the task
