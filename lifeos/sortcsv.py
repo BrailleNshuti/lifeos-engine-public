@@ -2,7 +2,8 @@
 
 Private by design: only a local Ollama model is allowed, the file is never printed or logged, the result is never
 written inside a git repo, and nothing existing is overwritten. Free keyword rules go first; the model only sees
-the text of rows the rules cannot place. Model answers outside the category list become 'other' and are flagged.
+the text of rows the rules cannot place. Model answers outside the category list become 'other' and are flagged;
+so is an exact 'other' answer, because it means the model does not know. Rows placed by the rules are never flagged.
 """
 import csv
 import io
@@ -59,7 +60,7 @@ def _by_model(text, categories, ask_fn):
               f"Answer with the category word only.\nTransaction text: <<<{text[:200]}>>>")
     answer = re.sub(r"[^a-z ]", "", ask_fn(prompt).lower()).strip()
     if answer in categories:
-        return answer, ""
+        return answer, "yes" if answer == "other" else ""  # an exact "other" means the model does not know
     found = [c for c in categories if re.search(rf"\b{re.escape(c)}\b", answer)]
     return (found[0] if found else _other(categories)), "yes"
 

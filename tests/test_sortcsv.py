@@ -125,3 +125,33 @@ def test_cli_refuses_a_remote_model(src, tmp_path, monkeypatch, capsys):
     monkeypatch.setenv("OLLAMA_HOST", "http://elsewhere.example.com")
     assert main(["sort-csv", str(src), "--out", str(tmp_path / "o.csv")]) == 1
     assert not (tmp_path / "o.csv").exists()
+
+
+def test_an_exact_other_answer_is_flagged(src, tmp_path):
+    out = tmp_path / "o.csv"
+    info = sortcsv.sort_csv(src, out, ask_fn=lambda p: "other")
+    lines = out.read_text(encoding="utf-8-sig").splitlines()
+    assert lines[3].endswith(";other;yes") and lines[4].endswith(";other;yes")
+    assert lines[1].endswith(";groceries;") and lines[2].endswith(";rent;")  # rule-matched rows stay unflagged
+    assert info["flagged"] == 2 and info["by_rule"] == 2
+
+
+def test_an_exact_valid_category_is_not_flagged(src, tmp_path):
+    out = tmp_path / "o.csv"
+    info = sortcsv.sort_csv(src, out, ask_fn=lambda p: "dining")
+    lines = out.read_text(encoding="utf-8-sig").splitlines()
+    assert lines[3].endswith(";dining;") and lines[4].endswith(";dining;")
+    assert info["flagged"] == 0
+
+
+def test_other_is_exact_after_the_answer_is_cleaned_up(src, tmp_path):
+    out = tmp_path / "o.csv"
+    info = sortcsv.sort_csv(src, out, ask_fn=lambda p: "Other.")
+    assert out.read_text(encoding="utf-8-sig").splitlines()[3].endswith(";other;yes") and info["flagged"] == 2
+
+
+def test_without_an_other_category_only_the_word_other_is_flagged(src, tmp_path):
+    exact = sortcsv.sort_csv(src, tmp_path / "a.csv", categories=["food", "home"], ask_fn=lambda p: "home")
+    word = sortcsv.sort_csv(src, tmp_path / "b.csv", categories=["food", "home"], ask_fn=lambda p: "other")
+    # no groceries/rent rules in this list, so all four rows go to the model; "other" is not in it and lands in the last one
+    assert exact["flagged"] == 0 and word["flagged"] == 4
