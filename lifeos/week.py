@@ -10,8 +10,11 @@ ASKED = "asked via lifeos ask"  # ledger note of every model call: ask, delegate
 def week_bounds(week=None, today=None):
     """Monday and Sunday of an ISO week ('2026-W47') or of the week containing today."""
     if week:
-        year, num = week.upper().split("-W")
-        start = dt.date.fromisocalendar(int(year), int(num), 1)
+        try:
+            year, num = week.upper().split("-W")
+            start = dt.date.fromisocalendar(int(year), int(num), 1)
+        except ValueError:
+            raise ValueError(f"'{week}' is not a week. Use the form 2026-W47 (year, -W, week number 1 to 53).") from None
     else:
         today = today or dt.date.today()
         start = today - dt.timedelta(days=today.weekday())

@@ -72,7 +72,11 @@ def _reply(id, result=None, error=None):
 
 def handle(home, msg):
     """Return the JSON-RPC reply for one message, or None for notifications."""
+    if not isinstance(msg, dict):
+        return _reply(None, error={"code": -32600, "message": "Invalid Request: a JSON object is expected"})
     id, method, params = msg.get("id"), msg.get("method", ""), msg.get("params") or {}
+    if not isinstance(params, dict):
+        return _reply(id, error={"code": -32602, "message": "Invalid params: an object is expected"})
     if id is None:
         return None
     if method == "initialize":
@@ -86,7 +90,7 @@ def handle(home, msg):
         return _reply(id, {"tools": [{"name": n, "description": d, "inputSchema": s} for n, d, s in TOOLS]})
     if method == "tools/call":
         name = params.get("name")
-        if name not in {t[0] for t in TOOLS}:
+        if not isinstance(name, str) or name not in {t[0] for t in TOOLS}:
             return _reply(id, error={"code": -32602, "message": f"Unknown tool {name}"})
         try:
             text, bad = _run_tool(home, name, params.get("arguments") or {}), False
