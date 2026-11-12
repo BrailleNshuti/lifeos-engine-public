@@ -56,14 +56,30 @@ def _mask(value):
     return value[:4] + "…" if len(value) > 4 else "…"
 
 
+def _decode(raw):
+    """Text of a file's bytes, or None for a real binary. UTF-16 with a BOM (PowerShell's > redirect) is text too."""
+    if raw.startswith((b"\xff\xfe", b"\xfe\xff")):
+        try:
+            return raw.decode("utf-16")
+        except UnicodeDecodeError:
+            return None
+    try:
+        return raw.decode("utf-8-sig")
+    except UnicodeDecodeError:  # cp1252/latin-1 text (an Excel CSV) is scanned; only files with NUL bytes are binary
+        return None if b"\0" in raw else raw.decode("latin-1")
+
+
 def _private_patterns():
     if not PRIVATE_PATTERNS.exists():
         return []
     patterns = []
-    for line in PRIVATE_PATTERNS.read_text(encoding="utf-8").splitlines():
+    for number, line in enumerate((_decode(PRIVATE_PATTERNS.read_bytes()) or "").splitlines(), 1):  # BOM and UTF-16 safe
         line = line.strip()
         if line and not line.startswith("#"):
-            patterns.append(re.compile(line, re.I))
+            try:
+                patterns.append(re.compile(line, re.I))
+            except re.error as error:  # fail closed: a pattern that silently does nothing would hide a leak
+                raise ValueError(f"private-patterns file {PRIVATE_PATTERNS}, line {number}: bad pattern ({error})") from error
     return patterns
 
 
@@ -98,29 +114,48 @@ def scan_text(text, private=()):
 
 
 def staged_files():
-    out = subprocess.run(["git", "diff", "--cached", "--name-only", "-z", "--diff-filter=ACM"],  # -z: names are not C-quoted
+    out = subprocess.run(["git", "diff", "--cached", "--name-only", "-z", "--diff-filter=ACMR"],  # -z: names are not C-quoted
                          capture_output=True, encoding="utf-8", errors="surrogateescape", check=True).stdout
     return [name for name in out.split("\0") if name]
 
 
-def scan_paths(paths):
-    """Scan text files; return (path, findings) pairs for files with findings."""
+def scan_paths(paths, skipped=None):
+    """Scan text files; return (path, findings) pairs for files with findings. Skipped names go into `skipped`."""
     private = _private_patterns()
     results = []
     for name in paths:
         path = Path(name)
         if not path.is_file() or path.stat().st_size > MAX_BYTES:
+            if skipped is not None:
+                skipped.append(name)
             continue
         try:
-            text = path.read_text(encoding="utf-8")
-        except UnicodeDecodeError:  # cp1252/latin-1 text (an Excel CSV) is scanned too; only files with NUL bytes are binary
-            raw = path.read_bytes()
-            if b"\0" in raw:
-                continue
-            text = raw.decode("latin-1")
+            text = _decode(path.read_bytes())
         except OSError:
+            text = None
+        if text is None:
+            if skipped is not None:
+                skipped.append(name)
             continue
         findings = scan_text(text, private)
         if findings:
             results.append((str(path), findings))
+    return results
+
+
+def scan_staged(names, skipped=None):
+    """Scan what is staged (the version a commit would carry), not the working file, which may differ."""
+    private = _private_patterns()
+    results = []
+    for name in names:
+        proc = subprocess.run(["git", "show", f":{name}"], capture_output=True)
+        raw = proc.stdout
+        text = None if proc.returncode or len(raw) > MAX_BYTES else _decode(raw)
+        if text is None:
+            if skipped is not None:
+                skipped.append(name)
+            continue
+        findings = scan_text(text, private)
+        if findings:
+            results.append((name, findings))
     return results

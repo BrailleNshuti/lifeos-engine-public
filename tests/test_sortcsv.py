@@ -171,3 +171,30 @@ def test_custom_categories_are_found_whatever_case_umlauts_or_hyphens_the_model_
     rows = out.read_text(encoding="utf-8-sig").splitlines()[1:]
     assert [r.split(";")[-2:] for r in rows] == [["Lebensmittel", ""], ["Gebühren", ""], ["car-sharing", ""]]
     assert info["flagged"] == 0
+
+
+def test_german_decimal_commas_do_not_change_the_delimiter(tmp_path):
+    src = tmp_path / "de.csv"
+    src.write_text("Datum;Beschreibung;Betrag\n01.11.2026;Lidl Markt;-12,50\n02.11.2026;Miete\n03.11.2026;Kino;-9,00\n",
+                   encoding="utf-8")
+    out = tmp_path / "o.csv"
+    sortcsv.sort_csv(src, out, ask_fn=lambda p: "other")
+    lines = out.read_text(encoding="utf-8-sig").splitlines()
+    assert lines[0] == "Datum;Beschreibung;Betrag;lifeos_category;lifeos_check"
+
+
+def test_a_short_row_still_puts_the_category_under_its_column(tmp_path):
+    src = tmp_path / "s.csv"
+    src.write_text("date;description;amount\n01.11.2026;Lidl Markt\n", encoding="utf-8")
+    out = tmp_path / "o.csv"
+    sortcsv.sort_csv(src, out, ask_fn=lambda p: "other")
+    row = out.read_text(encoding="utf-8-sig").splitlines()[1].split(";")
+    assert len(row) == 5 and row[3] == "groceries"
+
+
+def test_a_refusal_never_echoes_the_first_row(tmp_path):
+    src = tmp_path / "nohead.csv"
+    src.write_text("01.11.2026;Lidl Markt Bonn;-12,50\n02.11.2026;Miete;-600,00\n", encoding="utf-8")
+    with pytest.raises(sortcsv.Refused) as caught:
+        sortcsv.sort_csv(src, tmp_path / "o.csv", column="Description", ask_fn=lambda p: "other")
+    assert "Lidl" not in str(caught.value) and "12,50" not in str(caught.value)
