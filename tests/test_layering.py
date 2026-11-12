@@ -1,0 +1,86 @@
+"""Layering and API-hygiene tests: the module graph may only point downwards, and the number of
+cross-module uses of private (underscore) names may only shrink. Made-up data: none needed."""
+import ast
+from pathlib import Path
+
+PKG = Path(__file__).resolve().parent.parent / "lifeos"
+
+# A module may import only from a lower layer (a smaller number). Same layer = no import.
+LAYER = {
+    "home": 0, "guard": 0, "check": 0, "tasks": 0, "week": 0,
+    "context": 1,
+    "ask": 2,
+    "delegate": 3, "sortcsv": 3,
+    "mcp": 4,
+    "cli": 5,
+}
+
+# Known cross-module uses of private names (importer, owner, name). The ratchet: this set may only shrink.
+# When you make a name public (or move it), delete its row here; the test then fails if a row is stale.
+KNOWN_PRIVATE_USES = {
+    ("ask", "context", "_task_file"),
+    ("ask", "guard", "_private_patterns"),
+    ("delegate", "context", "_task_file"),
+    ("mcp", "context", "_task_file"),
+    ("mcp", "ask", "_check"),
+    ("sortcsv", "ask", "_ollama"),
+    ("sortcsv", "ask", "_qwen_model"),
+}
+
+
+def _modules():
+    return {p.stem: ast.parse(p.read_text(encoding="utf-8")) for p in PKG.glob("*.py") if p.stem != "__init__"}
+
+
+def _internal_imports(tree):
+    """Yield (owner module, imported name or None) for every `from .x import y` and `from . import x`."""
+    for node in ast.walk(tree):
+        if isinstance(node, ast.ImportFrom) and node.level == 1:
+            if node.module:
+                for alias in node.names:
+                    yield node.module, alias.name
+            else:
+                for alias in node.names:
+                    yield alias.name, None
+
+
+def _attribute_uses(tree, owner_names):
+    """Yield (owner, attr) for `owner._name` attribute access, e.g. ask._check."""
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Attribute) and isinstance(node.value, ast.Name) and node.value.id in owner_names:
+            yield node.value.id, node.attr
+
+
+def test_every_module_has_a_layer():
+    assert set(_modules()) == set(LAYER), "add new modules to LAYER in tests/test_layering.py"
+
+
+def test_imports_only_point_down():
+    problems = []
+    for name, tree in _modules().items():
+        for owner, _ in _internal_imports(tree):
+            if owner in LAYER and LAYER[owner] >= LAYER[name]:
+                problems.append(f"{name} (layer {LAYER[name]}) imports {owner} (layer {LAYER[owner]})")
+    assert not problems, problems
+
+
+def test_interfaces_are_not_imported_by_others():
+    for name, tree in _modules().items():
+        for owner, _ in _internal_imports(tree):
+            if owner == "cli":
+                raise AssertionError(f"{name} imports cli")
+            if owner == "mcp" and name != "cli":
+                raise AssertionError(f"{name} imports mcp")
+
+
+def test_private_cross_module_uses_only_shrink():
+    found = set()
+    for name, tree in _modules().items():
+        for owner, imported in _internal_imports(tree):
+            if imported and imported.startswith("_") and not imported.startswith("__"):
+                found.add((name, owner, imported))
+        for owner, attr in _attribute_uses(tree, set(LAYER) - {name}):
+            if attr.startswith("_") and not attr.startswith("__"):
+                found.add((name, owner, attr))
+    assert not (found - KNOWN_PRIVATE_USES), f"new private cross-module use: {sorted(found - KNOWN_PRIVATE_USES)}"
+    assert not (KNOWN_PRIVATE_USES - found), f"fixed: delete from KNOWN_PRIVATE_USES: {sorted(KNOWN_PRIVATE_USES - found)}"
