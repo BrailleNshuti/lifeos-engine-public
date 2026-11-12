@@ -14,6 +14,7 @@ import urllib.error
 import urllib.request
 from pathlib import Path
 
+from .check import check_answer
 from .context import _task_file, build_pack
 from .guard import _private_patterns, scan_text
 
@@ -130,7 +131,7 @@ def _record(home, path, model, text, today, note="asked via lifeos ask"):
     if ledger.exists():
         glue = "" if ledger.read_bytes()[-1:] in (b"", b"\n") else "\n"  # a hand-edited file may lack its last newline
         with open(ledger, "a", encoding="utf-8") as f:
-            f.write(f"{glue}{today:%Y-%m-%d},{path.stem},{model},,{note}\n")
+            f.write(f"{glue}{today:%Y-%m-%d},{path.stem},{model},,{note.replace(',', ' ')}\n")  # plain CSV: no commas in a note
 
 
 def write_result(home, task_id, who, text, today=None, note="written via lifeos mcp"):
@@ -153,5 +154,6 @@ def run_ask(home, model, task_id, budget=6000, dry_run=False, adapters=None, tod
     path = _task_file(home, task_id)
     text = adapters[model](f"{INSTRUCTION}\n\n{pack}")
     _check(text, "the answer", "Nothing was written to your files.")
-    _record(home, path, label(model), text, today or dt.date.today())
+    note = f"asked via lifeos ask; flags: {len(check_answer(text))}"  # the count only: never the answer or the flag texts
+    _record(home, path, label(model), text, today or dt.date.today(), note)
     return path

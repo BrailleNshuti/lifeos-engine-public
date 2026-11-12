@@ -1,7 +1,10 @@
 """Weekly numbers from the logs: the part of the Sunday review a machine can do honestly."""
 import csv
 import datetime as dt
+import re
 from pathlib import Path
+
+ASKED = "asked via lifeos ask"  # ledger note of every model call: ask, delegate and mcp all go through it
 
 
 def week_bounds(week=None, today=None):
@@ -31,6 +34,21 @@ def _in_range(row, start, end):
     return start <= day <= end
 
 
+def _delegation(ledger):
+    """Model calls of the week: how many, per model (most used first) and how many answers the check flagged."""
+    by_model, flagged = {}, 0
+    for row in ledger:
+        note = (row.get("note") or "").strip()
+        if not note.startswith(ASKED):
+            continue
+        model = (row.get("model") or "?").strip()
+        by_model[model] = by_model.get(model, 0) + 1
+        found = re.search(r"flags:\s*(\d+)", note)  # lines from before the check have no flags: they count as 0
+        flagged += bool(found and int(found.group(1)) > 0)
+    by_model = dict(sorted(by_model.items(), key=lambda item: (-item[1], item[0])))
+    return {"calls": sum(by_model.values()), "by_model": by_model, "flagged": flagged}
+
+
 def week_numbers(home, week=None, today=None):
     start, end = week_bounds(week, today)
     logs = Path(home) / "logs"
@@ -52,7 +70,15 @@ def week_numbers(home, week=None, today=None):
         "ledger_lines": len(ledger), "net_hours_saved": round(minutes / 60, 1),
         "proofs": len(proofs), "proofs_by_area": dict(sorted(by_area.items())),
         "proof_links": [((r.get("proof") or "").strip(), (r.get("link") or "").strip()) for r in proofs],
+        "delegation": _delegation(ledger),
     }
+
+
+def _delegation_line(d):
+    if not d["calls"]:
+        return "Delegation: none this week"
+    models = ", ".join(f"{model} {count}" for model, count in d["by_model"].items())
+    return f"Delegation: {d['calls']} calls ({models}); flagged answers: {d['flagged']} of {d['calls']}"
 
 
 def render_markdown(n):
@@ -62,6 +88,8 @@ def render_markdown(n):
         "",
         f"- Proofs: {n['proofs']}" + (f" ({areas})" if areas else ""),
         f"- Net time saved by AI: {n['net_hours_saved']} h from {n['ledger_lines']} ledger lines",
+        "",
+        _delegation_line(n["delegation"]),
         "",
         "## Proof links",
     ]
