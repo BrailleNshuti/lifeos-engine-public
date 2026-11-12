@@ -8,16 +8,18 @@ The engine is code only. Your life lives in a separate **private data repo** (`l
 
 | Command | What it does | Why it matters |
 |---|---|---|
-| `lifeos task new "<one sentence>"` | Creates `tasks/T-YYMMDD-name.md` from the hand-off template; you only write the done-when line | Hand-offs between models in seconds, never overwrites a file |
+| `lifeos task new "<one sentence>" [--route R] [--level L2] [--due 2026-11-30]` | Creates `tasks/T-YYMMDD-name.md` from the hand-off template (route defaults to `Claude Code -> Codex review`, level to `L2`, one of L0 to L3); you only write the done-when line | Hand-offs between models in seconds, never overwrites a file |
 | `lifeos task list [--status doing]` | Lists task files with status and due date | One look at open work |
-| `lifeos week [--week 2026-W47]` | Proofs and net time saved from the logs, as the start of the Sunday review | Numbers come from data, never from a model's guess |
+| `lifeos week [--week 2026-W47] [--json]` | Proofs and net time saved from the logs, as the start of the Sunday review; `--json` prints the numbers as JSON | Numbers come from data, never from a model's guess |
 | `lifeos context [TASK] [--budget 6000]` | Prints rules, the task, now and me in priority order, trimmed to a token budget | Paste once, pay little; shows the token cost before you send |
-| `lifeos ask <model> <task> [--budget N] [--full] [--dry-run]` | Guards the context pack (task and rules only; `--full` adds now.md and me.md), sends it to that model (codex, claude, ollama, qwen, or gemini through Antigravity `agy`) through its command-line tool (ollama: local address), appends `## Result · <model> · <date>` to the task file and one ledger line. A guard BLOCK sends nothing (exit 1); a missing tool exits 2 | Work moves between models without copy and paste, and off the Claude limit |
-| `lifeos delegate <task> [--model M] [--dry-run]` | Claude is the lead: picks the best-fitting model from the task text (private sorting -> qwen, code -> claude writes and codex tests and reviews, learning -> codex, long reading and live facts -> gemini, plans and decisions -> claude), runs it through `lifeos ask`, prints the answer plus a free CHECK line (no model call: empty, refusal, echoed prompt, success without evidence, undated link, guessing, no next step). A missing tool falls back to the next model and says so; a failed call is shown, never retried elsewhere | One command (or one chat tool call) instead of choosing a model by hand |
+| `lifeos ask <model> <task> [--budget N] [--full] [--dry-run]` | Guards the context pack (task and rules only; `--full` adds now.md and me.md), sends it to that model (codex, claude, ollama, qwen, or gemini through Antigravity `agy`) through its command-line tool (ollama and qwen: the local Ollama address), appends `## Result · <model> · <date>` to the task file and one ledger line. A guard BLOCK sends nothing (exit 1); a missing tool exits 2 | Work moves between models without copy and paste, and off the Claude limit |
+| `lifeos delegate <task> [--model M] [--budget N] [--full] [--dry-run]` | Claude is the lead: picks the best-fitting model from the task text (private sorting -> qwen, code -> claude writes and codex tests and reviews, learning -> codex, long reading and live facts -> gemini, plans and decisions -> claude), runs it through `lifeos ask`, prints the answer plus a free CHECK line (no model call: empty or too short, refusal, echoed prompt, success without evidence, undated link, guessing, no next step). A missing tool falls back to the next model and says so; a failed call is shown, never retried elsewhere | One command (or one chat tool call) instead of choosing a model by hand |
 | `lifeos sort-csv <file> [--out F] [--column C] [--categories a,b]` | Adds `lifeos_category` and `lifeos_check` columns to a bank CSV. Fully local: keyword rules first, then local Qwen for the rest; refuses a non-local Ollama address, never overwrites, never writes inside a git repo, prints counts only. Rows the model could not place (it answered `other`, or its answer was wordy or outside the list) say `yes` in `lifeos_check`; rows placed by the keyword rules never do | Your spending sorted without bank data touching any cloud or chat |
 | `lifeos mcp` | Runs a local MCP server (standard library only) with six tools: list tasks, new task, context, write result, ask, delegate. Writes go through the privacy guard and stay inside tasks/ and the ledger | Chat apps read and write your task files with no copy and paste |
 | `lifeos guard [files] / --staged` | Blocks IBANs, card numbers, ID and passport numbers, keys and private keys; warns on emails, phone numbers and possible secrets | Class C data never reaches a repo |
 | `lifeos doctor` | Checks the data repo and shows how many tokens its always-loaded files cost | Keeps the core small |
+
+Two options go before the command name: `--home <path>` picks the data repo (default: `LIFEOS_HOME`, else the current folder, which must hold `now.md`); `--version` prints the version.
 
 Five portable skills (open Agent Skills format, read by Claude and Codex) live in `skills/`: `lifeos-task`, `weekly-review`, `decision-memo`, `usage-handoff` and `work-prompt`.
 
@@ -33,13 +35,14 @@ lifeos context T-261116 --budget 4000
 ```
 
 Install the skills for Claude Code and Codex: `scripts/install-skills.ps1` (or `scripts/install-skills.sh`).
-Install the privacy guard as a pre-commit hook in the data repo: `scripts/install-hook.sh C:\path\to\lifeos` (Git Bash).
+Install the privacy guard as a pre-commit hook in the data repo: `scripts/install-hook.sh C:/path/to/lifeos` (Git Bash; forward slashes, because bash drops unquoted backslashes).
 
 Private patterns that must never be committed (your street, your phone number) go in `~/.lifeos/private-patterns.txt`, one regular expression per line, outside every repo. Mark a false alarm with `lifeos-guard: allow` on that line.
 
 ## Checks
 
 ```
+pip install pytest                    # once, for the tests only
 pytest -q
 lifeos guard $(git ls-files)
 ```
@@ -80,4 +83,4 @@ Other MCP apps (Codex, agy) have their own `mcp add` command with the same progr
 
 Register `lifeos mcp` in Claude (Desktop or Code). The server tells Claude its role: for work that fits another model it calls `lifeos_delegate`, reads the answer that comes back in the same chat, checks it against rules.md and writes the decision into the task file. You only talk to Claude.
 
-Qwen runs locally through Ollama: `ollama pull qwen2.5:3b` (default). Pick another size with `LIFEOS_QWEN_MODEL`, for example `qwen3:8b` once the laptop has the RAM. Reasoning blocks (`<think>`) are stripped from local answers.
+Qwen runs locally through Ollama: `ollama pull qwen2.5:3b` (default). Pick another size with `LIFEOS_QWEN_MODEL`, for example `qwen3:8b` once the laptop has the RAM. `lifeos ask ollama` uses `LIFEOS_OLLAMA_MODEL` (default `llama3.2`); both talk to `OLLAMA_HOST` (default `http://localhost:11434`). Reasoning blocks (`<think>`) are stripped from local answers.

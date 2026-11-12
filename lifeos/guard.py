@@ -98,9 +98,9 @@ def scan_text(text, private=()):
 
 
 def staged_files():
-    out = subprocess.run(["git", "diff", "--cached", "--name-only", "--diff-filter=ACM"],
-                         capture_output=True, text=True, check=True).stdout
-    return [line for line in out.splitlines() if line.strip()]
+    out = subprocess.run(["git", "diff", "--cached", "--name-only", "-z", "--diff-filter=ACM"],  # -z: names are not C-quoted
+                         capture_output=True, encoding="utf-8", errors="surrogateescape", check=True).stdout
+    return [name for name in out.split("\0") if name]
 
 
 def scan_paths(paths):
@@ -113,7 +113,12 @@ def scan_paths(paths):
             continue
         try:
             text = path.read_text(encoding="utf-8")
-        except (UnicodeDecodeError, OSError):
+        except UnicodeDecodeError:  # cp1252/latin-1 text (an Excel CSV) is scanned too; only files with NUL bytes are binary
+            raw = path.read_bytes()
+            if b"\0" in raw:
+                continue
+            text = raw.decode("latin-1")
+        except OSError:
             continue
         findings = scan_text(text, private)
         if findings:

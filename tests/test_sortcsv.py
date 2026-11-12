@@ -155,3 +155,19 @@ def test_without_an_other_category_only_the_word_other_is_flagged(src, tmp_path)
     word = sortcsv.sort_csv(src, tmp_path / "b.csv", categories=["food", "home"], ask_fn=lambda p: "other")
     # no groceries/rent rules in this list, so all four rows go to the model; "other" is not in it and lands in the last one
     assert exact["flagged"] == 0 and word["flagged"] == 4
+
+
+def test_custom_categories_are_found_whatever_case_umlauts_or_hyphens_the_model_answers(tmp_path):
+    """German category names are capitalised and have umlauts; a model that echoes them must not become 'other'."""
+    src = tmp_path / "de.csv"
+    src.write_text("Datum;Beschreibung;Betrag\n"
+                   "03.11.2026;Quarkbude Köln GmbH;-9,90\n"
+                   "04.11.2026;Kontoführung Entgelt;-3,00\n"
+                   "05.11.2026;Carsharing Bonn;-12,00\n", encoding="utf-8")
+    answers = {"Quarkbude": "lebensmittel", "Entgelt": "Gebühren.", "Carsharing": "car-sharing"}
+    out = tmp_path / "o.csv"
+    info = sortcsv.sort_csv(src, out, categories=["Lebensmittel", "Gebühren", "car-sharing", "Sonstiges"],
+                            ask_fn=lambda prompt: next(a for key, a in answers.items() if key in prompt))
+    rows = out.read_text(encoding="utf-8-sig").splitlines()[1:]
+    assert [r.split(";")[-2:] for r in rows] == [["Lebensmittel", ""], ["Gebühren", ""], ["car-sharing", ""]]
+    assert info["flagged"] == 0

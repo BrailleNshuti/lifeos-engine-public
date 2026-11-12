@@ -128,8 +128,9 @@ def _record(home, path, model, text, today, note="asked via lifeos ask"):
         f.write(f"\n## Result · {model} · {today:%Y-%m-%d}\n{text}\n")
     ledger = Path(home) / "logs" / "ledger.csv"
     if ledger.exists():
+        glue = "" if ledger.read_bytes()[-1:] in (b"", b"\n") else "\n"  # a hand-edited file may lack its last newline
         with open(ledger, "a", encoding="utf-8") as f:
-            f.write(f"{today:%Y-%m-%d},{path.stem},{model},,{note}\n")
+            f.write(f"{glue}{today:%Y-%m-%d},{path.stem},{model},,{note}\n")
 
 
 def write_result(home, task_id, who, text, today=None, note="written via lifeos mcp"):
