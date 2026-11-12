@@ -129,7 +129,7 @@ def test_ollama_adapter_uses_local_address(monkeypatch):
         seen["url"], seen["body"] = req.full_url, req.data
         return Resp()
 
-    monkeypatch.setattr(ask.urllib.request, "urlopen", fake_open)
+    monkeypatch.setattr(ask, "_open_local", fake_open)  # the adapter bypasses the proxy through _open_local
     monkeypatch.delenv("OLLAMA_HOST", raising=False)
     assert ask.ask_ollama("P") == "LOCAL"
     assert seen["url"] == "http://localhost:11434/api/generate" and b'"stream": false' in seen["body"]
@@ -227,3 +227,46 @@ def test_ledger_without_a_final_newline_keeps_its_rows_apart(home):
     lines = ledger.read_text(encoding="utf-8").splitlines()
     assert lines[:-1] == rows and lines[-1].startswith("2026-11-20,T-261116-demo-cli,fake,")
     assert week_numbers(home, "2026-W47")["ledger_lines"] == 4  # the 3 rows already in that week plus the new one
+
+
+def test_local_ollama_request_ignores_the_system_proxy(monkeypatch):
+    """With http_proxy set, the 'local' request (prompt text included) must not be sent to the proxy."""
+    import http.server
+    import json as _json
+    import threading
+
+    class Handler(http.server.BaseHTTPRequestHandler):
+        def do_POST(self):
+            self.rfile.read(int(self.headers.get("Content-Length", 0)))
+            body = _json.dumps({"response": "local answer"}).encode()
+            self.send_response(200)
+            self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
+
+        def log_message(self, *args):
+            pass
+
+    server = http.server.HTTPServer(("127.0.0.1", 0), Handler)
+    threading.Thread(target=server.serve_forever, daemon=True).start()
+    try:
+        monkeypatch.setenv("OLLAMA_HOST", f"127.0.0.1:{server.server_port}")
+        for name in ("http_proxy", "HTTP_PROXY"):
+            monkeypatch.setenv(name, "http://127.0.0.1:9")  # nothing listens there: a proxied request fails
+        monkeypatch.delenv("no_proxy", raising=False)
+        monkeypatch.delenv("NO_PROXY", raising=False)
+        assert ask.ask_ollama("hello") == "local answer"
+    finally:
+        server.shutdown()
+
+
+def test_an_ollama_timeout_is_not_reported_as_a_missing_tool(monkeypatch):
+    import urllib.request
+
+    def slow(self, *args, **kwargs):
+        raise TimeoutError("timed out")
+
+    monkeypatch.setattr(urllib.request.OpenerDirector, "open", slow)
+    with pytest.raises(ask.AskError, match="did not answer") as caught:
+        ask.ask_ollama("hello")
+    assert not isinstance(caught.value, ask.ToolMissing)
