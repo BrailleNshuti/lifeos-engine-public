@@ -261,6 +261,9 @@ def test_transactional_journal_recovers_partial_crash_and_rejects_unsafe_paths(h
         "command": "ask",
         "task_id": "T-261116-demo-cli",
         "model": "fake",
+        "budget": 6000,
+        "full": False,
+        "parent_run_id": None,
         "status": "ok",
     }
     with pytest.raises(OSError, match="simulated mid-transaction crash"):
@@ -472,7 +475,7 @@ def test_lock_exclusivity_live_pid_protection_and_token_checked_release(home, mo
         f"import sys, time; sys.path.insert(0, {repo_root!r}); "
         f"from lifeos import store; "
         f"rid = sys.argv[1]; "
-        f"store.append_run_record({str(home)!r}, {{'run_id': rid, 'date': '2026-11-20', 'command': 'ask', 'status': 'ok'}})"
+        f"store.append_run_record({str(home)!r}, {{'run_id': rid, 'date': '2026-11-20', 'command': 'ask', 'task_id': 'T-261116-demo-cli', 'model': 'fake', 'budget': 6000, 'full': False, 'parent_run_id': None, 'status': 'ok'}})"
     )
     p1 = subprocess.Popen([sys.executable, "-c", contend_code, "R-261120-mp0001"])
     p2_mp = subprocess.Popen([sys.executable, "-c", contend_code, "R-261120-mp0002"])
@@ -497,6 +500,9 @@ def test_concurrent_writers_do_not_lose_or_corrupt_updates(home):
                 "command": "ask",
                 "task_id": "T-261116-demo-cli",
                 "model": f"m{idx}",
+                "budget": 6000,
+                "full": False,
+                "parent_run_id": None,
                 "status": "ok",
             }
             store.record_result(
@@ -778,20 +784,34 @@ def test_full_64_char_sha256_and_per_reviewer_isolated_worktree_review(home, tmp
             adapters={"r1": verifying_reviewer_2, "r2": r2_wt_crash},
             today=TODAY, repo=repo, commit="HEAD", run_id="R-261120-wtcrashsha",
         )
-    # Also test a legacy/incomplete child record lacking requested_commit during parentless crash recovery
+    # Also test parentless crash recovery when child record has missing/mismatched requested_commit, budget, or diff_sha256:
+    # each must raise ValueError with zero provider calls and no new run records!
     runs_file = home / "logs" / "runs.jsonl"
-    legacy_child = dict(store.get_run_record(home, "R-261120-wtcrashsha-c1"))
-    legacy_child["run_id"] = "R-261120-wtcrashnoreq-c1"
-    legacy_child["parent_run_id"] = "R-261120-wtcrashnoreq"
-    legacy_child.pop("requested_commit", None)
-    with open(runs_file, "a", encoding="utf-8") as rf:
-        rf.write(json.dumps(legacy_child) + "\n")
-    with pytest.raises(ValueError, match="already belongs to a different context or commit"):
-        ask.run_review(
-            home, "T-261116", reviewers=("r1", "r2"),
-            adapters={"r1": verifying_reviewer_2, "r2": verifying_reviewer_2},
-            today=TODAY, repo=repo, commit="HEAD", run_id="R-261120-wtcrashnoreq",
-        )
+    base_persisted_child = dict(store.get_run_record(home, "R-261120-wtcrashsha-c1"))
+    bad_child_cases = [
+        ("R-261120-wtcrashnoreq", lambda c: c.pop("requested_commit", None)),
+        ("R-261120-wtcrashnobudget", lambda c: c.pop("budget", None)),
+        ("R-261120-wtcrashbadbudget", lambda c: c.__setitem__("budget", 1234)),
+        ("R-261120-wtcrashnodiff", lambda c: c.pop("diff_sha256", None)),
+        ("R-261120-wtcrashbaddiff", lambda c: c.__setitem__("diff_sha256", "f" * 64)),
+    ]
+    for bad_grp_id, mutator in bad_child_cases:
+        c_copy = dict(base_persisted_child)
+        c_copy["run_id"] = f"{bad_grp_id}-c1"
+        c_copy["parent_run_id"] = bad_grp_id
+        mutator(c_copy)
+        with open(runs_file, "a", encoding="utf-8") as rf:
+            rf.write(json.dumps(c_copy) + "\n")
+        before_bad_runs = _read_runs(home)
+        called_in_bad = []
+        with pytest.raises(ValueError, match="child run_id"):
+            ask.run_review(
+                home, "T-261116", reviewers=("r1", "r2"),
+                adapters={"r1": lambda p: called_in_bad.append(p) or CLEAN, "r2": lambda p: called_in_bad.append(p) or CLEAN},
+                today=TODAY, repo=repo, commit="HEAD", run_id=bad_grp_id,
+            )
+        assert called_in_bad == []
+        assert _read_runs(home) == before_bad_runs
 
     # Create a feature branch and merge commit (--no-ff): inspect_repo_commit must produce a non-empty first-parent diff!
     default_branch = subprocess.run(
@@ -947,7 +967,26 @@ def test_schema_versioning_v1_normalization_and_locked_proof_logging(home):
     }
     runs_path.write_text(json.dumps(v1_legacy_12) + "\n" + json.dumps(v1_legacy_64) + "\n", encoding="utf-8")
 
-    # Newly written records always force schema_version=2 even if caller passes schema_version=1
+    # Newly written records always force schema_version=2 even if caller passes schema_version=1,
+    # and _stamp_v2_run_record rejects incomplete v2 records missing mandatory identity fields
+    with pytest.raises(ValueError, match="missing mandatory identity fields"):
+        store.append_run_record(home, {
+            "run_id": "R-261120-missingid",
+            "date": TODAY.isoformat(),
+            "command": "ask",
+            "task_id": "T-261116-demo-cli",
+            "model": "fake",
+            "status": "ok",
+        })
+    with pytest.raises(ValueError, match="missing mandatory identity fields"):
+        store.append_run_record(home, {
+            "run_id": "R-261120-missingrevid",
+            "date": TODAY.isoformat(),
+            "command": "review_group",
+            "task_id": "T-261116-demo-cli",
+            "model": "review:fake",
+            "status": "ok",
+        })
     store.append_run_record(home, {
         "schema_version": 1,
         "run_id": "R-261120-forcedv2",
@@ -955,9 +994,27 @@ def test_schema_versioning_v1_normalization_and_locked_proof_logging(home):
         "command": "ask",
         "task_id": "T-261116-demo-cli",
         "model": "fake",
+        "budget": 6000,
+        "full": False,
+        "parent_run_id": None,
         "context_sha256": "b" * 64,
         "status": "ok",
     })
+    # Also verify that if a malformed v2 record on disk lacks budget/full/diff_sha256, _verify_ask_identity and
+    # _verify_review_identity reject it with ValueError instead of silently accepting arbitrary values
+    with open(runs_path, "a", encoding="utf-8") as rf:
+        rf.write(json.dumps({
+            "schema_version": 2, "run_id": "R-261120-incompletev2ask", "date": TODAY.isoformat(),
+            "command": "ask", "task_id": "T-261116-demo-cli", "model": "fake", "status": "ok",
+        }) + "\n")
+        rf.write(json.dumps({
+            "schema_version": 2, "run_id": "R-261120-incompletev2rev", "date": TODAY.isoformat(),
+            "command": "review_group", "task_id": "T-261116-demo-cli", "model": "review:fake", "status": "ok",
+        }) + "\n")
+    with pytest.raises(ValueError, match="missing mandatory v2 ask identity fields"):
+        ask.run_ask(home, "fake", "T-261116", adapters={"fake": lambda p: CLEAN}, today=TODAY, run_id="R-261120-incompletev2ask")
+    with pytest.raises(ValueError, match="missing mandatory v2 review identity fields"):
+        ask.run_review(home, "T-261116", reviewers=("fake",), adapters={"fake": lambda p: CLEAN}, today=TODAY, run_id="R-261120-incompletev2rev")
     ask.run_ask(
         home, "fake", "T-261116", adapters={"fake": lambda p: CLEAN}, today=TODAY, run_id="R-261120-v2rec001"
     )
