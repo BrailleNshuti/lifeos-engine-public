@@ -81,11 +81,11 @@ Claude Desktop: add this to `claude_desktop_config.json` under `mcpServers`, the
 Use your own path for LIFEOS_HOME.
 
 ```json
-"lifeos": {"command": "python", "args": ["-P", "-m", "lifeos.cli", "mcp"], "env": {"LIFEOS_HOME": "C:\\Users\\you\\lifeos"}}
+"lifeos": {"command": "lifeos", "args": ["mcp"], "env": {"LIFEOS_HOME": "C:\\Users\\you\\lifeos"}}
 ```
 
-Claude Code: `claude mcp add -s user lifeos -e LIFEOS_HOME=<path> -- python -P -m lifeos.cli mcp` (`-P` keeps a `~/lifeos` data repo folder from shadowing the `lifeos` package when the app starts in `~`).
-Other MCP apps (Codex, agy) use the same program (`python -P -m lifeos.cli mcp`) and `LIFEOS_HOME` environment variable.
+Claude Code: `claude mcp add -s user lifeos -e LIFEOS_HOME=<path> -- lifeos mcp` (or `python -P -m lifeos.cli mcp` on Python 3.11+; using `lifeos` or `-P` keeps a `~/lifeos` data repo folder from shadowing the `lifeos` package when the app starts in `~`).
+Other MCP apps (Codex, agy) use the same program and `LIFEOS_HOME` environment variable.
 `lifeos_ask` can take minutes; some apps stop waiting after about a minute. Screenshots stay in the chat.
 
 ## Claude as the lead
