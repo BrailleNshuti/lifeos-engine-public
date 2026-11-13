@@ -11,6 +11,7 @@ from pathlib import Path
 import re
 import shutil
 import subprocess
+import sys
 import tempfile
 import threading
 import time
@@ -88,17 +89,29 @@ def _isolated_git_worktree(repo_info):
         shutil.rmtree(parent_tmp, ignore_errors=True)
 
 
+def _child_env():
+    """Ensure the active Python interpreter and its Scripts/bin directory are on PATH for child CLI subprocesses."""
+    env = os.environ.copy()
+    py_dir = Path(sys.executable).resolve().parent
+    scripts_dir = py_dir / ("Scripts" if os.name == "nt" else "bin")
+    prepend = [str(d) for d in (scripts_dir, py_dir) if d.is_dir()]
+    cur_path = env.get("PATH", "")
+    env["PATH"] = os.pathsep.join(prepend + ([cur_path] if cur_path else []))
+    return env
+
+
 def _run_cli(cmd, prompt, timeout=TIMEOUT, via_stdin=True):
     exe = shutil.which(cmd[0])  # finds codex.cmd and friends on Windows
     if not exe:
         raise ToolMissing(f"{cmd[0]} is not installed or not on PATH.")
     active_cwd = current_review_cwd()
+    env = _child_env()
     try:
         if active_cwd is not None:
             done = subprocess.run(
                 [exe, *cmd[1:]], input=prompt if via_stdin else None,
                 stdin=None if via_stdin else subprocess.DEVNULL, capture_output=True, text=True,
-                timeout=timeout, encoding="utf-8", errors="replace", cwd=str(active_cwd),
+                timeout=timeout, encoding="utf-8", errors="replace", cwd=str(active_cwd), env=env,
             )
         else:
             # An empty temp folder: the model sees the pack and nothing else on disk
@@ -106,7 +119,7 @@ def _run_cli(cmd, prompt, timeout=TIMEOUT, via_stdin=True):
                 done = subprocess.run(
                     [exe, *cmd[1:]], input=prompt if via_stdin else None,
                     stdin=None if via_stdin else subprocess.DEVNULL, capture_output=True, text=True,
-                    timeout=timeout, encoding="utf-8", errors="replace", cwd=empty,
+                    timeout=timeout, encoding="utf-8", errors="replace", cwd=empty, env=env,
                 )
     except subprocess.TimeoutExpired:
         raise AskError(f"{cmd[0]} timed out after {timeout} s.") from None
@@ -368,7 +381,8 @@ def _verify_ask_identity(rec, task_stem, expected_model):
 
 
 def _verify_review_identity(rec, task_stem, expected_model, repo, commit):
-    """Ensure a reused run_id matches the original review_group command, task_id, reviewers, repo, and commit."""
+    """Ensure a reused run_id matches the original review_group command, task_id, reviewers, repo, and literal requested_commit
+    without inspecting Git or reopening the repository."""
     if (
         rec.get("command") != "review_group"
         or rec.get("task_id") != task_stem
@@ -384,19 +398,33 @@ def _verify_review_identity(rec, task_stem, expected_model, repo, commit):
     if repo:
         if Path(repo).resolve() != Path(rec_repo).resolve():
             raise ValueError(f"run_id '{rec.get('run_id')}' already belongs to repository '{rec_repo}'.")
+        req_arg = str(commit or "HEAD")
+        rec_req = rec.get("requested_commit")
         rec_sha = str(rec.get("commit_sha") or "")
-        req_commit = str(rec.get("requested_commit") or "HEAD")
-        repo_path = Path(repo)
-        if repo_path.is_dir() and (repo_path / ".git").exists():
-            try:
-                cur_sha = inspect_repo_commit(repo, commit)["commit_sha"]
-            except Exception as err:
-                raise ValueError(f"run_id '{rec.get('run_id')}' commit mismatch: {err}") from err
-            if rec_sha and cur_sha != rec_sha:
-                raise ValueError(f"run_id '{rec.get('run_id')}' already belongs to commit '{rec_sha}'.")
-        else:
-            if commit != req_commit and not (commit and rec_sha.startswith(str(commit))):
-                raise ValueError(f"run_id '{rec.get('run_id')}' already belongs to commit '{rec_sha}'.")
+        if rec_req is not None:
+            if req_arg != str(rec_req) and not (rec_sha and req_arg == rec_sha):
+                raise ValueError(
+                    f"run_id '{rec.get('run_id')}' already belongs to commit '{rec_sha or rec_req}'."
+                )
+        elif rec_sha and req_arg not in ("HEAD", rec_sha):
+            raise ValueError(f"run_id '{rec.get('run_id')}' already belongs to commit '{rec_sha}'.")
+
+
+def _verify_review_child_identity(child_rec, group_id, task_stem, who, digest, repo_label, commit_sha, req_commit):
+    """Ensure a persisted child review record from an interrupted run matches the parent, task, model, context digest, repo, and commit."""
+    if (
+        child_rec.get("command") != "review"
+        or child_rec.get("parent_run_id") != group_id
+        or child_rec.get("task_id") != task_stem
+        or child_rec.get("model") != who
+        or child_rec.get("context_sha256") != digest
+        or child_rec.get("repo") != repo_label
+        or child_rec.get("commit_sha") != commit_sha
+        or (child_rec.get("requested_commit") is not None and child_rec.get("requested_commit") != req_commit)
+    ):
+        raise ValueError(
+            f"child run_id '{child_rec.get('run_id')}' already belongs to a different context or commit."
+        )
 
 
 def run_ask(home, model, task_id, budget=6000, dry_run=False, adapters=None, today=None, full=False,
@@ -524,6 +552,7 @@ def run_review(home, task_id, reviewers=("codex", "claude"), budget=6000, dry_ru
                     }
                 raise _reconstruct_persisted_error(home, existing_group)
 
+        req_commit = str(commit or "HEAD") if repo else None
         group_started_iso = utc_now_iso()
         try:
             repo_info = inspect_repo_commit(repo, commit) if repo else None
@@ -536,7 +565,7 @@ def run_review(home, task_id, reviewers=("codex", "claude"), budget=6000, dry_ru
                     "command": "review_group", "task_id": path.stem, "model": expected_model,
                     "locality": "mixed", "context_sha256": pack_hash(""), "tokens": 0, "duration_ms": 0,
                     "status": "failed", "terminal": True, "flags": 0, "child_run_ids": [],
-                    "commit_sha": None, "requested_commit": commit if repo else None,
+                    "commit_sha": None, "requested_commit": req_commit,
                     "repo": str(Path(repo).resolve()) if repo else None, "error": redacted,
                 })
                 raise AskError(redacted) from err
@@ -557,7 +586,7 @@ def run_review(home, task_id, reviewers=("codex", "claude"), budget=6000, dry_ru
                     "command": "review_group", "task_id": path.stem, "model": expected_model,
                     "locality": "mixed", "context_sha256": digest, "tokens": tokens, "duration_ms": 0,
                     "status": "blocked", "terminal": True, "phase": "outbound_context", "flags": 0,
-                    "child_run_ids": [], "commit_sha": commit_sha, "requested_commit": commit if repo else None,
+                    "child_run_ids": [], "commit_sha": commit_sha, "requested_commit": req_commit,
                     "repo": repo_label, "error": redact_error(err),
                 })
             raise
@@ -580,14 +609,9 @@ def run_review(home, task_id, reviewers=("codex", "claude"), budget=6000, dry_ru
             if run_id:
                 existing_child = get_run_record(home, child_id, normalize=True)
                 if existing_child is not None:
-                    if (
-                        existing_child.get("command") != "review"
-                        or existing_child.get("task_id") != path.stem
-                        or existing_child.get("model") != who
-                    ):
-                        raise ValueError(
-                            f"child run_id '{child_id}' already belongs to a different operation."
-                        )
+                    _verify_review_child_identity(
+                        existing_child, group_id, path.stem, who, digest, repo_label, commit_sha, req_commit,
+                    )
                     if existing_child.get("status") == "ok":
                         flag_count = int(existing_child.get("flags", 0))
                         results.append({
@@ -604,7 +628,8 @@ def run_review(home, task_id, reviewers=("codex", "claude"), budget=6000, dry_ru
                 "schema_version": RUN_SCHEMA_VERSION, "run_id": child_id, "parent_run_id": group_id,
                 "date": day.isoformat(), "started_at": child_started_iso, "command": "review",
                 "task_id": path.stem, "model": who, "locality": locality, "context_sha256": digest,
-                "tokens": tokens, "commit_sha": commit_sha, "repo": repo_label, "terminal": True,
+                "tokens": tokens, "commit_sha": commit_sha, "requested_commit": req_commit,
+                "repo": repo_label, "terminal": True,
             }
             started = time.monotonic()
             phase = None
@@ -673,7 +698,7 @@ def run_review(home, task_id, reviewers=("codex", "claude"), budget=6000, dry_ru
             "locality": "mixed", "context_sha256": digest, "tokens": tokens, "duration_ms": group_elapsed,
             "status": group_status, "terminal": True, "flags": sum(len(r["flags"]) for r in results),
             "child_run_ids": child_ids, "commit_sha": commit_sha,
-            "requested_commit": commit if repo else None, "repo": repo_label,
+            "requested_commit": req_commit, "repo": repo_label,
         }
         if first_err is not None:
             parent_rec["error"] = redact_error(first_err)

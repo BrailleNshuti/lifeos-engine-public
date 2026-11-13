@@ -32,7 +32,7 @@ def _read_runs(home):
     return [json.loads(line) for line in path.read_text(encoding="utf-8").splitlines() if line.strip()]
 
 
-def test_pre_execution_run_id_idempotency_prevents_duplicate_ask_and_review(home):
+def test_pre_execution_run_id_idempotency_prevents_duplicate_ask_and_review(home, monkeypatch):
     ask_calls = []
     rev_calls = []
 
@@ -118,6 +118,29 @@ def test_pre_execution_run_id_idempotency_prevents_duplicate_ask_and_review(home
     assert parent_after is not None and parent_after["status"] == "ok"
     assert parent_after["child_run_ids"] == ["R-261120-revcrash-c1", "R-261120-revcrash-c2"]
 
+    # 3b. Crash after child 1 commits, then mutating the task context before retry is rejected with ValueError
+    crash_task = home / "tasks" / "T-261120-ctxmut.md"
+    crash_task.write_text("# Original task facts\n", encoding="utf-8")
+    r2_ctx_calls = []
+
+    def r2_ctx_crash(prompt):
+        r2_ctx_calls.append(prompt)
+        if len(r2_ctx_calls) == 1:
+            raise SimulatedProcessCrash("crash after child 1")
+        return CLEAN
+
+    with pytest.raises(SimulatedProcessCrash):
+        ask.run_review(
+            home, "T-261120-ctxmut", reviewers=("r1", "r2"),
+            adapters={"r1": r1_ok, "r2": r2_ctx_crash}, today=TODAY, run_id="R-261120-revcrashctx",
+        )
+    crash_task.write_text("# Mutated task facts after child 1 committed\n", encoding="utf-8")
+    with pytest.raises(ValueError, match="already belongs to a different context or commit"):
+        ask.run_review(
+            home, "T-261120-ctxmut", reviewers=("r1", "r2"),
+            adapters={"r1": r1_ok, "r2": r2_ctx_crash}, today=TODAY, run_id="R-261120-revcrashctx",
+        )
+
     # 4. Mismatched run_id reuse across command, task, model, or reviewer list is rejected with ValueError
     other_task = home / "tasks" / "T-261120-other.md"
     other_task.write_text("# Other task\n", encoding="utf-8")
@@ -134,49 +157,68 @@ def test_pre_execution_run_id_idempotency_prevents_duplicate_ask_and_review(home
     with pytest.raises(ValueError, match="already belongs to a different operation"):
         ask.run_review(home, "T-261120-other", reviewers=("r1", "r2"), adapters={"r1": counting_rev, "r2": counting_rev}, today=TODAY, run_id="R-261120-revidem1")
 
-    # 5. Simultaneous concurrent retries with the same run_id (ask and review) execute the provider only once
+    # 5. Simultaneous concurrent retries with the same run_id (ask and review) execute the provider only once,
+    #    never time out at 30s when waiting on a slow provider (>35s simulated elapsed time), and return cleanly in both threads
     simul_ask_calls = []
+    ask_outcomes = []
+    ask_errors = []
+    real_monotonic = store.time.monotonic
+    clock_offset = {"sec": 0.0}
+    monkeypatch.setattr(store.time, "monotonic", lambda: real_monotonic() + clock_offset["sec"])
 
     def slow_ask(prompt):
         time.sleep(0.05)
+        clock_offset["sec"] += 35.0  # Simulate >30s provider execution while second thread waits on run_lock
         simul_ask_calls.append(prompt)
         return CLEAN
 
-    t_ask1 = threading.Thread(
-        target=lambda: ask.run_ask(home, "fake", "T-261116", adapters={"fake": slow_ask}, today=TODAY, run_id="R-261120-simulask")
-    )
-    t_ask2 = threading.Thread(
-        target=lambda: ask.run_ask(home, "fake", "T-261116", adapters={"fake": slow_ask}, today=TODAY, run_id="R-261120-simulask")
-    )
+    def run_ask_worker():
+        try:
+            ask_outcomes.append(
+                ask.run_ask(home, "fake", "T-261116", adapters={"fake": slow_ask}, today=TODAY, run_id="R-261120-simulask")
+            )
+        except BaseException as exc:
+            ask_errors.append(exc)
+
+    t_ask1 = threading.Thread(target=run_ask_worker)
+    t_ask2 = threading.Thread(target=run_ask_worker)
     t_ask1.start()
     t_ask2.start()
     t_ask1.join()
     t_ask2.join()
+    monkeypatch.setattr(store.time, "monotonic", real_monotonic)
+    assert ask_errors == []
+    assert len(ask_outcomes) == 2 and ask_outcomes[0] == task_path and ask_outcomes[1] == task_path
     assert len(simul_ask_calls) == 1
 
     simul_rev_calls = []
+    rev_outcomes = []
+    rev_errors = []
 
     def slow_rev(prompt):
         time.sleep(0.04)
         simul_rev_calls.append(prompt)
         return CLEAN
 
-    t_rev1 = threading.Thread(
-        target=lambda: ask.run_review(
-            home, "T-261116", reviewers=("r1", "r2"),
-            adapters={"r1": slow_rev, "r2": slow_rev}, today=TODAY, run_id="R-261120-simulrev"
-        )
-    )
-    t_rev2 = threading.Thread(
-        target=lambda: ask.run_review(
-            home, "T-261116", reviewers=("r1", "r2"),
-            adapters={"r1": slow_rev, "r2": slow_rev}, today=TODAY, run_id="R-261120-simulrev"
-        )
-    )
+    def run_rev_worker():
+        try:
+            rev_outcomes.append(
+                ask.run_review(
+                    home, "T-261116", reviewers=("r1", "r2"),
+                    adapters={"r1": slow_rev, "r2": slow_rev}, today=TODAY, run_id="R-261120-simulrev",
+                )
+            )
+        except BaseException as exc:
+            rev_errors.append(exc)
+
+    t_rev1 = threading.Thread(target=run_rev_worker)
+    t_rev2 = threading.Thread(target=run_rev_worker)
     t_rev1.start()
     t_rev2.start()
     t_rev1.join()
     t_rev2.join()
+    assert rev_errors == []
+    assert len(rev_outcomes) == 2 and all(o["group_run_id"] == "R-261120-simulrev" for o in rev_outcomes)
     assert len(simul_rev_calls) == 2
 
 
@@ -657,15 +699,91 @@ def test_full_64_char_sha256_and_per_reviewer_isolated_worktree_review(home, tmp
             today=TODAY, repo=repo, commit="HEAD", run_id="R-261120-wtfail01",
         )
 
-    # Commit collision: advancing HEAD and reusing R-261120-wtgroup1 with commit="HEAD" is rejected with ValueError
+    # Record an initial repository inspection failure (invalid commit ref -> commit_sha is None, requested_commit="bad-ref"):
+    # retrying with the SAME requested_commit replays AskError, while reusing the run_id with a different commit raises ValueError!
+    with pytest.raises(ask.AskError):
+        ask.run_review(
+            home, "T-261116", reviewers=("r1",),
+            adapters={"r1": verifying_reviewer_2},
+            today=TODAY, repo=repo, commit="bad-ref-does-not-exist", run_id="R-261120-wtinspfail",
+        )
+    with pytest.raises(ask.AskError):
+        ask.run_review(
+            home, "T-261116", reviewers=("r1",),
+            adapters={"r1": verifying_reviewer_2},
+            today=TODAY, repo=repo, commit="bad-ref-does-not-exist", run_id="R-261120-wtinspfail",
+        )
+    with pytest.raises(ValueError, match="already belongs to commit"):
+        ask.run_review(
+            home, "T-261116", reviewers=("r1",),
+            adapters={"r1": verifying_reviewer_2},
+            today=TODAY, repo=repo, commit="HEAD", run_id="R-261120-wtinspfail",
+        )
+
+    # Constrained-budget review pack: even when task facts and rules.md are huge, repo_commit and commit_diff are guaranteed
+    repo_info_for_budget = context.inspect_repo_commit(repo, "HEAD")
+    big_task = home / "tasks" / "T-261120-bigreview.md"
+    big_task.write_text("# Big Task\n" + ("detailed context line " * 400) + "\n", encoding="utf-8")
+    constrained_pack, constrained_tokens = context.build_review_pack(
+        home, "T-261120-bigreview", budget=250, repo_info=repo_info_for_budget
+    )
+    assert f"=== repo_commit ({head_sha[:12]})" in constrained_pack
+    assert f"=== commit_diff ({head_sha[:12]})" in constrained_pack
+    assert "def add(a, b):" in constrained_pack
+    assert constrained_tokens <= 260
+    with pytest.raises(ValueError, match="too small to include repository metadata and commit diff"):
+        context.build_review_pack(home, "T-261120-bigreview", budget=40, repo_info=repo_info_for_budget)
+
+    # Partial-review crash recovery rejects reusing child 1 if HEAD advances before retry!
+    class SimulatedRepoCrash(BaseException):
+        pass
+
+    wt_crash_calls = []
+
+    def r2_wt_crash(prompt):
+        wt_crash_calls.append(prompt)
+        if len(wt_crash_calls) == 1:
+            raise SimulatedRepoCrash("crash after child 1 in worktree review")
+        return CLEAN
+
+    with pytest.raises(SimulatedRepoCrash):
+        ask.run_review(
+            home, "T-261116", reviewers=("r1", "r2"),
+            adapters={"r1": verifying_reviewer_2, "r2": r2_wt_crash},
+            today=TODAY, repo=repo, commit="HEAD", run_id="R-261120-wtcrashsha",
+        )
     (repo / "module.py").write_text(orig_code + "\n# second commit\n", encoding="utf-8")
     subprocess.run(["git", "add", "module.py"], cwd=repo, check=True, capture_output=True)
     subprocess.run(["git", "commit", "-m", "Second commit"], cwd=repo, check=True, capture_output=True)
+    with pytest.raises(ValueError, match="already belongs to a different context or commit"):
+        ask.run_review(
+            home, "T-261116", reviewers=("r1", "r2"),
+            adapters={"r1": verifying_reviewer_2, "r2": r2_wt_crash},
+            today=TODAY, repo=repo, commit="HEAD", run_id="R-261120-wtcrashsha",
+        )
+
+    # Reusing a completed parent run_id with a different requested commit string is rejected with ValueError
     with pytest.raises(ValueError, match="already belongs to commit"):
         ask.run_review(
             home, "T-261116", reviewers=("r1", "r2"),
             adapters={"r1": mutating_reviewer_1, "r2": verifying_reviewer_2},
-            today=TODAY, repo=repo, commit="HEAD", run_id="R-261120-wtgroup1",
+            today=TODAY, repo=repo, commit="HEAD~1", run_id="R-261120-wtgroup1",
+        )
+
+    # Corrupt the existing repository on disk so any git inspection would fail: persisted parent runs still replay
+    # without inspecting git!
+    (repo / ".git" / "HEAD").write_text("corrupted-invalid-git-head\n", encoding="utf-8")
+    replay_broken_ok = ask.run_review(
+        home, "T-261116", reviewers=("r1", "r2"),
+        adapters={"r1": mutating_reviewer_1, "r2": verifying_reviewer_2},
+        today=TODAY, repo=repo, commit="HEAD", run_id="R-261120-wtgroup1",
+    )
+    assert replay_broken_ok["commit_sha"] == head_sha and replay_broken_ok["group_run_id"] == "R-261120-wtgroup1"
+    with pytest.raises(ask.AskError, match="worktree reviewer boom"):
+        ask.run_review(
+            home, "T-261116", reviewers=("r1",),
+            adapters={"r1": verifying_reviewer_2},
+            today=TODAY, repo=repo, commit="HEAD", run_id="R-261120-wtfail01",
         )
 
     # Remove/relocate the reviewed repository from its path completely: retrying with the original run_id still replays
