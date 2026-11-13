@@ -6,3 +6,11 @@ __pycache__/
 *.env
 dist/
 build/
+logs/.store.lock
+logs/.store.journal.json
+logs/.store.journal.corrupt.*
+**/logs/.store.lock
+**/logs/.store.journal.json
+**/logs/.store.journal.corrupt.*
+.*.tmp
+**/.*.tmp

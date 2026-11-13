@@ -7,7 +7,7 @@ from .guard import private_patterns, scan_text
 from .home import estimate_tokens
 from .labcard import LabRefused, decode_card_bytes, format_pack, format_results_template, parse_card
 from .labscore import ScoreRefused, parse_results, score_card_results
-from .store import append_proof_row, atomic_write_bytes
+from .store import append_proof_row, atomic_write_bytes, store_lock
 
 
 def resolve_card_path(home, card_arg):
@@ -126,29 +126,31 @@ def score_results(home, card_arg, results_arg, dry_run=False):
         missing = ", ".join(scored["missing_manual"])
         raise LabRefused(f"missing manual verdict for {missing} in ## manual")
 
-    run_num, prior_scores, same_tests_diff_prompt, already_logged = _prior_lab_runs(
-        home, card, res["model"], res["results_hash"]
-    )
-    k = scored["passed_count"]
-    proof_text = (
-        f"{card['name']} v{card['version']}; {k}/5; {res['model']}; "
-        f"run {run_num}; typed by hand; results {res['results_hash']}; lifeos {__version__}"
-    )
-
-    logged = False
-    if not dry_run and home is not None and not already_logged:
-        try:
-            rel_link = res_path.resolve().relative_to(Path(home).resolve()).as_posix()
-        except ValueError:
-            rel_link = res_path.as_posix()
-        logged = append_proof_row(
-            Path(home) / "logs" / "proofs.csv",
-            res["date"],
-            "lab",
-            proof_text,
-            rel_link,
-            dedupe_token=f"results {res['results_hash']}",
+    with store_lock(home):
+        run_num, prior_scores, same_tests_diff_prompt, already_logged = _prior_lab_runs(
+            home, card, res["model"], res["results_hash"]
         )
+        k = scored["passed_count"]
+        proof_text = (
+            f"{card['name']} v{card['version']}; {k}/5; {res['model']}; "
+            f"run {run_num}; typed by hand; results {res['results_hash']}; lifeos {__version__}"
+        )
+
+        logged = False
+        if not dry_run and home is not None and not already_logged:
+            try:
+                rel_link = res_path.resolve().relative_to(Path(home).resolve()).as_posix()
+            except ValueError:
+                rel_link = res_path.as_posix()
+            logged = append_proof_row(
+                Path(home) / "logs" / "proofs.csv",
+                res["date"],
+                "lab",
+                proof_text,
+                rel_link,
+                dedupe_token=f"results {res['results_hash']}",
+                home=home,
+            )
 
     return {
         "card": card,

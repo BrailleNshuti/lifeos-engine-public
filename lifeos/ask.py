@@ -21,7 +21,7 @@ import urllib.request
 from .check import check_answer
 from .context import build_pack, build_review_pack, inspect_repo_commit, pack_hash, task_file
 from .guard import TOKEN_PATTERNS, SECRET_ASSIGNMENT, private_patterns, scan_text
-from .store import append_run_record, has_run_id, model_call_note, new_run_id, record_result
+from .store import RUN_SCHEMA_VERSION, append_run_record, has_run_id, model_call_note, new_run_id, record_result, utc_now_iso
 
 TIMEOUT = 600
 PROBE_TIMEOUT = 3
@@ -224,16 +224,16 @@ def _probe_ollama_tags():
         return None
 
 
-def provider_status(probe=False):
+def provider_status(probe=False, smoke=False):
     """Return availability, capability contract and (when probe=True) live health status for each provider."""
     rows = []
-    tags = _probe_ollama_tags() if probe else None
+    tags = _probe_ollama_tags() if (probe or smoke) else None
     for name, info in sorted(PROVIDERS.items()):
         exe = shutil.which(info["binary"])
         available = bool(exe)
         status = "available" if available else "missing"
         detail = info["binary"]
-        if probe:
+        if probe or smoke:
             if name in ("ollama", "qwen"):
                 target = qwen_model() if name == "qwen" else os.environ.get("LIFEOS_OLLAMA_MODEL", "llama3.2")
                 detail = f"ollama ({target})"
@@ -245,13 +245,25 @@ def provider_status(probe=False):
                     status = "model_missing"
             elif not available:
                 status = "missing"
+            elif smoke:
+                try:
+                    ans = ADAPTERS[name]("Reply with OK only.")
+                    status = "healthy" if ans else "unhealthy"
+                    detail = f"{info['binary']} (smoke ok)" if ans else f"{info['binary']} (empty smoke response)"
+                except Exception:
+                    status = "unhealthy"
+                    detail = f"{info['binary']} (smoke failed)"
             else:
                 try:
                     done = subprocess.run(
                         [exe, "--version"], capture_output=True, text=True, timeout=PROBE_TIMEOUT,
                         encoding="utf-8", errors="replace",
                     )
-                    status = "healthy" if done.returncode == 0 else "unhealthy"
+                    if done.returncode == 0:
+                        status = "cli_healthy"
+                        detail = f"{info['binary']} (--version ok)"
+                    else:
+                        status = "unhealthy"
                 except Exception:
                     status = "unreachable"
         rows.append({
@@ -316,21 +328,23 @@ def run_ask(home, model, task_id, budget=6000, dry_run=False, adapters=None, tod
     if not dry_run and has_run_id(home, rid):
         return path
 
+    started_iso = utc_now_iso()
     pack, tokens = build_pack(home, task_id, budget, task_first=True, names=None if full else MINIMAL)
     digest = pack_hash(pack)
     locality = PROVIDERS.get(model, {}).get("locality", "remote")
     base_rec = {
-        "run_id": rid, "parent_run_id": parent_run_id, "date": day.isoformat(), "command": "ask",
+        "schema_version": RUN_SCHEMA_VERSION, "run_id": rid, "parent_run_id": parent_run_id,
+        "date": day.isoformat(), "started_at": started_iso, "command": "ask",
         "task_id": path.stem, "model": label(model), "locality": locality,
-        "context_sha256": digest, "tokens": tokens,
+        "context_sha256": digest, "tokens": tokens, "terminal": True,
     }
     try:
         check_text(pack, "the context pack", "Nothing was sent.")
     except Blocked as err:
         if not dry_run:
             append_run_record(home, {
-                **base_rec, "duration_ms": 0, "status": "blocked", "phase": "outbound_context",
-                "flags": 0, "error": redact_error(err),
+                **base_rec, "finished_at": utc_now_iso(), "duration_ms": 0, "status": "blocked",
+                "phase": "outbound_context", "flags": 0, "error": redact_error(err),
             })
         raise
     if dry_run:
@@ -342,14 +356,14 @@ def run_ask(home, model, task_id, budget=6000, dry_run=False, adapters=None, tod
     except ToolMissing as err:
         elapsed_ms = int((time.monotonic() - started) * 1000)
         append_run_record(home, {
-            **base_rec, "duration_ms": elapsed_ms, "status": "tool_missing",
+            **base_rec, "finished_at": utc_now_iso(), "duration_ms": elapsed_ms, "status": "tool_missing",
             "flags": 0, "error": redact_error(err),
         })
         raise
     except AskError as err:
         elapsed_ms = int((time.monotonic() - started) * 1000)
         append_run_record(home, {
-            **base_rec, "duration_ms": elapsed_ms, "status": _classify_ask_error(err),
+            **base_rec, "finished_at": utc_now_iso(), "duration_ms": elapsed_ms, "status": _classify_ask_error(err),
             "flags": 0, "error": redact_error(err),
         })
         raise
@@ -359,14 +373,17 @@ def run_ask(home, model, task_id, budget=6000, dry_run=False, adapters=None, tod
         check_text(text, "the answer", "Nothing was written to your files.")
     except Blocked as err:
         append_run_record(home, {
-            **base_rec, "duration_ms": elapsed_ms, "status": "blocked", "phase": "inbound_answer",
-            "flags": 0, "error": redact_error(err),
+            **base_rec, "finished_at": utc_now_iso(), "duration_ms": elapsed_ms, "status": "blocked",
+            "phase": "inbound_answer", "flags": 0, "error": redact_error(err),
         })
         raise
 
     flags = check_answer(text)
     note = model_call_note(len(flags))  # the count only: never the answer or the flag texts
-    run_rec = {**base_rec, "duration_ms": elapsed_ms, "status": "ok", "flags": len(flags)}
+    run_rec = {
+        **base_rec, "finished_at": utc_now_iso(), "duration_ms": elapsed_ms,
+        "status": "ok", "flags": len(flags),
+    }
     record_result(home, path, label(model), text, day, note, run_id=rid, run_record=run_rec)
     return path
 
@@ -385,6 +402,7 @@ def run_review(home, task_id, reviewers=("codex", "claude"), budget=6000, dry_ru
     path = task_file(home, task_id)
     day = today or dt.date.today()
     group_id = run_id or new_run_id(day)
+    group_started_iso = utc_now_iso()
     repo_info = inspect_repo_commit(repo, commit) if repo else None
     pack, tokens = build_review_pack(home, task_id, budget, diff_text=diff_text, repo_info=repo_info)
     digest = pack_hash(pack)
@@ -402,11 +420,13 @@ def run_review(home, task_id, reviewers=("codex", "claude"), budget=6000, dry_ru
     except Blocked as err:
         if not dry_run:
             append_run_record(home, {
-                "run_id": group_id, "parent_run_id": None, "date": day.isoformat(), "command": "review_group",
-                "task_id": path.stem, "model": ",".join(f"review:{label(r)}" for r in cleaned),
+                "schema_version": RUN_SCHEMA_VERSION, "run_id": group_id, "parent_run_id": None,
+                "date": day.isoformat(), "started_at": group_started_iso, "finished_at": utc_now_iso(),
+                "command": "review_group", "task_id": path.stem,
+                "model": ",".join(f"review:{label(r)}" for r in cleaned),
                 "locality": "mixed", "context_sha256": digest, "tokens": tokens, "duration_ms": 0,
-                "status": "blocked", "phase": "outbound_context", "flags": 0, "child_run_ids": [],
-                "commit_sha": commit_sha, "repo": repo_label, "error": redact_error(err),
+                "status": "blocked", "terminal": True, "phase": "outbound_context", "flags": 0,
+                "child_run_ids": [], "commit_sha": commit_sha, "repo": repo_label, "error": redact_error(err),
             })
         raise
 
@@ -426,10 +446,12 @@ def run_review(home, task_id, reviewers=("codex", "claude"), budget=6000, dry_ru
         child_ids.append(child_id)
         who = f"review:{label(r)}"
         locality = PROVIDERS.get(r, {}).get("locality", "remote")
+        child_started_iso = utc_now_iso()
         base_child = {
-            "run_id": child_id, "parent_run_id": group_id, "date": day.isoformat(), "command": "review",
+            "schema_version": RUN_SCHEMA_VERSION, "run_id": child_id, "parent_run_id": group_id,
+            "date": day.isoformat(), "started_at": child_started_iso, "command": "review",
             "task_id": path.stem, "model": who, "locality": locality, "context_sha256": digest,
-            "tokens": tokens, "commit_sha": commit_sha, "repo": repo_label,
+            "tokens": tokens, "commit_sha": commit_sha, "repo": repo_label, "terminal": True,
         }
         started = time.monotonic()
         try:
@@ -446,7 +468,7 @@ def run_review(home, task_id, reviewers=("codex", "claude"), budget=6000, dry_ru
             else:
                 st = _classify_ask_error(err)
             append_run_record(home, {
-                **base_child, "duration_ms": elapsed_ms, "status": st,
+                **base_child, "finished_at": utc_now_iso(), "duration_ms": elapsed_ms, "status": st,
                 "flags": 0, "error": redact_error(err),
             })
             if first_err is None:
@@ -454,7 +476,10 @@ def run_review(home, task_id, reviewers=("codex", "claude"), budget=6000, dry_ru
             continue
 
         flags = check_answer(text)
-        child_rec = {**base_child, "duration_ms": elapsed_ms, "status": "ok", "flags": len(flags)}
+        child_rec = {
+            **base_child, "finished_at": utc_now_iso(), "duration_ms": elapsed_ms,
+            "status": "ok", "flags": len(flags),
+        }
         record_result(home, path, who, text, day, model_call_note(len(flags)), run_id=child_id, run_record=child_rec)
         results.append({"model": r, "label": who, "run_id": child_id, "text": text, "flags": flags})
 
@@ -467,10 +492,12 @@ def run_review(home, task_id, reviewers=("codex", "claude"), budget=6000, dry_ru
         group_status = "failed"
 
     parent_rec = {
-        "run_id": group_id, "parent_run_id": None, "date": day.isoformat(), "command": "review_group",
-        "task_id": path.stem, "model": ",".join(f"review:{label(r)}" for r in cleaned),
+        "schema_version": RUN_SCHEMA_VERSION, "run_id": group_id, "parent_run_id": None,
+        "date": day.isoformat(), "started_at": group_started_iso, "finished_at": utc_now_iso(),
+        "command": "review_group", "task_id": path.stem,
+        "model": ",".join(f"review:{label(r)}" for r in cleaned),
         "locality": "mixed", "context_sha256": digest, "tokens": tokens, "duration_ms": group_elapsed,
-        "status": group_status, "flags": sum(len(r["flags"]) for r in results),
+        "status": group_status, "terminal": True, "flags": sum(len(r["flags"]) for r in results),
         "child_run_ids": child_ids, "commit_sha": commit_sha, "repo": repo_label,
     }
     if first_err is not None:

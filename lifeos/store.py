@@ -1,9 +1,9 @@
-"""Durable, locked, journaled writes shared by LifeOS commands.
+"""Locked, crash-recoverable multi-file commits shared by LifeOS commands.
 
 All task results, ledger rows, proof rows and execution run records pass through
-this module so exclusive file locking, write-ahead crash recovery, run_id
-idempotency, CSV quoting, line boundaries and the model-call contract cannot
-drift between features.
+this module so exclusive file locking, write-ahead crash recovery, fsynced atomic
+replacement, run_id idempotency, schema versioning, CSV quoting, line boundaries
+and the model-call contract cannot drift between features.
 """
 import base64
 from contextlib import contextmanager
@@ -13,23 +13,39 @@ import io
 import json
 import os
 import re
+import threading
 import time
 import uuid
 from pathlib import Path
+
+_LOCK_TLS = threading.local()
 
 ASK_NOTE_PREFIX = "asked via lifeos ask"
 FLAGS_LABEL = "flags"
 LOCK_STALE_SECONDS = 30.0
 ALLOWED_JOURNAL_LOGS = {"logs/ledger.csv", "logs/proofs.csv", "logs/runs.jsonl"}
 TASK_REL_RE = re.compile(r"^(?:tasks/)?T-[A-Za-z0-9-]+\.md$")
+RUN_SCHEMA_VERSION = 2
+TERMINAL_RUN_STATUSES = ("ok", "blocked", "failed", "timeout", "tool_missing", "partial")
+
+
+def utc_now_iso():
+    """Return current UTC timestamp in ISO-8601 format (YYYY-MM-DDTHH:MM:SSZ)."""
+    return dt.datetime.now(dt.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
 
 
 def atomic_write_bytes(path, data):
-    """Write bytes to a sibling temp file and atomically replace the target."""
+    """Write bytes to a sibling temp file, fsync to disk, and atomically replace the target."""
     path = Path(path)
     tmp = path.with_name(f".{path.name}.{os.getpid()}.{uuid.uuid4().hex[:6]}.tmp")
+    flags = os.O_CREAT | os.O_EXCL | os.O_WRONLY | getattr(os, "O_BINARY", 0)
     try:
-        tmp.write_bytes(data)
+        fd = os.open(str(tmp), flags)
+        try:
+            os.write(fd, data)
+            os.fsync(fd)
+        finally:
+            os.close(fd)
         os.replace(tmp, path)
     finally:
         if tmp.exists():
@@ -89,7 +105,18 @@ def store_lock(home, timeout=10.0):
     if home is None or not (Path(home) / "logs").is_dir():
         yield
         return
-    lock_path = Path(home) / "logs" / ".store.lock"
+    lock_path = (Path(home) / "logs" / ".store.lock").resolve()
+    held = getattr(_LOCK_TLS, "held", None)
+    if held is None:
+        held = {}
+        _LOCK_TLS.held = held
+    if held.get(lock_path, 0) > 0:
+        held[lock_path] += 1
+        try:
+            yield
+        finally:
+            held[lock_path] -= 1
+        return
     owner_token = f"{os.getpid()}:{uuid.uuid4().hex}"
     deadline = time.monotonic() + timeout
     while True:
@@ -117,9 +144,11 @@ def store_lock(home, timeout=10.0):
             if time.monotonic() >= deadline:
                 raise TimeoutError(f"Timed out waiting for store lock: {lock_path}") from None
             time.sleep(0.01)
+    held[lock_path] = 1
     try:
         yield
     finally:
+        held.pop(lock_path, None)
         # Token-checked release: never delete a lock that does not carry our exact owner_token
         for _ in range(5):
             try:
@@ -156,8 +185,21 @@ def _validate_journal_target(home, rel_or_abs_path):
     return target, rel
 
 
+def _quarantine_journal(jpath):
+    """Preserve a corrupted or unsafe journal under logs/.store.journal.corrupt.<pid>.<id>.json for investigation."""
+    if jpath is None or not jpath.exists():
+        return None
+    corrupt_path = jpath.with_name(f".store.journal.corrupt.{os.getpid()}.{uuid.uuid4().hex[:6]}.json")
+    try:
+        os.replace(jpath, corrupt_path)
+        return corrupt_path
+    except OSError:
+        jpath.unlink(missing_ok=True)
+        return None
+
+
 def recover_journal(home):
-    """Replay any uncommitted multi-file transaction left by an interrupted process after validating every target."""
+    """Replay any uncommitted multi-file commit left by an interrupted process after validating every target."""
     jpath = _journal_path(home)
     if jpath is None or not jpath.exists():
         return False
@@ -172,8 +214,7 @@ def recover_journal(home):
             data = base64.b64decode(entry["b64"], validate=True)
             validated.append((target, data))
     except Exception as err:
-        # Quarantine/remove malformed or unsafe journal without replaying a single file
-        jpath.unlink(missing_ok=True)
+        _quarantine_journal(jpath)
         raise ValueError(f"Refused unsafe or corrupted store journal: {err}") from err
     for target, data in validated:
         atomic_write_bytes(target, data)
@@ -182,7 +223,7 @@ def recover_journal(home):
 
 
 def commit_transaction(home, operations):
-    """Commit one or more (path, bytes) updates atomically via a validated write-ahead journal."""
+    """Commit one or more (path, bytes) updates as a locked, crash-recoverable multi-file commit."""
     jpath = _journal_path(home)
     if jpath is not None and len(operations) > 1:
         journal_ops = []
@@ -216,6 +257,48 @@ def model_call_flags(note):
     return int(found.group(1)) if found else 0
 
 
+def normalize_run_record(record):
+    """Upgrade a v1 or v2 run record dict in memory with explicit schema_version, UTC timestamps, and terminal semantics."""
+    out = dict(record)
+    digest = str(out.get("context_sha256") or "")
+    if "schema_version" not in out:
+        out["schema_version"] = 1 if len(digest) == 12 else RUN_SCHEMA_VERSION
+    if "hash_format" not in out:
+        out["hash_format"] = "sha256_64" if len(digest) == 64 else ("sha256_prefix_12" if len(digest) == 12 else "none")
+    fallback_ts = f"{out.get('date', '1970-01-01')}T00:00:00Z"
+    out.setdefault("started_at", fallback_ts)
+    out.setdefault("finished_at", out["started_at"])
+    out["terminal"] = out.get("status") in TERMINAL_RUN_STATUSES
+    return out
+
+
+def _stamp_v2_run_record(record):
+    """Ensure a newly written run record carries v2 schema fields and a valid terminal status."""
+    rec = dict(record)
+    status = rec.get("status")
+    if status not in TERMINAL_RUN_STATUSES:
+        raise ValueError(f"Invalid non-terminal run status '{status}'. Allowed: {', '.join(TERMINAL_RUN_STATUSES)}")
+    now_iso = utc_now_iso()
+    rec.setdefault("schema_version", RUN_SCHEMA_VERSION)
+    rec.setdefault("started_at", now_iso)
+    rec.setdefault("finished_at", now_iso)
+    rec["terminal"] = True
+    return rec
+
+
+def read_run_records(home, normalize=True):
+    """Read all run records from logs/runs.jsonl under the store lock, optionally normalizing v1/v2 schema fields."""
+    if home is None:
+        return []
+    runs = Path(home) / "logs" / "runs.jsonl"
+    with store_lock(home):
+        recover_journal(home)
+        if not runs.exists():
+            return []
+        rows = [json.loads(line) for line in runs.read_text(encoding="utf-8").splitlines() if line.strip()]
+    return [normalize_run_record(r) for r in rows] if normalize else rows
+
+
 def _prepare_task_result_bytes(path, model, text, today):
     path = Path(path)
     block = f"\n## Result · {model} · {today:%Y-%m-%d}\n{text}\n"
@@ -235,10 +318,11 @@ def _prepare_csv_row_bytes(path, values):
 
 def _prepare_run_record_bytes(runs_path, record):
     runs_path = Path(runs_path)
+    stamped = _stamp_v2_run_record(record)
     raw = runs_path.read_bytes() if runs_path.exists() else b""
     if raw and raw[-1:] not in (b"\n", b"\r"):
         raw += b"\n"
-    line = (json.dumps(record, sort_keys=True) + "\n").encode("utf-8")
+    line = (json.dumps(stamped, sort_keys=True) + "\n").encode("utf-8")
     return raw + line
 
 
@@ -263,14 +347,22 @@ def append_ledger_row(ledger, today, task_id, model, note):
     append_csv_row(ledger, [today.isoformat(), task_id, model, "", note])
 
 
-def append_proof_row(proofs, date_str, area, proof, link, dedupe_token=None):
-    """Atomically append one row to logs/proofs.csv unless dedupe_token is already present."""
+def append_proof_row(proofs, date_str, area, proof, link, dedupe_token=None, home=None):
+    """Under the store lock, deduplicate and append one row to logs/proofs.csv."""
     proofs = Path(proofs)
-    if not proofs.exists():
-        return False
-    if dedupe_token and dedupe_token in proofs.read_text(encoding="utf-8"):
-        return False
-    return append_csv_row(proofs, [str(date_str), area, proof, str(link)])
+    effective_home = Path(home) if home is not None else (proofs.parent.parent if proofs.parent.name == "logs" else None)
+    with store_lock(effective_home):
+        recover_journal(effective_home)
+        if not proofs.exists():
+            return False
+        if dedupe_token and dedupe_token in proofs.read_text(encoding="utf-8"):
+            return False
+        data = _prepare_csv_row_bytes(proofs, [str(date_str), area, proof, str(link)])
+        if effective_home is not None:
+            commit_transaction(effective_home, [(proofs, data)])
+        else:
+            atomic_write_bytes(proofs, data)
+        return True
 
 
 def _has_run_id_unlocked(home, run_id):
@@ -311,7 +403,7 @@ def append_run_record(home, record):
 
 
 def record_result(home, path, model, text, today, note="written via lifeos mcp", run_id=None, run_record=None):
-    """Commit task result, ledger row and optional run record as one locked, journaled transaction."""
+    """Commit task result, ledger row and optional run record as one locked, crash-recoverable multi-file commit."""
     path = Path(path)
     effective_id = run_id or (run_record.get("run_id") if isinstance(run_record, dict) else None)
     with store_lock(home):

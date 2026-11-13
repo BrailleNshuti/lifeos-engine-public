@@ -233,12 +233,18 @@ def cmd_doctor(args):
         if not (home / "logs" / name).exists():
             print(f"  missing   logs/{name}")
             problems += 1
-    if getattr(args, "tools", False) or getattr(args, "live", False):
-        probe = bool(getattr(args, "live", False))
-        print("Providers: (live health probe)" if probe else "Providers: (binary availability)")
-        for p in provider_status(probe=probe):
+    if getattr(args, "tools", False) or getattr(args, "live", False) or getattr(args, "smoke", False):
+        smoke = bool(getattr(args, "smoke", False))
+        probe = bool(getattr(args, "live", False)) or smoke
+        if smoke:
+            print("Providers: (authenticated smoke probe)")
+        elif probe:
+            print("Providers: (live health probe)")
+        else:
+            print("Providers: (binary availability)")
+        for p in provider_status(probe=probe, smoke=smoke):
             state = p["status"]
-            problems += state not in ("available", "healthy")
+            problems += state not in ("available", "healthy", "cli_healthy")
             print(f"  {state:<13} {p['model']:<10} ({p['locality']}, {p['detail']})")
     print("doctor: ok" if not problems else f"doctor: {problems} thing(s) to fix")
     return 0 if not problems else 1
@@ -316,7 +322,8 @@ def build_parser():
 
     doctor = sub.add_parser("doctor", help="check the data repo and the token cost of its core files")
     doctor.add_argument("--tools", action="store_true", help="check binary availability of local and remote model CLIs")
-    doctor.add_argument("--live", action="store_true", help="probe live provider health (local Ollama tags and CLI execution)")
+    doctor.add_argument("--live", action="store_true", help="probe live provider health (local Ollama tags and CLI --version)")
+    doctor.add_argument("--smoke", action="store_true", help="run an authenticated live smoke request per provider")
     doctor.set_defaults(func=cmd_doctor)
 
     lab_p = sub.add_parser("lab", help="Prompt Lab: validate cards, pack test inputs, and score results offline")

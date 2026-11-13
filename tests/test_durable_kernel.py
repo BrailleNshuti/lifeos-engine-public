@@ -140,6 +140,11 @@ def test_transactional_journal_recovers_partial_crash_and_rejects_unsafe_paths(h
         assert not journal_path.exists()
         assert outside_target.read_text(encoding="utf-8") == "SAFE"
         assert (home / "rules.md").read_text(encoding="utf-8") == rules_before
+    # Corrupted/refused journals are quarantined rather than silently lost
+    quarantined = list((home / "logs").glob(".store.journal.corrupt.*.json"))
+    assert len(quarantined) == 4
+    for q in quarantined:
+        q.unlink()
 
 
 def test_lock_exclusivity_live_pid_protection_and_token_checked_release(home, monkeypatch):
@@ -377,7 +382,7 @@ def test_doctor_tools_and_live_cli_exit_codes(home, monkeypatch, capsys):
 
     assert cli.main(["--home", str(home), "doctor", "--tools", "--live"]) == 0
     out_ok = capsys.readouterr().out
-    assert "healthy" in out_ok and "doctor: ok" in out_ok
+    assert "healthy" in out_ok and "cli_healthy" in out_ok and "doctor: ok" in out_ok
 
     # Missing model in Ollama -> cli.main exits 1 and reports problems to fix
     class PartialTagsResp:
@@ -400,3 +405,64 @@ def test_doctor_tools_and_live_cli_exit_codes(home, monkeypatch, capsys):
     assert cli.main(["--home", str(home), "doctor", "--tools"]) == 1
     out_miss = capsys.readouterr().out
     assert "missing" in out_miss and "doctor: 1 thing(s) to fix" in out_miss
+
+
+def test_schema_versioning_v1_normalization_and_locked_proof_logging(home):
+    # 1. Legacy v1 record (12-char hash, no schema_version or timestamps) + v2 record coexist cleanly
+    runs_path = home / "logs" / "runs.jsonl"
+    v1_legacy = {
+        "run_id": "R-261113-legacy01",
+        "date": "2026-11-13",
+        "command": "ask",
+        "task_id": "T-261116-demo-cli",
+        "model": "qwen:qwen2.5:3b",
+        "context_sha256": "abcdef012345",
+        "status": "ok",
+    }
+    runs_path.write_text(json.dumps(v1_legacy) + "\n", encoding="utf-8")
+
+    ask.run_ask(
+        home, "fake", "T-261116", adapters={"fake": lambda p: CLEAN}, today=TODAY, run_id="R-261120-v2rec001"
+    )
+    records = {r["run_id"]: r for r in store.read_run_records(home, normalize=True)}
+    assert records["R-261113-legacy01"]["schema_version"] == 1
+    assert records["R-261113-legacy01"]["hash_format"] == "sha256_prefix_12"
+    assert records["R-261113-legacy01"]["started_at"] == "2026-11-13T00:00:00Z"
+    assert records["R-261113-legacy01"]["terminal"] is True
+
+    v2 = records["R-261120-v2rec001"]
+    assert v2["schema_version"] == 2
+    assert v2["hash_format"] == "sha256_64"
+    assert v2["started_at"].endswith("Z") and v2["finished_at"].endswith("Z")
+    assert v2["terminal"] is True
+
+    # Non-terminal or unknown status is rejected before writing
+    with pytest.raises(ValueError, match="Invalid non-terminal run status"):
+        store.append_run_record(home, {"run_id": "R-bad", "status": "running"})
+
+    # 2. Concurrent append_proof_row calls under store_lock neither duplicate identical tokens nor lose distinct rows
+    proofs_path = home / "logs" / "proofs.csv"
+    before_rows = len(proofs_path.read_text(encoding="utf-8").splitlines())
+    results = []
+
+    def proof_worker(idx):
+        # All 4 even threads race on the exact same dedupe_token; 4 odd threads write distinct tokens
+        token = "results shared_hash" if idx % 2 == 0 else f"results unique_{idx}"
+        wrote = store.append_proof_row(
+            proofs_path, "2026-11-20", "lab", f"demo v1; 5/5; {token}", "logs/lab/demo.md",
+            dedupe_token=token, home=home,
+        )
+        results.append((idx, wrote))
+
+    threads = [threading.Thread(target=proof_worker, args=(i,)) for i in range(8)]
+    for t in threads:
+        t.start()
+    for t in threads:
+        t.join()
+
+    even_writes = [w for idx, w in results if idx % 2 == 0]
+    odd_writes = [w for idx, w in results if idx % 2 == 1]
+    assert sum(even_writes) == 1  # Exactly 1 of the 4 racing threads wrote the shared dedupe_token
+    assert sum(odd_writes) == 4   # All 4 distinct tokens were preserved without lost updates
+    after_rows = len(proofs_path.read_text(encoding="utf-8").splitlines())
+    assert after_rows == before_rows + 5
