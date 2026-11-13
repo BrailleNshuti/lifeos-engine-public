@@ -368,7 +368,8 @@ def _reconstruct_persisted_error(home, rec):
 
 
 def _verify_ask_identity(rec, task_stem, expected_model, budget=6000, full=False, parent_run_id=None):
-    """Ensure a reused run_id matches the original ask command, task_id, model, budget, full flag, and parent_run_id."""
+    """Ensure a reused run_id matches the original ask command, task_id, model, budget, full flag, and parent_run_id.
+    Schema v2 records require all identity fields to be present; legacy v1 records default conservatively to (6000, False, None)."""
     if (
         rec.get("command") != "ask"
         or rec.get("task_id") != task_stem
@@ -378,17 +379,25 @@ def _verify_ask_identity(rec, task_stem, expected_model, budget=6000, full=False
             f"run_id '{rec.get('run_id')}' already belongs to a different operation "
             f"({rec.get('command')}:{rec.get('task_id')}:{rec.get('model')})."
         )
-    if "budget" in rec and rec.get("budget") != budget:
+    is_v2 = int(rec.get("schema_version", 1)) >= 2
+    if is_v2 and any(k not in rec for k in ("budget", "full", "parent_run_id")):
         raise ValueError(
-            f"run_id '{rec.get('run_id')}' already belongs to budget {rec.get('budget')} (got {budget})."
+            f"run_id '{rec.get('run_id')}' is missing mandatory v2 ask identity fields."
         )
-    if "full" in rec and bool(rec.get("full")) != bool(full):
+    rec_budget = rec.get("budget") if is_v2 else rec.get("budget", 6000)
+    if rec_budget != budget:
         raise ValueError(
-            f"run_id '{rec.get('run_id')}' already belongs to full={bool(rec.get('full'))} (got {bool(full)})."
+            f"run_id '{rec.get('run_id')}' already belongs to budget {rec_budget} (got {budget})."
         )
-    if "parent_run_id" in rec and rec.get("parent_run_id") != parent_run_id:
+    rec_full = rec.get("full") if is_v2 else rec.get("full", False)
+    if not isinstance(rec_full, bool) or rec_full != bool(full):
         raise ValueError(
-            f"run_id '{rec.get('run_id')}' already belongs to parent_run_id '{rec.get('parent_run_id')}'."
+            f"run_id '{rec.get('run_id')}' already belongs to full={rec_full} (got {bool(full)})."
+        )
+    rec_parent = rec.get("parent_run_id") if is_v2 else rec.get("parent_run_id", None)
+    if rec_parent != parent_run_id:
+        raise ValueError(
+            f"run_id '{rec.get('run_id')}' already belongs to parent_run_id '{rec_parent}'."
         )
 
 
@@ -398,7 +407,8 @@ def _diff_digest(diff_text):
 
 def _verify_review_identity(rec, task_stem, expected_model, repo, commit, budget=6000, diff_text=""):
     """Ensure a reused run_id matches the original review_group command, task_id, reviewers, budget, diff_sha256, repo,
-    and literal requested_commit without inspecting Git or reopening the repository."""
+    and literal requested_commit without inspecting Git or reopening the repository.
+    Schema v2 records require all identity fields to be present; legacy v1 records default conservatively."""
     if (
         rec.get("command") != "review_group"
         or rec.get("task_id") != task_stem
@@ -408,12 +418,19 @@ def _verify_review_identity(rec, task_stem, expected_model, repo, commit, budget
             f"run_id '{rec.get('run_id')}' already belongs to a different operation "
             f"({rec.get('command')}:{rec.get('task_id')}:{rec.get('model')})."
         )
-    if "budget" in rec and rec.get("budget") != budget:
+    is_v2 = int(rec.get("schema_version", 1)) >= 2
+    if is_v2 and any(k not in rec for k in ("budget", "diff_sha256")):
         raise ValueError(
-            f"run_id '{rec.get('run_id')}' already belongs to budget {rec.get('budget')} (got {budget})."
+            f"run_id '{rec.get('run_id')}' is missing mandatory v2 review identity fields."
+        )
+    rec_budget = rec.get("budget") if is_v2 else rec.get("budget", 6000)
+    if rec_budget != budget:
+        raise ValueError(
+            f"run_id '{rec.get('run_id')}' already belongs to budget {rec_budget} (got {budget})."
         )
     expected_diff_sha = _diff_digest(diff_text)
-    if "diff_sha256" in rec and rec.get("diff_sha256") != expected_diff_sha:
+    rec_diff_sha = rec.get("diff_sha256") if is_v2 else rec.get("diff_sha256", None)
+    if rec_diff_sha != expected_diff_sha:
         raise ValueError(
             f"run_id '{rec.get('run_id')}' already belongs to a different diff_text."
         )
@@ -426,8 +443,8 @@ def _verify_review_identity(rec, task_stem, expected_model, repo, commit, budget
         req_arg = str(commit or "HEAD")
         rec_req = rec.get("requested_commit")
         rec_sha = str(rec.get("commit_sha") or "")
-        if rec_req is not None:
-            if req_arg != str(rec_req):
+        if is_v2 or rec_req is not None:
+            if not rec_req or req_arg != str(rec_req):
                 raise ValueError(
                     f"run_id '{rec.get('run_id')}' already belongs to commit '{rec_req}'."
                 )
@@ -440,6 +457,13 @@ def _verify_review_child_identity(
 ):
     """Ensure a persisted child review record from an interrupted run matches the parent, task, model, context digest,
     budget, diff_sha256, repo, and commit."""
+    is_v2 = int(child_rec.get("schema_version", 1)) >= 2
+    if is_v2 and any(k not in child_rec for k in ("budget", "diff_sha256")):
+        raise ValueError(
+            f"child run_id '{child_rec.get('run_id')}' is missing mandatory v2 review identity fields."
+        )
+    rec_budget = child_rec.get("budget") if is_v2 else child_rec.get("budget", 6000)
+    rec_diff_sha = child_rec.get("diff_sha256") if is_v2 else child_rec.get("diff_sha256", None)
     if (
         child_rec.get("command") != "review"
         or child_rec.get("parent_run_id") != group_id
@@ -449,8 +473,8 @@ def _verify_review_child_identity(
         or child_rec.get("repo") != repo_label
         or child_rec.get("commit_sha") != commit_sha
         or child_rec.get("requested_commit") != req_commit
-        or ("budget" in child_rec and child_rec.get("budget") != budget)
-        or ("diff_sha256" in child_rec and child_rec.get("diff_sha256") != diff_sha)
+        or rec_budget != budget
+        or rec_diff_sha != diff_sha
     ):
         raise ValueError(
             f"child run_id '{child_rec.get('run_id')}' already belongs to a different context or commit."

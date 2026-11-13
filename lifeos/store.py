@@ -360,11 +360,27 @@ def normalize_run_record(record):
 
 
 def _stamp_v2_run_record(record):
-    """Ensure a newly written run record carries v2 schema fields (forced schema_version=2) and a valid terminal status."""
+    """Ensure a newly written run record carries v2 schema fields (forced schema_version=2), mandatory identity fields,
+    and a valid terminal status."""
     rec = dict(record)
     status = rec.get("status")
     if status not in TERMINAL_RUN_STATUSES:
         raise ValueError(f"Invalid non-terminal run status '{status}'. Allowed: {', '.join(TERMINAL_RUN_STATUSES)}")
+    cmd = rec.get("command")
+    if cmd == "ask":
+        if any(k not in rec for k in ("budget", "full", "parent_run_id")):
+            raise ValueError("v2 ask run record is missing mandatory identity fields (budget, full, parent_run_id).")
+        if isinstance(rec["budget"], bool) or not isinstance(rec["budget"], int) or not isinstance(rec["full"], bool):
+            raise ValueError("v2 ask run record requires integer budget and boolean full.")
+    elif cmd in ("review", "review_group"):
+        if any(k not in rec for k in ("budget", "diff_sha256")):
+            raise ValueError(f"v2 {cmd} run record is missing mandatory identity fields (budget, diff_sha256).")
+        if isinstance(rec["budget"], bool) or not isinstance(rec["budget"], int):
+            raise ValueError(f"v2 {cmd} run record requires integer budget.")
+        if rec.get("repo") and not rec.get("requested_commit"):
+            raise ValueError(f"v2 {cmd} run record with repo requires requested_commit.")
+        if cmd == "review" and any(k not in rec for k in ("parent_run_id", "context_sha256", "repo", "commit_sha")):
+            raise ValueError("v2 review child record is missing mandatory child identity fields.")
     now_iso = utc_now_iso()
     rec["schema_version"] = RUN_SCHEMA_VERSION
     rec.setdefault("started_at", now_iso)
