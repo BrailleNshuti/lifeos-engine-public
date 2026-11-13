@@ -238,6 +238,7 @@ def cmd_doctor(args):
         print("Providers: (live health probe)" if probe else "Providers: (binary availability)")
         for p in provider_status(probe=probe):
             state = p["status"]
+            problems += state not in ("available", "healthy")
             print(f"  {state:<13} {p['model']:<10} ({p['locality']}, {p['detail']})")
     print("doctor: ok" if not problems else f"doctor: {problems} thing(s) to fix")
     return 0 if not problems else 1

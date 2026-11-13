@@ -421,42 +421,42 @@ def run_review(home, task_id, reviewers=("codex", "claude"), budget=6000, dry_ru
     group_started = time.monotonic()
     first_err = None
 
-    with _isolated_git_worktree(repo_info):
-        for idx, r in enumerate(cleaned, 1):
-            child_id = f"{group_id}-c{idx}" if run_id else new_run_id(day)
-            child_ids.append(child_id)
-            who = f"review:{label(r)}"
-            locality = PROVIDERS.get(r, {}).get("locality", "remote")
-            base_child = {
-                "run_id": child_id, "parent_run_id": group_id, "date": day.isoformat(), "command": "review",
-                "task_id": path.stem, "model": who, "locality": locality, "context_sha256": digest,
-                "tokens": tokens, "commit_sha": commit_sha, "repo": repo_label,
-            }
-            started = time.monotonic()
-            try:
+    for idx, r in enumerate(cleaned, 1):
+        child_id = f"{group_id}-c{idx}" if run_id else new_run_id(day)
+        child_ids.append(child_id)
+        who = f"review:{label(r)}"
+        locality = PROVIDERS.get(r, {}).get("locality", "remote")
+        base_child = {
+            "run_id": child_id, "parent_run_id": group_id, "date": day.isoformat(), "command": "review",
+            "task_id": path.stem, "model": who, "locality": locality, "context_sha256": digest,
+            "tokens": tokens, "commit_sha": commit_sha, "repo": repo_label,
+        }
+        started = time.monotonic()
+        try:
+            with _isolated_git_worktree(repo_info):
                 text = adapters[r](f"{REVIEW_INSTRUCTION}\n\n{pack}")
-                elapsed_ms = int((time.monotonic() - started) * 1000)
-                check_text(text, f"the review from {r}", "Nothing was written to your files.")
-            except (ToolMissing, AskError, Blocked) as err:
-                elapsed_ms = int((time.monotonic() - started) * 1000)
-                if isinstance(err, ToolMissing):
-                    st = "tool_missing"
-                elif isinstance(err, Blocked):
-                    st = "blocked"
-                else:
-                    st = _classify_ask_error(err)
-                append_run_record(home, {
-                    **base_child, "duration_ms": elapsed_ms, "status": st,
-                    "flags": 0, "error": redact_error(err),
-                })
-                if first_err is None:
-                    first_err = err
-                continue
+            elapsed_ms = int((time.monotonic() - started) * 1000)
+            check_text(text, f"the review from {r}", "Nothing was written to your files.")
+        except (ToolMissing, AskError, Blocked) as err:
+            elapsed_ms = int((time.monotonic() - started) * 1000)
+            if isinstance(err, ToolMissing):
+                st = "tool_missing"
+            elif isinstance(err, Blocked):
+                st = "blocked"
+            else:
+                st = _classify_ask_error(err)
+            append_run_record(home, {
+                **base_child, "duration_ms": elapsed_ms, "status": st,
+                "flags": 0, "error": redact_error(err),
+            })
+            if first_err is None:
+                first_err = err
+            continue
 
-            flags = check_answer(text)
-            child_rec = {**base_child, "duration_ms": elapsed_ms, "status": "ok", "flags": len(flags)}
-            record_result(home, path, who, text, day, model_call_note(len(flags)), run_id=child_id, run_record=child_rec)
-            results.append({"model": r, "label": who, "run_id": child_id, "text": text, "flags": flags})
+        flags = check_answer(text)
+        child_rec = {**base_child, "duration_ms": elapsed_ms, "status": "ok", "flags": len(flags)}
+        record_result(home, path, who, text, day, model_call_note(len(flags)), run_id=child_id, run_record=child_rec)
+        results.append({"model": r, "label": who, "run_id": child_id, "text": text, "flags": flags})
 
     group_elapsed = int((time.monotonic() - group_started) * 1000)
     if first_err is None:

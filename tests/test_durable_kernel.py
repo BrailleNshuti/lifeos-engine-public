@@ -1,14 +1,18 @@
-"""Tests for Execution Kernel Durable: pre-execution run_id idempotency, transactional journal recovery,
-exclusive file locking under concurrent writers, failed/blocked/timeout/partial run logging with redaction,
-64-char SHA-256 digests, real provider health probes, and isolated git worktree + commit diff blind reviews."""
+"""Tests for Execution Kernel Durable: pre-execution run_id idempotency (ask + review), transactional journal
+recovery and path-allowlist security, exclusive file locking (live-PID stale protection + token-checked release +
+8-thread concurrency across task/ledger/runs), failed/blocked/timeout/partial/full-fail run logging with redaction,
+64-char SHA-256 digests, CLI doctor --tools/--live exit codes, and per-reviewer isolated git worktree blind reviews."""
+import base64
 import datetime as dt
 import json
+import os
 import shutil
 import subprocess
 import threading
+import time
 import pytest
 
-from lifeos import ask, context, store
+from lifeos import ask, cli, context, store
 
 TODAY = dt.date(2026, 11, 20)
 CLEAN = "Verified lifeos/store.py and tests/test_durable_kernel.py. Next step: merge."
@@ -29,36 +33,54 @@ def _read_runs(home):
 
 
 def test_pre_execution_run_id_idempotency_prevents_duplicate_ask_and_review(home):
-    calls = []
+    ask_calls = []
+    rev_calls = []
 
-    def counting_adapter(prompt):
-        calls.append(prompt)
+    def counting_ask(prompt):
+        ask_calls.append(prompt)
+        return CLEAN
+
+    def counting_rev(prompt):
+        rev_calls.append(prompt)
         return CLEAN
 
     task_path = home / "tasks" / "T-261116-demo-cli.md"
-    before_task = task_path.read_text(encoding="utf-8")
     before_ledger = (home / "logs" / "ledger.csv").read_text(encoding="utf-8").splitlines()
 
-    # First execution with explicit run_id
+    # 1. Ask idempotency on retry with same run_id (both API and CLI --run-id)
     ask.run_ask(
-        home, "fake", "T-261116", adapters={"fake": counting_adapter}, today=TODAY, run_id="R-261120-idem0001"
+        home, "fake", "T-261116", adapters={"fake": counting_ask}, today=TODAY, run_id="R-261120-idem0001"
     )
-    assert len(calls) == 1
-    after_first_task = task_path.read_text(encoding="utf-8")
-    assert after_first_task != before_task
-
-    # Retrying with the same run_id must NOT call the adapter again or duplicate task/ledger/run rows
+    after_first_ask = task_path.read_text(encoding="utf-8")
     ask.run_ask(
-        home, "fake", "T-261116", adapters={"fake": counting_adapter}, today=TODAY, run_id="R-261120-idem0001"
+        home, "fake", "T-261116", adapters={"fake": counting_ask}, today=TODAY, run_id="R-261120-idem0001"
     )
-    assert len(calls) == 1
-    assert task_path.read_text(encoding="utf-8") == after_first_task
+    assert len(ask_calls) == 1
+    assert task_path.read_text(encoding="utf-8") == after_first_ask
     assert len((home / "logs" / "ledger.csv").read_text(encoding="utf-8").splitlines()) == len(before_ledger) + 1
-    runs = _read_runs(home)
-    assert [r["run_id"] for r in runs] == ["R-261120-idem0001"]
+
+    # 2. Review idempotency on retry with same parent run_id
+    ask.run_review(
+        home, "T-261116", reviewers=("r1", "r2"),
+        adapters={"r1": counting_rev, "r2": counting_rev}, today=TODAY, run_id="R-261120-revidem1",
+    )
+    after_first_rev = task_path.read_text(encoding="utf-8")
+    ledger_after_rev = (home / "logs" / "ledger.csv").read_text(encoding="utf-8").splitlines()
+    runs_after_rev = _read_runs(home)
+    assert len(rev_calls) == 2
+
+    # Retry with the same group run_id: zero additional provider calls, zero duplicate task/ledger/run records
+    ask.run_review(
+        home, "T-261116", reviewers=("r1", "r2"),
+        adapters={"r1": counting_rev, "r2": counting_rev}, today=TODAY, run_id="R-261120-revidem1",
+    )
+    assert len(rev_calls) == 2
+    assert task_path.read_text(encoding="utf-8") == after_first_rev
+    assert (home / "logs" / "ledger.csv").read_text(encoding="utf-8").splitlines() == ledger_after_rev
+    assert _read_runs(home) == runs_after_rev
 
 
-def test_transactional_journal_recovers_partial_multi_file_crash(home, monkeypatch):
+def test_transactional_journal_recovers_partial_crash_and_rejects_unsafe_paths(home, monkeypatch, tmp_path):
     task_path = home / "tasks" / "T-261116-demo-cli.md"
     ledger_path = home / "logs" / "ledger.csv"
     runs_path = home / "logs" / "runs.jsonl"
@@ -86,7 +108,6 @@ def test_transactional_journal_recovers_partial_multi_file_crash(home, monkeypat
         store.record_result(home, task_path, "fake", CLEAN, TODAY, note="asked via lifeos ask; flags: 0",
                             run_id="R-261120-crash001", run_record=rec)
 
-    # Journal file exists because transaction did not finish
     journal_path = home / "logs" / ".store.journal.json"
     assert journal_path.exists()
 
@@ -98,13 +119,73 @@ def test_transactional_journal_recovers_partial_multi_file_crash(home, monkeypat
     assert "R-261120-crash001" in runs_path.read_text(encoding="utf-8")
     assert "T-261116-demo-cli,fake," in ledger_path.read_text(encoding="utf-8")
 
-    # Retrying the same run_id after recovery is a no-op (no duplicate task/ledger/run rows)
+    # Retrying the same run_id after recovery is a no-op
     assert store.record_result(home, task_path, "fake", CLEAN, TODAY, note="asked via lifeos ask; flags: 0",
                                run_id="R-261120-crash001", run_record=rec) is False
+
+    # Security: crafted journal targeting a file outside home or an unapproved file (rules.md) is refused and quarantined
+    outside_target = tmp_path / "outside.txt"
+    outside_target.write_text("SAFE", encoding="utf-8")
+    rules_before = (home / "rules.md").read_text(encoding="utf-8")
+
+    for bad_path in (str(outside_target), "../outside.txt", "rules.md", "tasks/../../outside.txt"):
+        journal_path.write_text(
+            json.dumps({
+                "operations": [{"path": bad_path, "b64": base64.b64encode(b"PWNED").decode("ascii")}]
+            }),
+            encoding="utf-8",
+        )
+        with pytest.raises(ValueError, match="Refused"):
+            store.recover_journal(home)
+        assert not journal_path.exists()
+        assert outside_target.read_text(encoding="utf-8") == "SAFE"
+        assert (home / "rules.md").read_text(encoding="utf-8") == rules_before
+
+
+def test_lock_exclusivity_live_pid_protection_and_token_checked_release(home, monkeypatch):
+    monkeypatch.setattr(store, "LOCK_STALE_SECONDS", 0.05)
+    lock_path = home / "logs" / ".store.lock"
+
+    # 1. Writer A holds the lock longer than LOCK_STALE_SECONDS while its PID is alive;
+    #    Writer B and Writer C must NOT steal A's lock!
+    entered = threading.Event()
+    release_a = threading.Event()
+    b_stolen = []
+
+    def writer_a():
+        with store.store_lock(home, timeout=1.0):
+            entered.set()
+            release_a.wait(timeout=1.0)
+
+    t_a = threading.Thread(target=writer_a)
+    t_a.start()
+    assert entered.wait(timeout=1.0)
+    time.sleep(0.08)  # Exceeds LOCK_STALE_SECONDS (0.05s), but owner PID (current process) is alive!
+
+    for _ in range(2):
+        with pytest.raises(TimeoutError):
+            with store.store_lock(home, timeout=0.06):
+                b_stolen.append(True)
+
+    assert not b_stolen
+    release_a.set()
+    t_a.join()
+    assert not lock_path.exists()
+
+    # 2. A stale lock from a dead PID (99999999) IS evicted after LOCK_STALE_SECONDS
+    old_ts = time.time() - 10.0
+    lock_path.write_text(f"dead-token\n99999999\n{old_ts}\n", encoding="ascii")
+    with store.store_lock(home, timeout=0.5):
+        assert lock_path.exists()
+        token, pid, _ = store._read_lock_meta(lock_path)
+        assert pid == os.getpid() and token != "dead-token"
+    assert not lock_path.exists()
 
 
 def test_concurrent_writers_do_not_lose_or_corrupt_updates(home):
     task_path = home / "tasks" / "T-261116-demo-cli.md"
+    ledger_path = home / "logs" / "ledger.csv"
+    before_ledger_count = len(ledger_path.read_text(encoding="utf-8").splitlines())
     errors = []
 
     def worker(idx):
@@ -133,14 +214,29 @@ def test_concurrent_writers_do_not_lose_or_corrupt_updates(home):
 
     assert not errors
     task_text = task_path.read_text(encoding="utf-8")
+    ledger_lines = ledger_path.read_text(encoding="utf-8").splitlines()
+    assert len(ledger_lines) == before_ledger_count + 8
     for i in range(8):
         assert f"CONCURRENT ANSWER {i}" in task_text
+        assert any(f",T-261116-demo-cli,m{i},," in line for line in ledger_lines)
     runs = _read_runs(home)
     assert len(runs) == 8
     assert {r["run_id"] for r in runs} == {f"R-261120-conc{i:04d}" for i in range(8)}
 
 
-def test_blocked_failed_timeout_tool_missing_and_partial_runs_are_recorded_with_redaction(home):
+def test_blocked_failed_timeout_tool_missing_partial_and_full_fail_runs_recorded_with_redaction(home):
+    leaked_secret = "ghp_" + "a1" * 18
+
+    # 0. Outbound context blocked by guard -> status="blocked", phase="outbound_context"
+    task_path = home / "tasks" / "T-261116-demo-cli.md"
+    orig_task = task_path.read_text(encoding="utf-8")
+    task_path.write_text(orig_task + f"\nkey {leaked_secret}\n", encoding="utf-8")
+    with pytest.raises(ask.Blocked):
+        ask.run_ask(home, "fake", "T-261116", adapters={"fake": lambda p: CLEAN}, today=TODAY, run_id="R-261120-blko0001")
+    with pytest.raises(ask.Blocked):
+        ask.run_review(home, "T-261116", reviewers=("fake",), adapters={"fake": lambda p: CLEAN}, today=TODAY, run_id="R-261120-blkr0001")
+    task_path.write_text(orig_task, encoding="utf-8")
+
     # 1. Provider timeout -> status="timeout"
     def timeout_adapter(prompt):
         raise ask.AskError("codex timed out after 600 s.")
@@ -149,10 +245,8 @@ def test_blocked_failed_timeout_tool_missing_and_partial_runs_are_recorded_with_
         ask.run_ask(home, "fake", "T-261116", adapters={"fake": timeout_adapter}, today=TODAY, run_id="R-261120-time0001")
 
     # 2. Provider failure containing a secret in stderr -> status="failed", secret redacted
-    leaked_secret = "ghp_" + "a1" * 18
-
     def failing_secret_adapter(prompt):
-        raise ask.AskError(f"fatal: auth failed for token {leaked_secret}")
+        raise ask.AskError(f"fatal: auth failed for {leaked_secret}")
 
     with pytest.raises(ask.AskError):
         ask.run_ask(home, "fake", "T-261116", adapters={"fake": failing_secret_adapter}, today=TODAY, run_id="R-261120-fail0001")
@@ -171,7 +265,7 @@ def test_blocked_failed_timeout_tool_missing_and_partial_runs_are_recorded_with_
     with pytest.raises(ask.Blocked):
         ask.run_ask(home, "fake", "T-261116", adapters={"fake": leaky_answer_adapter}, today=TODAY, run_id="R-261120-blka0001")
 
-    # 5. Partial multi-model review (one reviewer succeeds, second reviewer fails) -> parent recorded with status="partial"
+    # 5. Partial multi-model review (one succeeds, one fails) -> parent status="partial"
     with pytest.raises(ask.AskError):
         ask.run_review(
             home, "T-261116", reviewers=("ok_rev", "bad_rev"),
@@ -179,80 +273,114 @@ def test_blocked_failed_timeout_tool_missing_and_partial_runs_are_recorded_with_
             today=TODAY, run_id="R-261120-partgrp1",
         )
 
+    # 6. Fully failed multi-model review (all reviewers fail) -> parent status="failed"
+    with pytest.raises(ask.AskError):
+        ask.run_review(
+            home, "T-261116", reviewers=("bad1", "bad2"),
+            adapters={"bad1": failing_secret_adapter, "bad2": timeout_adapter},
+            today=TODAY, run_id="R-261120-failgrp1",
+        )
+
     raw_runs = (home / "logs" / "runs.jsonl").read_text(encoding="utf-8")
     assert leaked_secret not in raw_runs  # Secret never enters runs.jsonl!
     by_id = {r["run_id"]: r for r in _read_runs(home)}
+    assert by_id["R-261120-blko0001"]["status"] == "blocked" and by_id["R-261120-blko0001"]["phase"] == "outbound_context"
+    assert by_id["R-261120-blkr0001"]["status"] == "blocked" and by_id["R-261120-blkr0001"]["phase"] == "outbound_context"
     assert by_id["R-261120-time0001"]["status"] == "timeout"
     assert by_id["R-261120-fail0001"]["status"] == "failed"
     assert "[REDACTED]" in by_id["R-261120-fail0001"]["error"]
     assert by_id["R-261120-miss0001"]["status"] == "tool_missing"
-    assert by_id["R-261120-blka0001"]["status"] == "blocked"
-    assert by_id["R-261120-partgrp1"]["command"] == "review_group"
-    assert by_id["R-261120-partgrp1"]["status"] == "partial"
-    assert len(by_id["R-261120-partgrp1"]["child_run_ids"]) == 2
+    assert by_id["R-261120-blka0001"]["status"] == "blocked" and by_id["R-261120-blka0001"]["phase"] == "inbound_answer"
+    assert by_id["R-261120-partgrp1"]["command"] == "review_group" and by_id["R-261120-partgrp1"]["status"] == "partial"
+    assert by_id["R-261120-failgrp1"]["command"] == "review_group" and by_id["R-261120-failgrp1"]["status"] == "failed"
 
 
-def test_full_64_char_sha256_and_repo_worktree_commit_review(home, tmp_path):
-    # Full 64-char SHA-256 digest
+def test_full_64_char_sha256_and_per_reviewer_isolated_worktree_review(home, tmp_path):
     assert len(context.pack_hash("hello world")) == 64
 
-    # Create a real temporary Git repository with a commit to review
     repo = tmp_path / "sample-repo"
     repo.mkdir()
     subprocess.run(["git", "init"], cwd=repo, check=True, capture_output=True)
     subprocess.run(["git", "config", "user.email", "test@example.org"], cwd=repo, check=True, capture_output=True)
     subprocess.run(["git", "config", "user.name", "Test"], cwd=repo, check=True, capture_output=True)
-    (repo / "module.py").write_text("def add(a, b):\n    return a + b\n", encoding="utf-8")
+    orig_code = "def add(a, b):\n    return a + b\n"
+    (repo / "module.py").write_text(orig_code, encoding="utf-8")
     subprocess.run(["git", "add", "module.py"], cwd=repo, check=True, capture_output=True)
     subprocess.run(["git", "commit", "-m", "Add module.py"], cwd=repo, check=True, capture_output=True)
     head_sha = subprocess.run(
         ["git", "rev-parse", "HEAD"], cwd=repo, check=True, capture_output=True, text=True
     ).stdout.strip()
 
-    observed = {}
+    observed = {"cwds": [], "r2_module_text": None}
 
-    def worktree_checking_reviewer(prompt):
+    def mutating_reviewer_1(prompt):
+        cwd = ask.current_review_cwd()
+        observed["cwds"].append(cwd)
+        # Attempt to poison the worktree for later reviewers
+        (cwd / "module.py").write_text("MUTATED BY REVIEWER 1\n", encoding="utf-8")
+        (cwd / "untracked.txt").write_text("POISON\n", encoding="utf-8")
+        return CLEAN
+
+    def verifying_reviewer_2(prompt):
+        cwd = ask.current_review_cwd()
+        observed["cwds"].append(cwd)
+        observed["r2_module_text"] = (cwd / "module.py").read_text(encoding="utf-8")
+        observed["r2_has_untracked"] = (cwd / "untracked.txt").exists()
         observed["prompt"] = prompt
-        observed["cwd"] = ask.current_review_cwd()
-        if observed["cwd"]:
-            observed["files"] = sorted(p.name for p in observed["cwd"].iterdir())
         return CLEAN
 
     out = ask.run_review(
-        home, "T-261116", reviewers=("codex",), adapters={"codex": worktree_checking_reviewer},
+        home, "T-261116", reviewers=("r1", "r2"),
+        adapters={"r1": mutating_reviewer_1, "r2": verifying_reviewer_2},
         today=TODAY, repo=repo, commit="HEAD", run_id="R-261120-wtgroup1",
     )
+    # Reviewer 2 got its own fresh isolated worktree, completely unaffected by Reviewer 1's mutation!
+    assert len(observed["cwds"]) == 2 and observed["cwds"][0] != observed["cwds"][1]
+    assert observed["r2_module_text"] == orig_code
+    assert observed["r2_has_untracked"] is False
     assert out["commit_sha"] == head_sha
-    assert len(out["sha256"]) == 64
     assert head_sha in observed["prompt"]
-    assert "def add(a, b):" in observed["prompt"]
-    assert "module.py" in observed.get("files", [])
 
-    # Temporary detached worktree was cleaned up after review finished
+    # Both temporary detached worktrees were cleaned up after review finished
     wt_list = subprocess.run(
         ["git", "worktree", "list"], cwd=repo, check=True, capture_output=True, text=True
     ).stdout.strip().splitlines()
     assert len(wt_list) == 1
 
-    # Parent and child records both exist and carry commit_sha
     by_id = {r["run_id"]: r for r in _read_runs(home)}
     parent = by_id["R-261120-wtgroup1"]
-    assert parent["command"] == "review_group"
-    assert parent["status"] == "ok"
-    assert parent["commit_sha"] == head_sha
-    child = by_id[parent["child_run_ids"][0]]
-    assert child["parent_run_id"] == "R-261120-wtgroup1"
-    assert child["commit_sha"] == head_sha
+    assert parent["command"] == "review_group" and parent["status"] == "ok" and parent["commit_sha"] == head_sha
+    for cid in parent["child_run_ids"]:
+        assert by_id[cid]["commit_sha"] == head_sha
 
 
-def test_provider_status_distinguishes_availability_from_live_health(monkeypatch):
-    # Unprobed: reports binary availability, never claims live health
-    rows = ask.provider_status(probe=False)
-    assert all(r["status"] in ("available", "missing") for r in rows)
-    assert all("capabilities" in r for r in rows)
+def test_doctor_tools_and_live_cli_exit_codes(home, monkeypatch, capsys):
+    # All healthy -> cli.main exits 0
+    class AllTagsResp:
+        def __enter__(self):
+            return self
 
-    # Probed with mocked local Ollama /api/tags and CLI --version
-    class TagsResp:
+        def __exit__(self, *a):
+            return False
+
+        def read(self):
+            return b'{"models": [{"name": "qwen2.5:3b"}, {"name": "llama3.2"}]}'
+
+    class VersionOk:
+        returncode, stdout, stderr = 0, "1.0.0\n", ""
+
+    monkeypatch.setattr(ask, "_open_local", lambda req, timeout: AllTagsResp())
+    monkeypatch.setattr(ask.shutil, "which", lambda name: f"/usr/bin/{name}")
+    monkeypatch.setattr(ask.subprocess, "run", lambda *a, **kw: VersionOk())
+    monkeypatch.delenv("LIFEOS_OLLAMA_MODEL", raising=False)
+    monkeypatch.delenv("LIFEOS_QWEN_MODEL", raising=False)
+
+    assert cli.main(["--home", str(home), "doctor", "--tools", "--live"]) == 0
+    out_ok = capsys.readouterr().out
+    assert "healthy" in out_ok and "doctor: ok" in out_ok
+
+    # Missing model in Ollama -> cli.main exits 1 and reports problems to fix
+    class PartialTagsResp:
         def __enter__(self):
             return self
 
@@ -262,16 +390,13 @@ def test_provider_status_distinguishes_availability_from_live_health(monkeypatch
         def read(self):
             return b'{"models": [{"name": "qwen2.5:3b"}]}'
 
-    class VersionDone:
-        returncode, stdout, stderr = 0, "1.0.0\n", ""
+    monkeypatch.setattr(ask, "_open_local", lambda req, timeout: PartialTagsResp())
+    assert cli.main(["--home", str(home), "doctor", "--tools", "--live"]) == 1
+    out_bad = capsys.readouterr().out
+    assert "model_missing" in out_bad and "doctor: 1 thing(s) to fix" in out_bad
 
-    monkeypatch.setattr(ask, "_open_local", lambda req, timeout: TagsResp())
-    monkeypatch.setattr(ask.shutil, "which", lambda name: f"/usr/bin/{name}")
-    monkeypatch.setattr(ask.subprocess, "run", lambda *a, **kw: VersionDone())
-    monkeypatch.delenv("LIFEOS_OLLAMA_MODEL", raising=False)
-    monkeypatch.delenv("LIFEOS_QWEN_MODEL", raising=False)
-
-    probed = {r["model"]: r for r in ask.provider_status(probe=True)}
-    assert probed["qwen"]["status"] == "healthy"
-    assert probed["ollama"]["status"] == "model_missing"  # llama3.2 not in mocked /api/tags
-    assert probed["codex"]["status"] == "healthy"
+    # Missing CLI binary with --tools -> cli.main exits 1
+    monkeypatch.setattr(ask.shutil, "which", lambda name: None if name == "codex" else f"/usr/bin/{name}")
+    assert cli.main(["--home", str(home), "doctor", "--tools"]) == 1
+    out_miss = capsys.readouterr().out
+    assert "missing" in out_miss and "doctor: 1 thing(s) to fix" in out_miss

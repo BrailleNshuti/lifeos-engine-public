@@ -20,6 +20,8 @@ from pathlib import Path
 ASK_NOTE_PREFIX = "asked via lifeos ask"
 FLAGS_LABEL = "flags"
 LOCK_STALE_SECONDS = 30.0
+ALLOWED_JOURNAL_LOGS = {"logs/ledger.csv", "logs/proofs.csv", "logs/runs.jsonl"}
+TASK_REL_RE = re.compile(r"^tasks/T-[A-Za-z0-9-]+\.md$")
 
 
 def atomic_write_bytes(path, data):
@@ -37,28 +39,78 @@ def atomic_write_bytes(path, data):
 _atomic_write_bytes = atomic_write_bytes
 
 
+def _pid_is_alive(pid):
+    """Return True if a process with `pid` is currently running on this machine."""
+    if not isinstance(pid, int) or pid <= 0:
+        return False
+    if os.name == "nt":
+        try:
+            import ctypes
+            kernel32 = ctypes.windll.kernel32
+            PROCESS_QUERY_LIMITED_INFORMATION = 0x1000
+            STILL_ACTIVE = 259
+            handle = kernel32.OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, False, pid)
+            if not handle:
+                # ERROR_ACCESS_DENIED (5) means process exists under another privilege context
+                return ctypes.GetLastError() == 5
+            try:
+                exit_code = ctypes.c_ulong()
+                if kernel32.GetExitCodeProcess(handle, ctypes.byref(exit_code)):
+                    return exit_code.value == STILL_ACTIVE
+                return True
+            finally:
+                kernel32.CloseHandle(handle)
+        except Exception:
+            pass
+    try:
+        os.kill(pid, 0)
+        return True
+    except PermissionError:
+        return True
+    except OSError:
+        return False
+
+
+def _read_lock_meta(lock_path):
+    """Return (owner_token, pid, timestamp) from a lockfile, or (None, None, None)."""
+    try:
+        lines = lock_path.read_text(encoding="ascii").splitlines()
+        if len(lines) >= 3:
+            return lines[0].strip(), int(lines[1].strip()), float(lines[2].strip())
+    except (OSError, ValueError):
+        pass
+    return None, None, None
+
+
 @contextmanager
 def store_lock(home, timeout=10.0):
-    """Acquire an exclusive cross-process/cross-thread lock on <home>/logs/.store.lock."""
+    """Acquire an exclusive cross-process/cross-thread lock on <home>/logs/.store.lock
+    with live-PID verification before stale eviction and token-checked release."""
     if home is None or not (Path(home) / "logs").is_dir():
         yield
         return
     lock_path = Path(home) / "logs" / ".store.lock"
+    owner_token = f"{os.getpid()}:{uuid.uuid4().hex}"
     deadline = time.monotonic() + timeout
-    fd = None
     while True:
         try:
             fd = os.open(str(lock_path), os.O_CREAT | os.O_EXCL | os.O_WRONLY)
             try:
-                os.write(fd, f"{os.getpid()}\n{time.time()}\n".encode("ascii"))
+                payload = f"{owner_token}\n{os.getpid()}\n{time.time()}\n".encode("ascii")
+                os.write(fd, payload)
             finally:
                 os.close(fd)
             break
         except FileExistsError:
             try:
-                if time.time() - lock_path.stat().st_mtime > LOCK_STALE_SECONDS:
-                    lock_path.unlink(missing_ok=True)
-                    continue
+                existing_token, existing_pid, created_ts = _read_lock_meta(lock_path)
+                age = (time.time() - created_ts) if created_ts is not None else (time.time() - lock_path.stat().st_mtime)
+                # Only evict if the lock is older than LOCK_STALE_SECONDS AND its owner PID is no longer alive
+                if age > LOCK_STALE_SECONDS and not _pid_is_alive(existing_pid):
+                    cur_token, _, _ = _read_lock_meta(lock_path)
+                    if cur_token == existing_token:
+                        lock_path.unlink(missing_ok=True)
+                        continue
             except OSError:
                 pass
             if time.monotonic() >= deadline:
@@ -67,7 +119,10 @@ def store_lock(home, timeout=10.0):
     try:
         yield
     finally:
-        lock_path.unlink(missing_ok=True)
+        # Token-checked release: never delete a lock that does not carry our exact owner_token
+        cur_token, _, _ = _read_lock_meta(lock_path)
+        if cur_token == owner_token:
+            lock_path.unlink(missing_ok=True)
 
 
 def _journal_path(home):
@@ -77,37 +132,56 @@ def _journal_path(home):
     return logs / ".store.journal.json" if logs.is_dir() else None
 
 
+def _validate_journal_target(home, rel_or_abs_path):
+    """Validate that a journal target resolves strictly inside `home` and matches the write allowlist."""
+    if home is None:
+        raise ValueError("Cannot validate journal target without a LifeOS home.")
+    home_root = Path(home).resolve()
+    candidate = Path(rel_or_abs_path)
+    target = (home_root / candidate).resolve() if not candidate.is_absolute() else candidate.resolve()
+    try:
+        rel = target.relative_to(home_root).as_posix()
+    except ValueError as err:
+        raise ValueError(f"Refused journal target outside LifeOS home: {rel_or_abs_path}") from err
+    if rel not in ALLOWED_JOURNAL_LOGS and not TASK_REL_RE.fullmatch(rel):
+        raise ValueError(f"Refused journal target outside store allowlist: {rel}")
+    return target, rel
+
+
 def recover_journal(home):
-    """Replay any uncommitted multi-file transaction left by an interrupted process."""
+    """Replay any uncommitted multi-file transaction left by an interrupted process after validating every target."""
     jpath = _journal_path(home)
     if jpath is None or not jpath.exists():
         return False
     try:
         payload = json.loads(jpath.read_text(encoding="utf-8"))
-    except (OSError, json.JSONDecodeError):
+        entries = payload["operations"]
+        if not isinstance(entries, list) or not entries:
+            raise ValueError("Malformed journal operations list")
+        validated = []
+        for entry in entries:
+            target, _ = _validate_journal_target(home, entry["path"])
+            data = base64.b64decode(entry["b64"], validate=True)
+            validated.append((target, data))
+    except Exception as err:
+        # Quarantine/remove malformed or unsafe journal without replaying a single file
         jpath.unlink(missing_ok=True)
-        return False
-    for entry in payload.get("operations", []):
-        target = Path(entry["path"])
-        data = base64.b64decode(entry["b64"])
+        raise ValueError(f"Refused unsafe or corrupted store journal: {err}") from err
+    for target, data in validated:
         atomic_write_bytes(target, data)
     jpath.unlink(missing_ok=True)
     return True
 
 
 def commit_transaction(home, operations):
-    """Commit one or more (path, bytes) updates atomically via a write-ahead journal."""
+    """Commit one or more (path, bytes) updates atomically via a validated write-ahead journal."""
     jpath = _journal_path(home)
     if jpath is not None and len(operations) > 1:
-        journal_bytes = json.dumps(
-            {
-                "operations": [
-                    {"path": str(Path(p)), "b64": base64.b64encode(data).decode("ascii")}
-                    for p, data in operations
-                ]
-            },
-            sort_keys=True,
-        ).encode("utf-8")
+        journal_ops = []
+        for p, data in operations:
+            _, rel = _validate_journal_target(home, p)
+            journal_ops.append({"path": rel, "b64": base64.b64encode(data).decode("ascii")})
+        journal_bytes = json.dumps({"operations": journal_ops}, sort_keys=True).encode("utf-8")
         atomic_write_bytes(jpath, journal_bytes)
     for target, data in operations:
         atomic_write_bytes(Path(target), data)
