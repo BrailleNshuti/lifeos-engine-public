@@ -402,9 +402,9 @@ def _verify_review_identity(rec, task_stem, expected_model, repo, commit):
         rec_req = rec.get("requested_commit")
         rec_sha = str(rec.get("commit_sha") or "")
         if rec_req is not None:
-            if req_arg != str(rec_req) and not (rec_sha and req_arg == rec_sha):
+            if req_arg != str(rec_req):
                 raise ValueError(
-                    f"run_id '{rec.get('run_id')}' already belongs to commit '{rec_sha or rec_req}'."
+                    f"run_id '{rec.get('run_id')}' already belongs to commit '{rec_req}'."
                 )
         elif rec_sha and req_arg not in ("HEAD", rec_sha):
             raise ValueError(f"run_id '{rec.get('run_id')}' already belongs to commit '{rec_sha}'.")
@@ -420,7 +420,7 @@ def _verify_review_child_identity(child_rec, group_id, task_stem, who, digest, r
         or child_rec.get("context_sha256") != digest
         or child_rec.get("repo") != repo_label
         or child_rec.get("commit_sha") != commit_sha
-        or (child_rec.get("requested_commit") is not None and child_rec.get("requested_commit") != req_commit)
+        or child_rec.get("requested_commit") != req_commit
     ):
         raise ValueError(
             f"child run_id '{child_rec.get('run_id')}' already belongs to a different context or commit."
