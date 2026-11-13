@@ -21,7 +21,10 @@ import urllib.request
 from .check import check_answer
 from .context import build_pack, build_review_pack, inspect_repo_commit, pack_hash, task_file
 from .guard import TOKEN_PATTERNS, SECRET_ASSIGNMENT, private_patterns, scan_text
-from .store import RUN_SCHEMA_VERSION, append_run_record, has_run_id, model_call_note, new_run_id, record_result, utc_now_iso
+from .store import (
+    RUN_SCHEMA_VERSION, append_run_record, get_run_record, has_run_id,
+    model_call_note, new_run_id, record_result, utc_now_iso,
+)
 
 TIMEOUT = 600
 PROBE_TIMEOUT = 3
@@ -224,16 +227,43 @@ def _probe_ollama_tags():
         return None
 
 
-def provider_status(probe=False, smoke=False):
-    """Return availability, capability contract and (when probe=True) live health status for each provider."""
+def provider_status(probe=False, smoke=False, adapters=None):
+    """Return availability, capability contract and (when probe=True or smoke=True) live health status for each provider."""
     rows = []
+    active_adapters = adapters or ADAPTERS
     tags = _probe_ollama_tags() if (probe or smoke) else None
     for name, info in sorted(PROVIDERS.items()):
         exe = shutil.which(info["binary"])
         available = bool(exe)
         status = "available" if available else "missing"
         detail = info["binary"]
-        if probe or smoke:
+        if smoke:
+            if name in ("ollama", "qwen"):
+                target = qwen_model() if name == "qwen" else os.environ.get("LIFEOS_OLLAMA_MODEL", "llama3.2")
+                detail = f"ollama ({target})"
+                if tags is None and adapters is None:
+                    status = "unreachable"
+                elif tags is not None and target not in tags and f"{target}:latest" not in tags and adapters is None:
+                    status = "model_missing"
+                else:
+                    try:
+                        ans = active_adapters[name]("Reply with OK only.")
+                        status = "healthy" if ans else "unhealthy"
+                        detail = f"ollama ({target}, smoke ok)" if ans else f"ollama ({target}, empty smoke response)"
+                    except Exception:
+                        status = "unhealthy"
+                        detail = f"ollama ({target}, smoke failed)"
+            elif not available and adapters is None:
+                status = "missing"
+            else:
+                try:
+                    ans = active_adapters[name]("Reply with OK only.")
+                    status = "healthy" if ans else "unhealthy"
+                    detail = f"{info['binary']} (smoke ok)" if ans else f"{info['binary']} (empty smoke response)"
+                except Exception:
+                    status = "unhealthy"
+                    detail = f"{info['binary']} (smoke failed)"
+        elif probe:
             if name in ("ollama", "qwen"):
                 target = qwen_model() if name == "qwen" else os.environ.get("LIFEOS_OLLAMA_MODEL", "llama3.2")
                 detail = f"ollama ({target})"
@@ -245,14 +275,6 @@ def provider_status(probe=False, smoke=False):
                     status = "model_missing"
             elif not available:
                 status = "missing"
-            elif smoke:
-                try:
-                    ans = ADAPTERS[name]("Reply with OK only.")
-                    status = "healthy" if ans else "unhealthy"
-                    detail = f"{info['binary']} (smoke ok)" if ans else f"{info['binary']} (empty smoke response)"
-                except Exception:
-                    status = "unhealthy"
-                    detail = f"{info['binary']} (smoke failed)"
             else:
                 try:
                     done = subprocess.run(
@@ -353,6 +375,13 @@ def run_ask(home, model, task_id, budget=6000, dry_run=False, adapters=None, tod
     started = time.monotonic()
     try:
         text = adapters[model](f"{INSTRUCTION}\n\n{pack}")
+    except Blocked as err:
+        elapsed_ms = int((time.monotonic() - started) * 1000)
+        append_run_record(home, {
+            **base_rec, "finished_at": utc_now_iso(), "duration_ms": elapsed_ms, "status": "blocked",
+            "phase": "provider_guard", "flags": 0, "error": redact_error(err),
+        })
+        raise
     except ToolMissing as err:
         elapsed_ms = int((time.monotonic() - started) * 1000)
         append_run_record(home, {
@@ -386,6 +415,16 @@ def run_ask(home, model, task_id, budget=6000, dry_run=False, adapters=None, tod
     }
     record_result(home, path, label(model), text, day, note, run_id=rid, run_record=run_rec)
     return path
+
+
+def _reconstruct_child_error(rec):
+    status = rec.get("status")
+    msg = rec.get("error") or f"persisted child run {rec.get('run_id')} failed with status {status}"
+    if status == "tool_missing":
+        return ToolMissing(msg)
+    if status == "blocked":
+        return Blocked(msg)
+    return AskError(msg)
 
 
 def run_review(home, task_id, reviewers=("codex", "claude"), budget=6000, dry_run=False, adapters=None,
@@ -445,6 +484,19 @@ def run_review(home, task_id, reviewers=("codex", "claude"), budget=6000, dry_ru
         child_id = f"{group_id}-c{idx}" if run_id else new_run_id(day)
         child_ids.append(child_id)
         who = f"review:{label(r)}"
+        if run_id:
+            existing_child = get_run_record(home, child_id, normalize=True)
+            if existing_child is not None:
+                if existing_child.get("status") == "ok":
+                    flag_count = int(existing_child.get("flags", 0))
+                    results.append({
+                        "model": r, "label": who, "run_id": child_id,
+                        "text": "", "flags": ["persisted_flag"] * flag_count,
+                    })
+                elif first_err is None:
+                    first_err = _reconstruct_child_error(existing_child)
+                continue
+
         locality = PROVIDERS.get(r, {}).get("locality", "remote")
         child_started_iso = utc_now_iso()
         base_child = {
@@ -454,11 +506,20 @@ def run_review(home, task_id, reviewers=("codex", "claude"), budget=6000, dry_ru
             "tokens": tokens, "commit_sha": commit_sha, "repo": repo_label, "terminal": True,
         }
         started = time.monotonic()
+        phase = None
         try:
-            with _isolated_git_worktree(repo_info):
-                text = adapters[r](f"{REVIEW_INSTRUCTION}\n\n{pack}")
+            try:
+                with _isolated_git_worktree(repo_info):
+                    text = adapters[r](f"{REVIEW_INSTRUCTION}\n\n{pack}")
+            except Blocked:
+                phase = "provider_guard"
+                raise
             elapsed_ms = int((time.monotonic() - started) * 1000)
-            check_text(text, f"the review from {r}", "Nothing was written to your files.")
+            try:
+                check_text(text, f"the review from {r}", "Nothing was written to your files.")
+            except Blocked:
+                phase = "inbound_answer"
+                raise
         except (ToolMissing, AskError, Blocked) as err:
             elapsed_ms = int((time.monotonic() - started) * 1000)
             if isinstance(err, ToolMissing):
@@ -467,10 +528,13 @@ def run_review(home, task_id, reviewers=("codex", "claude"), budget=6000, dry_ru
                 st = "blocked"
             else:
                 st = _classify_ask_error(err)
-            append_run_record(home, {
+            fail_child = {
                 **base_child, "finished_at": utc_now_iso(), "duration_ms": elapsed_ms, "status": st,
                 "flags": 0, "error": redact_error(err),
-            })
+            }
+            if phase:
+                fail_child["phase"] = phase
+            append_run_record(home, fail_child)
             if first_err is None:
                 first_err = err
             continue

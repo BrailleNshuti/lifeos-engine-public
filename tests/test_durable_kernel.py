@@ -79,6 +79,42 @@ def test_pre_execution_run_id_idempotency_prevents_duplicate_ask_and_review(home
     assert (home / "logs" / "ledger.csv").read_text(encoding="utf-8").splitlines() == ledger_after_rev
     assert _read_runs(home) == runs_after_rev
 
+    # 3. Crash after first child completes before parent review_group record is written:
+    #    retrying the same parent run_id reuses child 1 without re-calling r1 and completes child 2 + parent
+    r1_calls = []
+    r2_calls = []
+
+    def r1_ok(prompt):
+        r1_calls.append(prompt)
+        return CLEAN
+
+    def r2_crash_once(prompt):
+        r2_calls.append(prompt)
+        if len(r2_calls) == 1:
+            raise RuntimeError("simulated uncatchable process crash after child 1 committed")
+        return CLEAN
+
+    with pytest.raises(RuntimeError, match="simulated uncatchable process crash"):
+        ask.run_review(
+            home, "T-261116", reviewers=("r1", "r2"),
+            adapters={"r1": r1_ok, "r2": r2_crash_once}, today=TODAY, run_id="R-261120-revcrash",
+        )
+    assert len(r1_calls) == 1 and len(r2_calls) == 1
+    assert store.get_run_record(home, "R-261120-revcrash-c1") is not None
+    assert store.get_run_record(home, "R-261120-revcrash") is None
+
+    # Retry with same parent run_id: r1 is NOT called again, r2 completes, and parent record is written
+    out_retry = ask.run_review(
+        home, "T-261116", reviewers=("r1", "r2"),
+        adapters={"r1": r1_ok, "r2": r2_crash_once}, today=TODAY, run_id="R-261120-revcrash",
+    )
+    assert len(r1_calls) == 1  # Zero duplicate calls to child 1!
+    assert len(r2_calls) == 2
+    assert out_retry["group_run_id"] == "R-261120-revcrash"
+    parent_after = store.get_run_record(home, "R-261120-revcrash")
+    assert parent_after is not None and parent_after["status"] == "ok"
+    assert parent_after["child_run_ids"] == ["R-261120-revcrash-c1", "R-261120-revcrash-c2"]
+
 
 def test_transactional_journal_recovers_partial_crash_and_rejects_unsafe_paths(home, monkeypatch, tmp_path):
     task_path = home / "tasks" / "T-261116-demo-cli.md"
@@ -146,8 +182,25 @@ def test_transactional_journal_recovers_partial_crash_and_rejects_unsafe_paths(h
     for q in quarantined:
         q.unlink()
 
+    # Short-write resilience: _write_all loops over memoryview when os.write writes only a few bytes at a time
+    real_write = store.os.write
+    chunk_target = tmp_path / "chunked.txt"
+    payload = b"abcdefghijklmnopqrstuvwxyz0123456789" * 3
+    monkeypatch.setattr(store.os, "write", lambda fd, buf: real_write(fd, buf[:5]))
+    store.atomic_write_bytes(chunk_target, payload)
+    monkeypatch.setattr(store.os, "write", real_write)
+    assert chunk_target.read_bytes() == payload
+
+    # Zero-byte write raises OSError instead of spinning forever
+    monkeypatch.setattr(store.os, "write", lambda fd, buf: 0)
+    with pytest.raises(OSError, match="Short write returned 0 bytes"):
+        store.atomic_write_bytes(chunk_target, b"fail")
+    monkeypatch.setattr(store.os, "write", real_write)
+
 
 def test_lock_exclusivity_live_pid_protection_and_token_checked_release(home, monkeypatch):
+    import sys
+
     monkeypatch.setattr(store, "LOCK_STALE_SECONDS", 0.05)
     lock_path = home / "logs" / ".store.lock"
 
@@ -165,7 +218,7 @@ def test_lock_exclusivity_live_pid_protection_and_token_checked_release(home, mo
     t_a = threading.Thread(target=writer_a)
     t_a.start()
     assert entered.wait(timeout=1.0)
-    time.sleep(0.08)  # Exceeds LOCK_STALE_SECONDS (0.05s), but owner PID (current process) is alive!
+    time.sleep(0.08)  # Exceeds LOCK_STALE_SECONDS (0.05s), but owner holds OS + thread lock!
 
     for _ in range(2):
         with pytest.raises(TimeoutError):
@@ -177,14 +230,28 @@ def test_lock_exclusivity_live_pid_protection_and_token_checked_release(home, mo
     t_a.join()
     assert not lock_path.exists()
 
-    # 2. A stale lock from a dead PID (99999999) IS evicted after LOCK_STALE_SECONDS
-    old_ts = time.time() - 10.0
-    lock_path.write_text(f"dead-token\n99999999\n{old_ts}\n", encoding="ascii")
-    with store.store_lock(home, timeout=0.5):
-        assert lock_path.exists()
-        token, pid, _ = store._read_lock_meta(lock_path)
-        assert pid == os.getpid() and token != "dead-token"
-    assert not lock_path.exists()
+    # 2. Multiprocess dead-owner & two-contender recovery: a child process locks .store.lock and dies via os._exit(0);
+    #    the OS immediately releases the advisory lock, and two contending subprocesses serialize cleanly without race
+    repo_root = str(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+    crash_code = (
+        f"import os, sys; sys.path.insert(0, {repo_root!r}); "
+        f"from lifeos import store; "
+        f"ctx = store.store_lock({str(home)!r}, timeout=2.0); ctx.__enter__(); os._exit(0)"
+    )
+    subprocess.run([sys.executable, "-c", crash_code], check=True)
+
+    contend_code = (
+        f"import sys, time; sys.path.insert(0, {repo_root!r}); "
+        f"from lifeos import store; "
+        f"rid = sys.argv[1]; "
+        f"store.append_run_record({str(home)!r}, {{'run_id': rid, 'date': '2026-11-20', 'command': 'ask', 'status': 'ok'}})"
+    )
+    p1 = subprocess.Popen([sys.executable, "-c", contend_code, "R-261120-mp0001"])
+    p2 = subprocess.Popen([sys.executable, "-c", contend_code, "R-261120-mp0002"])
+    assert p1.wait(timeout=5.0) == 0
+    assert p2.wait(timeout=5.0) == 0
+    mp_ids = {r["run_id"] for r in _read_runs(home)}
+    assert {"R-261120-mp0001", "R-261120-mp0002"}.issubset(mp_ids)
 
 
 def test_concurrent_writers_do_not_lose_or_corrupt_updates(home):
@@ -229,7 +296,7 @@ def test_concurrent_writers_do_not_lose_or_corrupt_updates(home):
     assert {r["run_id"] for r in runs} == {f"R-261120-conc{i:04d}" for i in range(8)}
 
 
-def test_blocked_failed_timeout_tool_missing_partial_and_full_fail_runs_recorded_with_redaction(home):
+def test_blocked_failed_timeout_tool_missing_partial_and_full_fail_runs_recorded_with_redaction(home, monkeypatch):
     leaked_secret = "ghp_" + "a1" * 18
 
     # 0. Outbound context blocked by guard -> status="blocked", phase="outbound_context"
@@ -241,6 +308,12 @@ def test_blocked_failed_timeout_tool_missing_partial_and_full_fail_runs_recorded
     with pytest.raises(ask.Blocked):
         ask.run_review(home, "T-261116", reviewers=("fake",), adapters={"fake": lambda p: CLEAN}, today=TODAY, run_id="R-261120-blkr0001")
     task_path.write_text(orig_task, encoding="utf-8")
+
+    # 0b. Provider-level privacy block (non-loopback OLLAMA_HOST) -> status="blocked", phase="provider_guard"
+    monkeypatch.setenv("OLLAMA_HOST", "http://remote.example.org:11434")
+    with pytest.raises(ask.Blocked):
+        ask.run_ask(home, "ollama", "T-261116", today=TODAY, run_id="R-261120-blkp0001")
+    monkeypatch.delenv("OLLAMA_HOST", raising=False)
 
     # 1. Provider timeout -> status="timeout"
     def timeout_adapter(prompt):
@@ -291,6 +364,7 @@ def test_blocked_failed_timeout_tool_missing_partial_and_full_fail_runs_recorded
     by_id = {r["run_id"]: r for r in _read_runs(home)}
     assert by_id["R-261120-blko0001"]["status"] == "blocked" and by_id["R-261120-blko0001"]["phase"] == "outbound_context"
     assert by_id["R-261120-blkr0001"]["status"] == "blocked" and by_id["R-261120-blkr0001"]["phase"] == "outbound_context"
+    assert by_id["R-261120-blkp0001"]["status"] == "blocked" and by_id["R-261120-blkp0001"]["phase"] == "provider_guard"
     assert by_id["R-261120-time0001"]["status"] == "timeout"
     assert by_id["R-261120-fail0001"]["status"] == "failed"
     assert "[REDACTED]" in by_id["R-261120-fail0001"]["error"]
@@ -384,6 +458,21 @@ def test_doctor_tools_and_live_cli_exit_codes(home, monkeypatch, capsys):
     out_ok = capsys.readouterr().out
     assert "healthy" in out_ok and "cli_healthy" in out_ok and "doctor: ok" in out_ok
 
+    # Authenticated --smoke probe invokes every configured provider adapter (both local and remote)
+    smoke_called = []
+
+    def make_smoke(name):
+        def _smoke(prompt):
+            smoke_called.append(name)
+            return "OK"
+        return _smoke
+
+    monkeypatch.setattr(ask, "ADAPTERS", {k: make_smoke(k) for k in ask.PROVIDERS})
+    assert cli.main(["--home", str(home), "doctor", "--smoke"]) == 0
+    out_smoke = capsys.readouterr().out
+    assert set(smoke_called) == set(ask.PROVIDERS)
+    assert "smoke ok" in out_smoke and "doctor: ok" in out_smoke
+
     # Missing model in Ollama -> cli.main exits 1 and reports problems to fix
     class PartialTagsResp:
         def __enter__(self):
@@ -408,9 +497,9 @@ def test_doctor_tools_and_live_cli_exit_codes(home, monkeypatch, capsys):
 
 
 def test_schema_versioning_v1_normalization_and_locked_proof_logging(home):
-    # 1. Legacy v1 record (12-char hash, no schema_version or timestamps) + v2 record coexist cleanly
+    # 1. Legacy v1 records (both 12-char hash and schema-less 64-char hash) + v2 record coexist cleanly
     runs_path = home / "logs" / "runs.jsonl"
-    v1_legacy = {
+    v1_legacy_12 = {
         "run_id": "R-261113-legacy01",
         "date": "2026-11-13",
         "command": "ask",
@@ -419,8 +508,28 @@ def test_schema_versioning_v1_normalization_and_locked_proof_logging(home):
         "context_sha256": "abcdef012345",
         "status": "ok",
     }
-    runs_path.write_text(json.dumps(v1_legacy) + "\n", encoding="utf-8")
+    v1_legacy_64 = {
+        "run_id": "R-261113-legacy64",
+        "date": "2026-11-13",
+        "command": "ask",
+        "task_id": "T-261116-demo-cli",
+        "model": "codex",
+        "context_sha256": "a" * 64,
+        "status": "ok",
+    }
+    runs_path.write_text(json.dumps(v1_legacy_12) + "\n" + json.dumps(v1_legacy_64) + "\n", encoding="utf-8")
 
+    # Newly written records always force schema_version=2 even if caller passes schema_version=1
+    store.append_run_record(home, {
+        "schema_version": 1,
+        "run_id": "R-261120-forcedv2",
+        "date": TODAY.isoformat(),
+        "command": "ask",
+        "task_id": "T-261116-demo-cli",
+        "model": "fake",
+        "context_sha256": "b" * 64,
+        "status": "ok",
+    })
     ask.run_ask(
         home, "fake", "T-261116", adapters={"fake": lambda p: CLEAN}, today=TODAY, run_id="R-261120-v2rec001"
     )
@@ -430,6 +539,12 @@ def test_schema_versioning_v1_normalization_and_locked_proof_logging(home):
     assert records["R-261113-legacy01"]["started_at"] == "2026-11-13T00:00:00Z"
     assert records["R-261113-legacy01"]["terminal"] is True
 
+    # Schema-less 64-char historical record is still schema_version == 1 with hash_format == "sha256_64"
+    assert records["R-261113-legacy64"]["schema_version"] == 1
+    assert records["R-261113-legacy64"]["hash_format"] == "sha256_64"
+    assert records["R-261113-legacy64"]["terminal"] is True
+
+    assert records["R-261120-forcedv2"]["schema_version"] == 2
     v2 = records["R-261120-v2rec001"]
     assert v2["schema_version"] == 2
     assert v2["hash_format"] == "sha256_64"

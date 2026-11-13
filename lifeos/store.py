@@ -1,9 +1,9 @@
 """Locked, crash-recoverable multi-file commits shared by LifeOS commands.
 
 All task results, ledger rows, proof rows and execution run records pass through
-this module so exclusive file locking, write-ahead crash recovery, fsynced atomic
-replacement, run_id idempotency, schema versioning, CSV quoting, line boundaries
-and the model-call contract cannot drift between features.
+this module so exclusive OS advisory file locking, write-ahead crash recovery,
+fsynced atomic replacement, run_id idempotency, schema versioning, CSV quoting,
+line boundaries and the model-call contract cannot drift between features.
 """
 import base64
 from contextlib import contextmanager
@@ -18,7 +18,15 @@ import time
 import uuid
 from pathlib import Path
 
-_LOCK_TLS = threading.local()
+try:
+    import fcntl
+except ImportError:  # pragma: no cover - Windows
+    fcntl = None
+
+try:
+    import msvcrt
+except ImportError:  # pragma: no cover - POSIX
+    msvcrt = None
 
 ASK_NOTE_PREFIX = "asked via lifeos ask"
 FLAGS_LABEL = "flags"
@@ -28,21 +36,36 @@ TASK_REL_RE = re.compile(r"^(?:tasks/)?T-[A-Za-z0-9-]+\.md$")
 RUN_SCHEMA_VERSION = 2
 TERMINAL_RUN_STATUSES = ("ok", "blocked", "failed", "timeout", "tool_missing", "partial")
 
+_LOCK_TLS = threading.local()
+_THREAD_LOCKS_GUARD = threading.Lock()
+_THREAD_LOCKS = {}
+
 
 def utc_now_iso():
     """Return current UTC timestamp in ISO-8601 format (YYYY-MM-DDTHH:MM:SSZ)."""
     return dt.datetime.now(dt.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
 
 
+def _write_all(fd, data):
+    """Write every byte from `data` to `fd` via a memoryview loop, raising OSError on a zero-byte write."""
+    view = memoryview(data if isinstance(data, (bytes, bytearray, memoryview)) else bytes(data))
+    total = 0
+    while total < len(view):
+        written = os.write(fd, view[total:])
+        if written is None or written <= 0:
+            raise OSError("Short write returned 0 bytes")
+        total += written
+
+
 def atomic_write_bytes(path, data):
-    """Write bytes to a sibling temp file, fsync to disk, and atomically replace the target."""
+    """Write bytes to a sibling temp file via _write_all, fsync to disk, and atomically replace the target."""
     path = Path(path)
     tmp = path.with_name(f".{path.name}.{os.getpid()}.{uuid.uuid4().hex[:6]}.tmp")
     flags = os.O_CREAT | os.O_EXCL | os.O_WRONLY | getattr(os, "O_BINARY", 0)
     try:
         fd = os.open(str(tmp), flags)
         try:
-            os.write(fd, data)
+            _write_all(fd, data)
             os.fsync(fd)
         finally:
             os.close(fd)
@@ -55,42 +78,52 @@ def atomic_write_bytes(path, data):
 _atomic_write_bytes = atomic_write_bytes
 
 
-def _pid_is_alive(pid):
-    """Return True if a process with `pid` is currently running on this machine."""
-    if not isinstance(pid, int) or pid <= 0:
-        return False
-    if os.name == "nt":
+def _get_thread_lock(lock_path):
+    with _THREAD_LOCKS_GUARD:
+        tlock = _THREAD_LOCKS.get(lock_path)
+        if tlock is None:
+            tlock = threading.Lock()
+            _THREAD_LOCKS[lock_path] = tlock
+        return tlock
+
+
+def _try_os_lock(fd):
+    """Attempt a non-blocking exclusive OS advisory lock on `fd` (byte 0 on Windows, flock on POSIX)."""
+    if msvcrt is not None:
         try:
-            import ctypes
-            kernel32 = ctypes.windll.kernel32
-            PROCESS_QUERY_LIMITED_INFORMATION = 0x1000
-            STILL_ACTIVE = 259
-            handle = kernel32.OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, False, pid)
-            if not handle:
-                # ERROR_ACCESS_DENIED (5) means process exists under another privilege context
-                return ctypes.GetLastError() == 5
-            try:
-                exit_code = ctypes.c_ulong()
-                if kernel32.GetExitCodeProcess(handle, ctypes.byref(exit_code)):
-                    return exit_code.value == STILL_ACTIVE
-                return True
-            finally:
-                kernel32.CloseHandle(handle)
-        except Exception:
+            os.lseek(fd, 0, os.SEEK_SET)
+            msvcrt.locking(fd, msvcrt.LK_NBLCK, 1)
+            return True
+        except OSError:
+            return False
+    if fcntl is not None:
+        try:
+            fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+            return True
+        except OSError:
+            return False
+    return True
+
+
+def _os_unlock(fd):
+    """Release the OS advisory lock on `fd` before closing it."""
+    if msvcrt is not None:
+        try:
+            os.lseek(fd, 0, os.SEEK_SET)
+            msvcrt.locking(fd, msvcrt.LK_UNLCK, 1)
+        except OSError:
             pass
-    try:
-        os.kill(pid, 0)
-        return True
-    except PermissionError:
-        return True
-    except OSError:
-        return False
+    elif fcntl is not None:
+        try:
+            fcntl.flock(fd, fcntl.LOCK_UN)
+        except OSError:
+            pass
 
 
 def _read_lock_meta(lock_path):
     """Return (owner_token, pid, timestamp) from a lockfile, or (None, None, None)."""
     try:
-        lines = lock_path.read_text(encoding="ascii").splitlines()
+        lines = Path(lock_path).read_text(encoding="ascii").splitlines()
         if len(lines) >= 3:
             return lines[0].strip(), int(lines[1].strip()), float(lines[2].strip())
     except (OSError, ValueError):
@@ -100,8 +133,8 @@ def _read_lock_meta(lock_path):
 
 @contextmanager
 def store_lock(home, timeout=10.0):
-    """Acquire an exclusive cross-process/cross-thread lock on <home>/logs/.store.lock
-    with live-PID verification before stale eviction and token-checked release."""
+    """Acquire an exclusive cross-process (OS advisory lock) and cross-thread lock on <home>/logs/.store.lock,
+    holding the file descriptor for the context lifetime so dead-process recovery is kernel-atomic and race-free."""
     if home is None or not (Path(home) / "logs").is_dir():
         yield
         return
@@ -117,49 +150,56 @@ def store_lock(home, timeout=10.0):
         finally:
             held[lock_path] -= 1
         return
+
     owner_token = f"{os.getpid()}:{uuid.uuid4().hex}"
     deadline = time.monotonic() + timeout
+    tlock = _get_thread_lock(lock_path)
+
     while True:
-        try:
-            fd = os.open(str(lock_path), os.O_CREAT | os.O_EXCL | os.O_WRONLY)
-            try:
-                payload = f"{owner_token}\n{os.getpid()}\n{time.time()}\n".encode("ascii")
-                os.write(fd, payload)
-            finally:
-                os.close(fd)
+        remaining = deadline - time.monotonic()
+        if remaining <= 0:
+            raise TimeoutError(f"Timed out waiting for store lock: {lock_path}")
+        if tlock.acquire(timeout=min(remaining, 0.05)):
             break
-        except FileExistsError:
+
+    fd = None
+    try:
+        open_flags = os.O_CREAT | os.O_RDWR | getattr(os, "O_BINARY", 0)
+        while True:
             try:
-                # Check mtime first without opening the file so normal contenders never block unlink on Windows
-                if time.time() - lock_path.stat().st_mtime > LOCK_STALE_SECONDS:
-                    existing_token, existing_pid, created_ts = _read_lock_meta(lock_path)
-                    age = (time.time() - created_ts) if created_ts is not None else (time.time() - lock_path.stat().st_mtime)
-                    if age > LOCK_STALE_SECONDS and not _pid_is_alive(existing_pid):
-                        cur_token, _, _ = _read_lock_meta(lock_path)
-                        if cur_token == existing_token:
-                            lock_path.unlink(missing_ok=True)
-                            continue
+                fd = os.open(str(lock_path), open_flags)
+            except OSError:
+                fd = None
+            if fd is not None and _try_os_lock(fd):
+                try:
+                    os.lseek(fd, 0, os.SEEK_SET)
+                    payload = f"{owner_token}\n{os.getpid()}\n{time.time()}\n".encode("ascii")
+                    _write_all(fd, payload)
+                    os.ftruncate(fd, len(payload))
+                except OSError:
+                    pass
+                break
+            if fd is not None:
+                os.close(fd)
+                fd = None
+            if time.monotonic() >= deadline:
+                raise TimeoutError(f"Timed out waiting for store lock: {lock_path}")
+            time.sleep(0.01)
+
+        held[lock_path] = 1
+        try:
+            yield
+        finally:
+            held.pop(lock_path, None)
+    finally:
+        if fd is not None:
+            _os_unlock(fd)
+            os.close(fd)
+            try:
+                lock_path.unlink(missing_ok=True)
             except OSError:
                 pass
-            if time.monotonic() >= deadline:
-                raise TimeoutError(f"Timed out waiting for store lock: {lock_path}") from None
-            time.sleep(0.01)
-    held[lock_path] = 1
-    try:
-        yield
-    finally:
-        held.pop(lock_path, None)
-        # Token-checked release: never delete a lock that does not carry our exact owner_token
-        for _ in range(5):
-            try:
-                if not lock_path.exists():
-                    break
-                cur_token, _, _ = _read_lock_meta(lock_path)
-                if cur_token == owner_token:
-                    lock_path.unlink(missing_ok=True)
-                break
-            except PermissionError:
-                time.sleep(0.005)
+        tlock.release()
 
 
 def _journal_path(home):
@@ -258,11 +298,11 @@ def model_call_flags(note):
 
 
 def normalize_run_record(record):
-    """Upgrade a v1 or v2 run record dict in memory with explicit schema_version, UTC timestamps, and terminal semantics."""
+    """Upgrade a v1 or v2 run record dict in memory with explicit schema_version, UTC timestamps, and terminal semantics.
+    Any historical record lacking `schema_version` is classified as schema_version=1 regardless of digest length."""
     out = dict(record)
     digest = str(out.get("context_sha256") or "")
-    if "schema_version" not in out:
-        out["schema_version"] = 1 if len(digest) == 12 else RUN_SCHEMA_VERSION
+    out["schema_version"] = int(out["schema_version"]) if "schema_version" in out else 1
     if "hash_format" not in out:
         out["hash_format"] = "sha256_64" if len(digest) == 64 else ("sha256_prefix_12" if len(digest) == 12 else "none")
     fallback_ts = f"{out.get('date', '1970-01-01')}T00:00:00Z"
@@ -273,13 +313,13 @@ def normalize_run_record(record):
 
 
 def _stamp_v2_run_record(record):
-    """Ensure a newly written run record carries v2 schema fields and a valid terminal status."""
+    """Ensure a newly written run record carries v2 schema fields (forced schema_version=2) and a valid terminal status."""
     rec = dict(record)
     status = rec.get("status")
     if status not in TERMINAL_RUN_STATUSES:
         raise ValueError(f"Invalid non-terminal run status '{status}'. Allowed: {', '.join(TERMINAL_RUN_STATUSES)}")
     now_iso = utc_now_iso()
-    rec.setdefault("schema_version", RUN_SCHEMA_VERSION)
+    rec["schema_version"] = RUN_SCHEMA_VERSION
     rec.setdefault("started_at", now_iso)
     rec.setdefault("finished_at", now_iso)
     rec["terminal"] = True
@@ -297,6 +337,16 @@ def read_run_records(home, normalize=True):
             return []
         rows = [json.loads(line) for line in runs.read_text(encoding="utf-8").splitlines() if line.strip()]
     return [normalize_run_record(r) for r in rows] if normalize else rows
+
+
+def get_run_record(home, run_id, normalize=True):
+    """Return a single persisted run record by run_id under the store lock, or None."""
+    if not run_id or home is None:
+        return None
+    for rec in read_run_records(home, normalize=normalize):
+        if rec.get("run_id") == run_id:
+            return rec
+    return None
 
 
 def _prepare_task_result_bytes(path, model, text, today):
