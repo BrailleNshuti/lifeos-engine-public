@@ -159,8 +159,12 @@ def inspect_repo_commit(repo_path, commit="HEAD"):
 
 
 def build_review_pack(home, task_id, budget=6000, diff_text="", repo_info=None):
-    """Facts-only pack for blind review (rule 7): strips any appended '## Result · ...' blocks so reviewers never see prior answers."""
+    """Facts-only pack for blind review (rule 7): strips any appended '## Result · ...' blocks so reviewers never see prior answers,
+    and reserves budget so repository metadata and commit diffs always reach reviewers."""
     _validate_budget(budget)
+    has_diff = bool((repo_info and repo_info.get("diff_text", "").strip()) or diff_text.strip())
+    if (repo_info or has_diff) and budget < 80:
+        raise ValueError(f"Review budget ({budget} tokens) is too small to include repository metadata and commit diff.")
     home = Path(home)
     path = task_file(home, task_id)
     facts = re.split(r"\n## Result\s*·", path.read_text(encoding="utf-8"), maxsplit=1)[0].strip()
@@ -173,17 +177,33 @@ def build_review_pack(home, task_id, budget=6000, diff_text="", repo_info=None):
             parts.append((f"commit_diff ({repo_info['commit_sha'][:12]})", repo_info["diff_text"].strip()))
     if diff_text.strip():
         parts.append(("diff", diff_text.strip()))
+
+    full_costs = [estimate_tokens(f"=== {n} ===\n{t}\n") for n, t in parts]
+    if sum(full_costs) <= budget:
+        blocks = [f"=== {n} ===\n{t}\n" for n, t in parts]
+        pack = "\n".join(blocks)
+        return pack, estimate_tokens(pack)
+
     blocks, used = [], 0
-    for name, text in parts:
+    total_parts = len(parts)
+    for idx, (name, text) in enumerate(parts):
         block = f"=== {name} ===\n{text}\n"
-        cost = estimate_tokens(block)
-        if used + cost <= budget:
+        cost = full_costs[idx]
+        # Reserve space for every subsequent section (especially repo_commit and commit_diff/diff)
+        reserved = 0
+        for rem_idx in range(idx + 1, total_parts):
+            rem_name = parts[rem_idx][0]
+            min_share = max(50, budget // 4) if ("diff" in rem_name or "repo_commit" in rem_name) else max(25, budget // (total_parts + 1))
+            reserved += min(full_costs[rem_idx], min_share)
+        avail = max(20, budget - used - reserved)
+        if cost <= avail:
             blocks.append(block)
             used += cost
             continue
-        room = max((budget - used) * 4 - 80, 200 if not blocks else 0)
-        if not blocks or room > 400:
-            blocks.append(f"=== {name} (trimmed to fit {budget} tokens) ===\n{text[:room]}\n")
-        break
+        header = f"=== {name} (trimmed to fit {budget} tokens) ===\n"
+        room = max(avail * 4 - len(header) - 8, 40)
+        trimmed_block = f"{header}{text[:room]}\n"
+        blocks.append(trimmed_block)
+        used += estimate_tokens(trimmed_block)
     pack = "\n".join(blocks)
     return pack, estimate_tokens(pack)

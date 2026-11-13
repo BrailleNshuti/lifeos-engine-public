@@ -156,7 +156,7 @@ def _read_lock_meta(lock_path):
 @contextmanager
 def _advisory_lock_file(lock_path, timeout=10.0):
     """Acquire an exclusive cross-process (OS advisory lock) and cross-thread lock on `lock_path`,
-    holding the file descriptor on a persistent inode for the context lifetime."""
+    holding the file descriptor on a persistent inode for the context lifetime. Pass `timeout=None` to wait indefinitely."""
     lock_path = Path(lock_path).resolve()
     held = getattr(_LOCK_TLS, "held", None)
     if held is None:
@@ -171,15 +171,19 @@ def _advisory_lock_file(lock_path, timeout=10.0):
         return
 
     owner_token = f"{os.getpid()}:{uuid.uuid4().hex}"
-    deadline = time.monotonic() + timeout
+    deadline = None if timeout is None else (time.monotonic() + timeout)
     tlock = _get_thread_lock(lock_path)
 
     while True:
-        remaining = deadline - time.monotonic()
-        if remaining <= 0:
-            raise TimeoutError(f"Timed out waiting for store lock: {lock_path}")
-        if tlock.acquire(timeout=min(remaining, 0.05)):
-            break
+        if deadline is None:
+            if tlock.acquire(timeout=0.05):
+                break
+        else:
+            remaining = deadline - time.monotonic()
+            if remaining <= 0:
+                raise TimeoutError(f"Timed out waiting for store lock: {lock_path}")
+            if tlock.acquire(timeout=min(remaining, 0.05)):
+                break
 
     fd = None
     try:
@@ -201,7 +205,7 @@ def _advisory_lock_file(lock_path, timeout=10.0):
             if fd is not None:
                 os.close(fd)
                 fd = None
-            if time.monotonic() >= deadline:
+            if deadline is not None and time.monotonic() >= deadline:
                 raise TimeoutError(f"Timed out waiting for store lock: {lock_path}")
             time.sleep(0.01)
 
@@ -230,8 +234,9 @@ def store_lock(home, timeout=10.0):
 
 
 @contextmanager
-def run_lock(home, run_id, timeout=30.0):
-    """Serialize concurrent executions sharing the same `run_id` from initial lookup through terminal record commit."""
+def run_lock(home, run_id, timeout=None):
+    """Serialize concurrent executions sharing the same `run_id` from initial lookup through terminal record commit.
+    Defaults to `timeout=None` (indefinite advisory-lock wait) so duplicate requests wait for slow provider runs."""
     if not run_id or home is None or not (Path(home) / "logs").is_dir():
         yield
         return
