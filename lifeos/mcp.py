@@ -6,7 +6,7 @@ Everything stays inside the data repo: tasks/ and logs/ledger.csv. Every write g
 import json
 
 from . import __version__, ask, delegate
-from .context import task_file, build_pack
+from .context import build_pack, explain_pack, render_explanation, task_file
 from .tasks import list_tasks, new_task
 
 STR = {"type": "string"}
@@ -21,8 +21,8 @@ TOOLS = [
      _schema({"status": {"type": "string", "enum": ["inbox", "doing", "done"]}}, [])),
     ("lifeos_task_new", "Create a task file from one sentence. The owner writes the done_when line.",
      _schema({"sentence": STR}, ["sentence"])),
-    ("lifeos_context", "Read a task with the rules (and, with full=true, now.md and me.md) as a context pack.",
-     _schema({"task": STR, "budget": {"type": "integer"}, "full": {"type": "boolean"}}, ["task"])),
+    ("lifeos_context", "Read a task with the rules (and, with full=true, now.md and me.md) as a context pack, or explain=true for provenance.",
+     _schema({"task": STR, "budget": {"type": "integer"}, "full": {"type": "boolean"}, "explain": {"type": "boolean"}}, ["task"])),
     ("lifeos_result_write", "Append your result to a task file under '## Result'. Class C data is refused.",
      _schema({"task": STR, "model": STR, "text": STR}, ["task", "model", "text"])),
     ("lifeos_ask", "Send a task to another model (codex, claude, gemini, ollama, qwen) and write its answer into the task file.",
@@ -30,12 +30,14 @@ TOOLS = [
     ("lifeos_delegate", "Let LifeOS pick the best-fitting model for a task (or pass model to choose), run it, "
      "and return its answer here. The answer is also appended to the task file.",
      _schema({"task": STR, "model": STR, "budget": {"type": "integer"}, "full": {"type": "boolean"}}, ["task"])),
+    ("lifeos_review", "Run an independent blind review (rule 7) across multiple models on the task's facts-only pack.",
+     _schema({"task": STR, "reviewers": STR, "budget": {"type": "integer"}}, ["task"])),
 ]
 
 INSTRUCTIONS = ("You are the lead. Work happens in task files. For work that fits another model (code, long reading, "
                 "private sorting), call lifeos_delegate with the task id; read the answer it returns, check it against "
                 "rules.md (proof, sources, how it could be wrong), then say plainly if the CHECK line flags anything or you see nonsense, and write your decision or next step with "
-                "lifeos_result_write. Never delegate class C data (IDs, bank, passwords, health, tenant data). "
+                "lifeos_result_write. For blind multi-model verification (rule 7), call lifeos_review. Never delegate class C data (IDs, bank, passwords, health, tenant data). "
                 "Private files such as a bank CSV never go into this chat or to any cloud model: tell the owner to run "
                 "`lifeos sort-csv <file>` in PowerShell (local, offline). "
                 "The owner makes the final call; sending, buying, deleting and publishing need his yes.")
@@ -50,8 +52,10 @@ def _run_tool(home, name, a):
         return str(new_task(home, a["sentence"]).relative_to(home))
     if name == "lifeos_context":
         task_file(home, a["task"])  # a missing, empty or unsafe id is an error, never a pack without the task
-        return build_pack(home, a["task"], a.get("budget", 6000), task_first=True,
-                          names=None if a.get("full") else ask.MINIMAL)[0]
+        names = None if a.get("full") else ask.MINIMAL
+        if a.get("explain"):
+            return render_explanation(explain_pack(home, a["task"], a.get("budget", 6000), task_first=True, names=names))
+        return build_pack(home, a["task"], a.get("budget", 6000), task_first=True, names=names)[0]
     if name == "lifeos_result_write":
         return f"written to {ask.write_result(home, a['task'], a['model'], a['text']).relative_to(home)}"
     if name == "lifeos_delegate":
@@ -61,6 +65,13 @@ def _run_tool(home, name, a):
     if name == "lifeos_ask":
         path = ask.run_ask(home, a["model"], a["task"], a.get("budget", 6000), full=bool(a.get("full")))
         return f"{a['model']} answered; result appended to {path.relative_to(home)}"
+    if name == "lifeos_review":
+        revs = [r.strip() for r in (a.get("reviewers") or "codex,claude").split(",") if r.strip()]
+        out = ask.run_review(home, a["task"], reviewers=revs, budget=a.get("budget", 6000))
+        parts = [f"Blind review ({out['group_run_id']}, pack {out['sha256']}) appended to {out['path'].relative_to(home)}:"]
+        for r in out["results"]:
+            parts.append(f"\n--- {r['label']} ({r['run_id']}) ---\n{r['text']}")
+        return "\n".join(parts)
     raise KeyError(name)
 
 
@@ -113,4 +124,3 @@ def serve(home, stdin, stdout):
         if reply is not None:
             stdout.write(json.dumps(reply) + "\n")
             stdout.flush()
-

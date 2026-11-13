@@ -1,4 +1,4 @@
-"""lifeos ask: send a task's context pack to another model and write the answer back into the task file.
+"""lifeos ask & review: send a task's context pack to models and write guarded results + run records.
 
 Adapters are small functions (prompt in, text out). The privacy guard runs on the pack first; a BLOCK stops the call.
 Prompts go in through stdin, never as arguments, so they stay out of the process list.
@@ -10,19 +10,23 @@ import re
 import shutil
 import subprocess
 import tempfile
+import time
 import urllib.error
 import urllib.parse
 import urllib.request
 
 from .check import check_answer
-from .context import task_file, build_pack
+from .context import build_pack, build_review_pack, pack_hash, task_file
 from .guard import private_patterns, scan_text
-from .store import model_call_note, record_result
+from .store import append_run_record, model_call_note, new_run_id, record_result
 
 TIMEOUT = 600
 MINIMAL = ("TASK", "rules.md")  # now.md and me.md only go out with --full
 INSTRUCTION = ("You are helping with the task below. Use only the context given. Answer with the result only: "
                "what was done, evidence, open issues, next step. Never ask for class C data (IDs, bank, passwords, health).")
+REVIEW_INSTRUCTION = ("You are conducting an independent blind review (rule 7). You see only the task facts and rules—"
+                      "never another model's answer. List findings in priority order (bugs, missing tests, privacy or "
+                      "security problems, rule violations), evidence, and the exact fix or verdict. End with Next step.")
 
 
 class Blocked(Exception):
@@ -132,6 +136,22 @@ def label(model):
 
 
 ADAPTERS = {"codex": ask_codex, "gemini": ask_gemini, "claude": ask_claude, "ollama": ask_ollama, "qwen": ask_qwen}
+PROVIDERS = {
+    "claude": {"locality": "remote", "binary": "claude"},
+    "codex": {"locality": "remote", "binary": "codex"},
+    "gemini": {"locality": "remote", "binary": "agy"},
+    "ollama": {"locality": "local", "binary": "ollama"},
+    "qwen": {"locality": "local", "binary": "ollama"},
+}
+
+
+def provider_status():
+    """Return availability and locality metadata for every registered model provider."""
+    rows = []
+    for name, info in sorted(PROVIDERS.items()):
+        exe = shutil.which(info["binary"])
+        rows.append({"model": name, "locality": info["locality"], "binary": info["binary"], "available": bool(exe)})
+    return rows
 
 
 def check_text(text, where, action):
@@ -152,7 +172,7 @@ def write_result(home, task_id, who, text, today=None, note="written via lifeos 
     return path
 
 
-def run_ask(home, model, task_id, budget=6000, dry_run=False, adapters=None, today=None, full=False):
+def run_ask(home, model, task_id, budget=6000, dry_run=False, adapters=None, today=None, full=False, parent_run_id=None):
     """Return the task path after writing the answer, or (pack, tokens) for a dry run."""
     adapters = adapters or ADAPTERS
     if model not in adapters:
@@ -162,10 +182,56 @@ def run_ask(home, model, task_id, budget=6000, dry_run=False, adapters=None, tod
     if dry_run:
         return pack, tokens
     path = task_file(home, task_id)
+    day = today or dt.date.today()
+    started = time.monotonic()
     text = adapters[model](f"{INSTRUCTION}\n\n{pack}")
+    elapsed_ms = int((time.monotonic() - started) * 1000)
     check_text(text, "the answer", "Nothing was written to your files.")
-    note = model_call_note(len(check_answer(text)))  # the count only: never the answer or the flag texts
-    record_result(home, path, label(model), text, today or dt.date.today(), note)
+    flags = check_answer(text)
+    note = model_call_note(len(flags))  # the count only: never the answer or the flag texts
+    record_result(home, path, label(model), text, day, note)
+    append_run_record(home, {
+        "run_id": new_run_id(day), "parent_run_id": parent_run_id, "date": day.isoformat(), "command": "ask",
+        "task_id": path.stem, "model": label(model), "locality": PROVIDERS.get(model, {}).get("locality", "remote"),
+        "context_sha256": pack_hash(pack), "tokens": tokens, "duration_ms": elapsed_ms, "status": "ok",
+        "flags": len(flags),
+    })
     return path
 
 
+def run_review(home, task_id, reviewers=("codex", "claude"), budget=6000, dry_run=False, adapters=None, today=None, diff_text=""):
+    """Run an independent blind review (rule 7) across multiple models on the same pre-committed facts-only pack."""
+    adapters = adapters or ADAPTERS
+    cleaned = [r.strip() for r in reviewers if r and r.strip()]
+    if not cleaned:
+        raise ValueError("Pass at least one reviewer model.")
+    for r in cleaned:
+        if r not in adapters:
+            raise ValueError(f"Unknown model '{r}'. Choose one of: {', '.join(sorted(adapters))}.")
+    pack, tokens = build_review_pack(home, task_id, budget, diff_text=diff_text)
+    check_text(pack, "the review pack", "Nothing was sent.")
+    digest = pack_hash(pack)
+    path = task_file(home, task_id)
+    if dry_run:
+        return {"pack": pack, "tokens": tokens, "sha256": digest, "reviewers": cleaned, "path": path, "results": []}
+    day = today or dt.date.today()
+    group_id = new_run_id(day)
+    results = []
+    for r in cleaned:
+        started = time.monotonic()
+        text = adapters[r](f"{REVIEW_INSTRUCTION}\n\n{pack}")
+        elapsed_ms = int((time.monotonic() - started) * 1000)
+        check_text(text, f"the review from {r}", "Nothing was written to your files.")
+        flags = check_answer(text)
+        who = f"review:{label(r)}"
+        record_result(home, path, who, text, day, model_call_note(len(flags)))
+        run_id = new_run_id(day)
+        append_run_record(home, {
+            "run_id": run_id, "parent_run_id": group_id, "date": day.isoformat(), "command": "review",
+            "task_id": path.stem, "model": who, "locality": PROVIDERS.get(r, {}).get("locality", "remote"),
+            "context_sha256": digest, "tokens": tokens, "duration_ms": elapsed_ms, "status": "ok",
+            "flags": len(flags),
+        })
+        results.append({"model": r, "label": who, "run_id": run_id, "text": text, "flags": flags})
+    return {"pack": pack, "tokens": tokens, "sha256": digest, "reviewers": cleaned, "path": path,
+            "group_run_id": group_id, "results": results}

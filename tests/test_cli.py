@@ -34,3 +34,14 @@ def test_doctor_fails_when_core_exceeds_token_cap(demo, tmp_path, capsys):
     out = capsys.readouterr().out
     assert "over the 2000-token cap" in out
     assert "doctor: 1 thing(s) to fix" in out
+
+
+def test_context_explain_and_doctor_tools_and_review_dry_run(demo, capsys):
+    assert main(["--home", str(demo), "context", "T-261116", "--explain"]) == 0
+    assert "sha256" in capsys.readouterr().out
+    assert main(["--home", str(demo), "doctor", "--tools"]) == 0
+    assert "Providers:" in capsys.readouterr().out
+    assert main(["--home", str(demo), "review", "T-261116", "--reviewers", "codex,claude", "--dry-run"]) == 0
+    err = capsys.readouterr().err
+    assert "blind review pack" in err
+
