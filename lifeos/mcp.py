@@ -30,8 +30,8 @@ TOOLS = [
     ("lifeos_delegate", "Let LifeOS pick the best-fitting model for a task (or pass model to choose), run it, "
      "and return its answer here. The answer is also appended to the task file.",
      _schema({"task": STR, "model": STR, "budget": {"type": "integer"}, "full": {"type": "boolean"}}, ["task"])),
-    ("lifeos_review", "Run an independent blind review (rule 7) across multiple models on the task's facts-only pack.",
-     _schema({"task": STR, "reviewers": STR, "budget": {"type": "integer"}}, ["task"])),
+    ("lifeos_review", "Run an independent blind review (rule 7) across multiple models on the task's facts-only pack (and optional git repo/commit).",
+     _schema({"task": STR, "reviewers": STR, "repo": STR, "commit": STR, "budget": {"type": "integer"}}, ["task"])),
 ]
 
 INSTRUCTIONS = ("You are the lead. Work happens in task files. For work that fits another model (code, long reading, "
@@ -67,7 +67,10 @@ def _run_tool(home, name, a):
         return f"{a['model']} answered; result appended to {path.relative_to(home)}"
     if name == "lifeos_review":
         revs = [r.strip() for r in (a.get("reviewers") or "codex,claude").split(",") if r.strip()]
-        out = ask.run_review(home, a["task"], reviewers=revs, budget=a.get("budget", 6000))
+        out = ask.run_review(
+            home, a["task"], reviewers=revs, budget=a.get("budget", 6000),
+            repo=a.get("repo"), commit=a.get("commit") or "HEAD",
+        )
         parts = [f"Blind review ({out['group_run_id']}, pack {out['sha256']}) appended to {out['path'].relative_to(home)}:"]
         for r in out["results"]:
             parts.append(f"\n--- {r['label']} ({r['run_id']}) ---\n{r['text']}")

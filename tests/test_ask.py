@@ -287,7 +287,7 @@ def test_run_ask_writes_immutable_run_record_in_runs_jsonl(home):
     rec = _json.loads(runs[-1])
     assert rec["run_id"].startswith("R-261120-")
     assert rec["command"] == "ask" and rec["task_id"] == "T-261116-demo-cli" and rec["flags"] == 0
-    assert len(rec["context_sha256"]) == 12
+    assert len(rec["context_sha256"]) == 64
 
 
 def test_blind_multi_model_review_hides_earlier_answers_and_logs_parent_run(home):
@@ -314,6 +314,7 @@ def test_blind_multi_model_review_hides_earlier_answers_and_logs_parent_run(home
     assert "## Result · review:codex · 2026-11-20" in text
     assert "## Result · review:gemini · 2026-11-20" in text
     runs = [_json.loads(line) for line in (home / "logs" / "runs.jsonl").read_text(encoding="utf-8").splitlines()]
-    assert [r["parent_run_id"] for r in runs[-2:]] == [out["group_run_id"], out["group_run_id"]]
+    assert [r["parent_run_id"] for r in runs[-3:-1]] == [out["group_run_id"], out["group_run_id"]]
+    assert runs[-1]["run_id"] == out["group_run_id"] and runs[-1]["command"] == "review_group"
 
 

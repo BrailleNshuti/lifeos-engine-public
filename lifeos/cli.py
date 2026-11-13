@@ -50,10 +50,16 @@ def cmd_context(args):
 def cmd_ask(args):
     home = find_home(args.home)
     try:
-        result = run_ask(home, args.model, args.task, args.budget, args.dry_run, full=args.full)
+        result = run_ask(
+            home, args.model, args.task, args.budget, args.dry_run,
+            full=args.full, run_id=getattr(args, "run_id", None),
+        )
     except Blocked as error:
         print(f"lifeos: BLOCKED. {error}", file=sys.stderr)
         return 1
+    except ToolMissing as error:
+        print(f"lifeos: {error}", file=sys.stderr)
+        return 2
     except AskError as error:
         print(f"lifeos: {error}", file=sys.stderr)
         return 3
@@ -90,7 +96,11 @@ def cmd_review(args):
     home = find_home(args.home)
     revs = [r.strip() for r in args.reviewers.split(",") if r.strip()]
     try:
-        out = run_review(home, args.task, reviewers=revs, budget=args.budget, dry_run=args.dry_run)
+        out = run_review(
+            home, args.task, reviewers=revs, budget=args.budget, dry_run=args.dry_run,
+            repo=getattr(args, "repo", None), commit=getattr(args, "commit", "HEAD"),
+            run_id=getattr(args, "run_id", None),
+        )
     except Blocked as error:
         print(f"lifeos: BLOCKED. {error}", file=sys.stderr)
         return 1
@@ -105,7 +115,8 @@ def cmd_review(args):
         print(f"[dry run: blind review pack ({out['sha256']}) for {', '.join(out['reviewers'])}, ~{out['tokens']} tokens]",
               file=sys.stderr)
         return 0
-    print(f"blind review ({out['group_run_id']}, pack {out['sha256']}) -> {out['path'].relative_to(home)}")
+    commit_note = f", commit {out['commit_sha'][:12]}" if out.get("commit_sha") else ""
+    print(f"blind review ({out['group_run_id']}, pack {out['sha256'][:12]}{commit_note}) -> {out['path'].relative_to(home)}")
     for r in out["results"]:
         warn = f" [CHECK: {'; '.join(r['flags'])}]" if r["flags"] else ""
         print(f"  {r['label']} ({r['run_id']}){warn}")
@@ -222,11 +233,12 @@ def cmd_doctor(args):
         if not (home / "logs" / name).exists():
             print(f"  missing   logs/{name}")
             problems += 1
-    if getattr(args, "tools", False):
-        print("Providers:")
-        for p in provider_status():
-            state = "ready" if p["available"] else "missing"
-            print(f"  {state:<9} {p['model']:<10} ({p['locality']}, {p['binary']})")
+    if getattr(args, "tools", False) or getattr(args, "live", False):
+        probe = bool(getattr(args, "live", False))
+        print("Providers: (live health probe)" if probe else "Providers: (binary availability)")
+        for p in provider_status(probe=probe):
+            state = p["status"]
+            print(f"  {state:<13} {p['model']:<10} ({p['locality']}, {p['detail']})")
     print("doctor: ok" if not problems else f"doctor: {problems} thing(s) to fix")
     return 0 if not problems else 1
 
@@ -264,6 +276,7 @@ def build_parser():
     ask.add_argument("task", help="task id or prefix, for example T-261116")
     ask.add_argument("--budget", type=int, default=6000)
     ask.add_argument("--full", action="store_true", help="also send now.md and me.md (default: task and rules only)")
+    ask.add_argument("--run-id", help="explicit run_id for idempotent retry")
     ask.add_argument("--dry-run", action="store_true", help="show the pack and token cost; send nothing")
     ask.set_defaults(func=cmd_ask)
 
@@ -278,6 +291,9 @@ def build_parser():
     rev = sub.add_parser("review", help="run an independent blind review (rule 7) across multiple models")
     rev.add_argument("task", help="task id or prefix, for example T-261116")
     rev.add_argument("--reviewers", default="codex,claude", help="comma-separated reviewer models (default: codex,claude)")
+    rev.add_argument("--repo", help="git repository path to inspect and mount in an isolated read-only worktree")
+    rev.add_argument("--commit", default="HEAD", help="git commit or ref to review when --repo is set (default: HEAD)")
+    rev.add_argument("--run-id", help="explicit parent run_id for idempotent retry")
     rev.add_argument("--budget", type=int, default=6000)
     rev.add_argument("--dry-run", action="store_true", help="show the blind review pack and hash; send nothing")
     rev.set_defaults(func=cmd_review)
@@ -298,7 +314,8 @@ def build_parser():
     guard.set_defaults(func=cmd_guard)
 
     doctor = sub.add_parser("doctor", help="check the data repo and the token cost of its core files")
-    doctor.add_argument("--tools", action="store_true", help="also check availability of local and remote model CLIs")
+    doctor.add_argument("--tools", action="store_true", help="check binary availability of local and remote model CLIs")
+    doctor.add_argument("--live", action="store_true", help="probe live provider health (local Ollama tags and CLI execution)")
     doctor.set_defaults(func=cmd_doctor)
 
     lab_p = sub.add_parser("lab", help="Prompt Lab: validate cards, pack test inputs, and score results offline")

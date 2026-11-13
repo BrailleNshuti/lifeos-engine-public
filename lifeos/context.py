@@ -1,6 +1,7 @@
 """Context packs: the smallest set of LifeOS files a model needs, with a token estimate, provenance and a budget."""
 import hashlib
 import re
+import subprocess
 from pathlib import Path
 
 from .home import estimate_tokens
@@ -10,9 +11,9 @@ TASK_FIRST = ("TASK", "rules.md", "now.md", "me.md")
 
 
 def pack_hash(text):
-    """Short, deterministic SHA-256 fingerprint of a context pack or file."""
+    """Full 64-character deterministic SHA-256 hex digest of a context pack or file."""
     norm = "\n".join(line.rstrip() for line in (text or "").replace("\r\n", "\n").splitlines())
-    return hashlib.sha256(norm.encode("utf-8")).hexdigest()[:12]
+    return hashlib.sha256(norm.encode("utf-8")).hexdigest()
 
 
 def task_file(home, task_id):
@@ -68,7 +69,7 @@ def build_pack(home, task_id=None, budget=6000, task_first=False, names=None):
 
 
 def explain_pack(home, task_id=None, budget=6000, task_first=False, names=None):
-    """Return provenance, inclusion status, token cost and hashes for every candidate context source."""
+    """Return provenance, inclusion status, token cost and full SHA-256 digests for every candidate context source."""
     _validate_budget(budget)
     home = Path(home)
     order = TASK_FIRST if task_first else PRIORITY
@@ -121,7 +122,43 @@ def render_explanation(info):
     return "\n".join(lines)
 
 
-def build_review_pack(home, task_id, budget=6000, diff_text=""):
+def inspect_repo_commit(repo_path, commit="HEAD"):
+    """Resolve exact repository commit SHA, branch, tracked file list, and unified diff for blind review."""
+    repo = Path(repo_path).resolve()
+    if not repo.is_dir():
+        raise FileNotFoundError(f"Repository path not found: {repo_path}")
+
+    def _git(*args):
+        proc = subprocess.run(
+            ["git", "-C", str(repo), *args],
+            capture_output=True, text=True, encoding="utf-8", errors="replace", check=False,
+        )
+        if proc.returncode != 0:
+            raise ValueError(f"git {' '.join(args)} failed in {repo}: {proc.stderr.strip()[:200]}")
+        return proc.stdout.strip()
+
+    commit_sha = _git("rev-parse", "--verify", f"{commit}^{{commit}}")
+    branch = _git("rev-parse", "--abbrev-ref", "HEAD")
+    stat = _git("show", "--stat", "--format=fuller", commit_sha)
+    files = _git("ls-tree", "--name-only", "-r", commit_sha)
+    patch = _git("show", "--format=", commit_sha)
+    meta = (
+        f"repo: {repo.name} ({repo.as_posix()})\n"
+        f"branch: {branch}\n"
+        f"commit_sha: {commit_sha}\n\n"
+        f"--- commit summary ---\n{stat}\n\n"
+        f"--- tracked files ({len(files.splitlines())}) ---\n{files}"
+    )
+    return {
+        "repo": repo,
+        "branch": branch,
+        "commit_sha": commit_sha,
+        "meta_text": meta,
+        "diff_text": patch,
+    }
+
+
+def build_review_pack(home, task_id, budget=6000, diff_text="", repo_info=None):
     """Facts-only pack for blind review (rule 7): strips any existing '## Result' blocks so reviewers never see prior answers."""
     _validate_budget(budget)
     home = Path(home)
@@ -130,6 +167,10 @@ def build_review_pack(home, task_id, budget=6000, diff_text=""):
     parts = [(f"tasks/{path.name} (facts only)", facts)]
     if (home / "rules.md").exists():
         parts.append(("rules.md", (home / "rules.md").read_text(encoding="utf-8").strip()))
+    if repo_info:
+        parts.append((f"repo_commit ({repo_info['commit_sha'][:12]})", repo_info["meta_text"].strip()))
+        if repo_info.get("diff_text", "").strip():
+            parts.append((f"commit_diff ({repo_info['commit_sha'][:12]})", repo_info["diff_text"].strip()))
     if diff_text.strip():
         parts.append(("diff", diff_text.strip()))
     blocks, used = [], 0

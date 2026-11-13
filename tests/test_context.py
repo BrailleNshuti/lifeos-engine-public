@@ -30,7 +30,7 @@ def test_explain_pack_reports_included_trimmed_and_excluded_files(demo):
     statuses = {item["name"]: item["status"] for item in info["items"]}
     assert statuses["tasks/T-261116-demo-cli.md"] == "included"
     assert statuses["now.md"] == "excluded (minimal mode)"
-    assert len(info["sha256"]) == 12
+    assert len(info["sha256"]) == 64
     rendered = render_explanation(info)
     assert "sha256" in rendered and "excluded (minimal mode)" in rendered
 
@@ -45,6 +45,6 @@ def test_build_review_pack_strips_existing_results_for_blind_review(demo, tmp_pa
     pack, _ = build_review_pack(home, "T-261116", diff_text="diff --git a/x.py b/x.py")
     assert "SECRET FIRST ANSWER" not in pack
     assert "=== diff ===" in pack
-    assert len(pack_hash(pack)) == 12
+    assert len(pack_hash(pack)) == 64
 
 
