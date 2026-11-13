@@ -8,6 +8,7 @@ Read this first (AGENTS.md rule for build repos). Keep it short and update it af
 - PR #18 enforces the 2,000-token always-loaded core cap; the data repo was trimmed below it.
 - PR #22 hardened the privacy and persistence boundaries: remote Ollama is refused centrally, untrusted text cannot self-allow, assigned secrets block, `store.py` owns result/ledger writes, the ask/week contract is shared, context budgets are bounded, and cross-module private API uses are zero.
 - PR #22 CI: 158 tests passed on Python 3.10, 3.11, 3.12 and 3.13 on Linux and Python 3.12 on Windows.
+- MCP `-P` safe-path flag documented and tested (`tests/test_mcp.py`, 159 tests); `install-skills` covers Claude, Codex and Antigravity/Gemini; `install-hook.ps1` added for Windows PowerShell.
 - The private data repo now has its own dependency-free privacy/core-budget workflow (lifeos PR #23).
 - Code routing decision D23 remains: Claude writes, Codex checks.
 - Public from v0.3: no personal data; examples are fabricated.

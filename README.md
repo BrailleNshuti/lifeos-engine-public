@@ -36,8 +36,8 @@ lifeos week
 lifeos context T-261116 --budget 4000
 ```
 
-Install the skills for Claude Code and Codex: `scripts/install-skills.ps1` (or `scripts/install-skills.sh`).
-Install the privacy guard as a pre-commit hook in the data repo: `scripts/install-hook.sh C:/path/to/lifeos` (Git Bash; forward slashes, because bash drops unquoted backslashes).
+Install the skills for Claude Code, Codex and Antigravity/Gemini: `scripts/install-skills.ps1` (or `scripts/install-skills.sh`).
+Install the privacy guard as a pre-commit hook in the data repo: `scripts/install-hook.ps1 C:\path\to\lifeos` (or `scripts/install-hook.sh C:/path/to/lifeos` in Git Bash).
 
 Private patterns that must never be committed (your street, your phone number) go in `~/.lifeos/private-patterns.txt`, one regular expression per line, outside every repo. Mark a false alarm with `lifeos-guard: allow` on that line.
 
@@ -81,11 +81,11 @@ Claude Desktop: add this to `claude_desktop_config.json` under `mcpServers`, the
 Use your own path for LIFEOS_HOME.
 
 ```json
-"lifeos": {"command": "python", "args": ["-m", "lifeos.cli", "mcp"], "env": {"LIFEOS_HOME": "C:\\Users\\you\\lifeos"}}
+"lifeos": {"command": "lifeos", "args": ["mcp"], "env": {"LIFEOS_HOME": "C:\\Users\\you\\lifeos"}}
 ```
 
-Claude Code: `claude mcp add lifeos -e LIFEOS_HOME=<path> -- python -m lifeos.cli mcp`.
-Other MCP apps (Codex, agy) have their own `mcp add` command with the same program and environment variable.
+Claude Code: `claude mcp add -s user lifeos -e LIFEOS_HOME=<path> -- lifeos mcp` (or `python -P -m lifeos.cli mcp` on Python 3.11+; using `lifeos` or `-P` keeps a `~/lifeos` data repo folder from shadowing the `lifeos` package when the app starts in `~`).
+Other MCP apps (Codex, agy) use the same program and `LIFEOS_HOME` environment variable.
 `lifeos_ask` can take minutes; some apps stop waiting after about a minute. Screenshots stay in the chat.
 
 ## Claude as the lead

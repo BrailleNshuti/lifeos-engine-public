@@ -157,3 +157,25 @@ def test_odd_shapes_of_params_and_tool_name_get_an_error_not_a_crash(home):
         assert reply["error"]["code"] == -32602
 
 
+def test_mcp_entrypoint_prevents_home_lifeos_folder_shadowing(tmp_path, demo):
+    """When an MCP client spawns from ~ and ~/lifeos exists as the data repo, `lifeos mcp` (and `python -P`
+    on Python 3.11+) must not treat ~/lifeos as a PEP 420 namespace package shadowing `lifeos`."""
+    import os
+    import subprocess
+    import sys
+
+    data_repo = tmp_path / "lifeos"
+    shutil.copytree(demo, data_repo)
+    env = {**os.environ, "LIFEOS_HOME": str(data_repo), "PYTHONSAFEPATH": "1"}
+    req = json.dumps({"jsonrpc": "2.0", "id": 1, "method": "ping"}) + "\n"
+    exe = shutil.which("lifeos")
+    cmd = [exe, "mcp"] if exe else [sys.executable, *(["-P"] if sys.version_info >= (3, 11) else []), "-m", "lifeos.cli", "mcp"]
+    proc = subprocess.run(
+        cmd, input=req, capture_output=True, text=True, encoding="utf-8", cwd=tmp_path, env=env, timeout=10,
+    )
+    assert proc.returncode == 0, proc.stderr
+    assert json.loads(proc.stdout.strip()) == {"jsonrpc": "2.0", "id": 1, "result": {}}
+
+
+
+
