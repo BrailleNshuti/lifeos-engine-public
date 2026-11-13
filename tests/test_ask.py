@@ -278,3 +278,42 @@ def test_an_ollama_timeout_is_not_reported_as_a_missing_tool(monkeypatch):
         ask.ask_ollama("hello")
     assert not isinstance(caught.value, ask.ToolMissing)
 
+
+def test_run_ask_writes_immutable_run_record_in_runs_jsonl(home):
+    import json as _json
+
+    ask.run_ask(home, "fake", "T-261116", adapters={"fake": lambda prompt: CLEAN}, today=TODAY)
+    runs = (home / "logs" / "runs.jsonl").read_text(encoding="utf-8").splitlines()
+    rec = _json.loads(runs[-1])
+    assert rec["run_id"].startswith("R-261120-")
+    assert rec["command"] == "ask" and rec["task_id"] == "T-261116-demo-cli" and rec["flags"] == 0
+    assert len(rec["context_sha256"]) == 12
+
+
+def test_blind_multi_model_review_hides_earlier_answers_and_logs_parent_run(home):
+    import json as _json
+
+    seen = {}
+
+    def rev_codex(prompt):
+        seen["codex"] = prompt
+        return "Checked lifeos/store.py: 0 bugs found. Next step: merge."
+
+    def rev_gemini(prompt):
+        seen["gemini"] = prompt
+        return "Checked tests/test_store.py: edge cases covered. Next step: ship."
+
+    # First model writes an answer; neither blind reviewer may see it!
+    ask.write_result(home, "T-261116", "claude", "FIRST MODEL SECRET VERDICT", today=TODAY)
+    out = ask.run_review(home, "T-261116", reviewers=("codex", "gemini"),
+                         adapters={"codex": rev_codex, "gemini": rev_gemini}, today=TODAY)
+    assert "FIRST MODEL SECRET VERDICT" not in seen["codex"]
+    assert "FIRST MODEL SECRET VERDICT" not in seen["gemini"]
+    assert "0 bugs found" not in seen["gemini"]  # Reviewer 2 never sees Reviewer 1's answer
+    text = (home / "tasks" / "T-261116-demo-cli.md").read_text(encoding="utf-8")
+    assert "## Result · review:codex · 2026-11-20" in text
+    assert "## Result · review:gemini · 2026-11-20" in text
+    runs = [_json.loads(line) for line in (home / "logs" / "runs.jsonl").read_text(encoding="utf-8").splitlines()]
+    assert [r["parent_run_id"] for r in runs[-2:]] == [out["group_run_id"], out["group_run_id"]]
+
+

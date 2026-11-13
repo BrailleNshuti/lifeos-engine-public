@@ -2,13 +2,12 @@
 import argparse
 import json
 import sys
-from pathlib import Path
 
 from . import __version__
 from . import mcp, sortcsv
 from .delegate import run_delegate
-from .ask import ADAPTERS, AskError, Blocked, ToolMissing, run_ask
-from .context import build_pack
+from .ask import ADAPTERS, AskError, Blocked, ToolMissing, provider_status, run_ask, run_review
+from .context import build_pack, explain_pack, render_explanation
 from .guard import scan_paths, scan_staged, staged_files
 from .home import CORE_FILES, HomeError, estimate_tokens, find_home
 from .tasks import list_tasks, new_task
@@ -37,7 +36,11 @@ def cmd_week(args):
 
 
 def cmd_context(args):
-    pack, tokens = build_pack(find_home(args.home), args.task, args.budget)
+    home = find_home(args.home)
+    if getattr(args, "explain", False):
+        print(render_explanation(explain_pack(home, args.task, args.budget)))
+        return 0
+    pack, tokens = build_pack(home, args.task, args.budget)
     print(pack)
     print(f"[context pack: about {tokens} tokens, budget {args.budget}]", file=sys.stderr)
     return 0
@@ -79,6 +82,32 @@ def cmd_delegate(args):
         print(f"\n{out['text']}\n\n[result appended to {out['path'].relative_to(home)}]")
     if out["flags"]:  # also when the answer is empty, the case CHECK exists for (a dry run has no flags)
         print("CHECK (free, no model): " + "; ".join(out["flags"]))
+    return 0
+
+
+def cmd_review(args):
+    home = find_home(args.home)
+    revs = [r.strip() for r in args.reviewers.split(",") if r.strip()]
+    try:
+        out = run_review(home, args.task, reviewers=revs, budget=args.budget, dry_run=args.dry_run)
+    except Blocked as error:
+        print(f"lifeos: BLOCKED. {error}", file=sys.stderr)
+        return 1
+    except ToolMissing as error:
+        print(f"lifeos: {error}", file=sys.stderr)
+        return 2
+    except AskError as error:
+        print(f"lifeos: {error}", file=sys.stderr)
+        return 3
+    if args.dry_run:
+        print(out["pack"])
+        print(f"[dry run: blind review pack ({out['sha256']}) for {', '.join(out['reviewers'])}, ~{out['tokens']} tokens]",
+              file=sys.stderr)
+        return 0
+    print(f"blind review ({out['group_run_id']}, pack {out['sha256']}) -> {out['path'].relative_to(home)}")
+    for r in out["results"]:
+        warn = f" [CHECK: {'; '.join(r['flags'])}]" if r["flags"] else ""
+        print(f"  {r['label']} ({r['run_id']}){warn}")
     return 0
 
 
@@ -153,6 +182,11 @@ def cmd_doctor(args):
         if not (home / "logs" / name).exists():
             print(f"  missing   logs/{name}")
             problems += 1
+    if getattr(args, "tools", False):
+        print("Providers:")
+        for p in provider_status():
+            state = "ready" if p["available"] else "missing"
+            print(f"  {state:<9} {p['model']:<10} ({p['locality']}, {p['binary']})")
     print("doctor: ok" if not problems else f"doctor: {problems} thing(s) to fix")
     return 0 if not problems else 1
 
@@ -182,6 +216,7 @@ def build_parser():
     ctx = sub.add_parser("context", help="print a context pack for another model, within a token budget")
     ctx.add_argument("task", nargs="?", help="task id or prefix, for example T-261116")
     ctx.add_argument("--budget", type=int, default=6000)
+    ctx.add_argument("--explain", action="store_true", help="show why each file was included, trimmed or excluded, plus sha256")
     ctx.set_defaults(func=cmd_context)
 
     ask = sub.add_parser("ask", help="send a task's context pack to another model and write the answer back")
@@ -200,6 +235,13 @@ def build_parser():
     dele.add_argument("--dry-run", action="store_true", help="show which model would take it; send nothing")
     dele.set_defaults(func=cmd_delegate)
 
+    rev = sub.add_parser("review", help="run an independent blind review (rule 7) across multiple models")
+    rev.add_argument("task", help="task id or prefix, for example T-261116")
+    rev.add_argument("--reviewers", default="codex,claude", help="comma-separated reviewer models (default: codex,claude)")
+    rev.add_argument("--budget", type=int, default=6000)
+    rev.add_argument("--dry-run", action="store_true", help="show the blind review pack and hash; send nothing")
+    rev.set_defaults(func=cmd_review)
+
     srt = sub.add_parser("sort-csv", help="add a spending category to a bank CSV, fully local (Ollama), never in a repo")
     srt.add_argument("file")
     srt.add_argument("--out", help="default: <file>.sorted.csv beside the input")
@@ -216,6 +258,7 @@ def build_parser():
     guard.set_defaults(func=cmd_guard)
 
     doctor = sub.add_parser("doctor", help="check the data repo and the token cost of its core files")
+    doctor.add_argument("--tools", action="store_true", help="also check availability of local and remote model CLIs")
     doctor.set_defaults(func=cmd_doctor)
     return parser
 

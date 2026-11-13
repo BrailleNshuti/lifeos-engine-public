@@ -29,7 +29,9 @@ def test_initialize_and_tool_list(home):
     assert reply["result"]["protocolVersion"] == "2025-06-18"
     assert "tools" in reply["result"]["capabilities"] and reply["result"]["serverInfo"]["name"] == "lifeos"
     names = {t["name"] for t in call(home, "tools/list")["result"]["tools"]}
-    assert names == {"lifeos_task_list", "lifeos_task_new", "lifeos_context", "lifeos_result_write", "lifeos_ask", "lifeos_delegate"}
+    assert names == {"lifeos_task_list", "lifeos_task_new", "lifeos_context", "lifeos_result_write",
+                     "lifeos_ask", "lifeos_delegate", "lifeos_review"}
+
 
 
 def test_notifications_get_no_reply(home):
@@ -70,6 +72,16 @@ def test_ask_tool_uses_the_adapters(home, monkeypatch):
     monkeypatch.setitem(ask.ADAPTERS, "codex", lambda prompt: "FROM CODEX")
     text, err = tool(home, "lifeos_ask", model="codex", task="T-261116")
     assert not err and "FROM CODEX" in (home / "tasks" / "T-261116-demo-cli.md").read_text(encoding="utf-8")
+
+
+def test_review_and_context_explain_tools(home, monkeypatch):
+    monkeypatch.setitem(ask.ADAPTERS, "codex", lambda prompt: "Checked a.py. Next step: ok.")
+    monkeypatch.setitem(ask.ADAPTERS, "claude", lambda prompt: "Checked b.py. Next step: ok.")
+    text, err = tool(home, "lifeos_review", task="T-261116", reviewers="codex,claude")
+    assert not err and "review:codex" in text and "review:claude" in text
+    exp, err = tool(home, "lifeos_context", task="T-261116", explain=True)
+    assert not err and "sha256" in exp
+
 
 
 @pytest.mark.parametrize("bad", ["../now", "..\\now", "T-1/../../x", "*", "T-261116*/../..", ""])

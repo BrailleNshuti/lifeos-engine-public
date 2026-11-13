@@ -1,4 +1,5 @@
-"""Context packs: the smallest set of LifeOS files a model needs, with a token estimate and a budget."""
+"""Context packs: the smallest set of LifeOS files a model needs, with a token estimate, provenance and a budget."""
+import hashlib
 import re
 from pathlib import Path
 
@@ -6,6 +7,12 @@ from .home import estimate_tokens
 
 PRIORITY = ("rules.md", "TASK", "now.md", "me.md")
 TASK_FIRST = ("TASK", "rules.md", "now.md", "me.md")
+
+
+def pack_hash(text):
+    """Short, deterministic SHA-256 fingerprint of a context pack or file."""
+    norm = "\n".join(line.rstrip() for line in (text or "").replace("\r\n", "\n").splitlines())
+    return hashlib.sha256(norm.encode("utf-8")).hexdigest()[:12]
 
 
 def task_file(home, task_id):
@@ -22,10 +29,14 @@ def task_file(home, task_id):
     return matches[0]
 
 
-def build_pack(home, task_id=None, budget=6000, task_first=False, names=None):
-    """Return (pack_text, token_estimate). Files are added in priority order; the last ones are trimmed to fit."""
+def _validate_budget(budget):
     if isinstance(budget, bool) or not isinstance(budget, int) or not 1 <= budget <= 50000:
         raise ValueError("Context budget must be an integer from 1 to 50000 tokens.")
+
+
+def build_pack(home, task_id=None, budget=6000, task_first=False, names=None):
+    """Return (pack_text, token_estimate). Files are added in priority order; the last ones are trimmed to fit."""
+    _validate_budget(budget)
     home = Path(home)
     files = []
     for name in (TASK_FIRST if task_first else PRIORITY):
@@ -55,3 +66,83 @@ def build_pack(home, task_id=None, budget=6000, task_first=False, names=None):
     pack = "\n".join(blocks)
     return pack, estimate_tokens(pack)
 
+
+def explain_pack(home, task_id=None, budget=6000, task_first=False, names=None):
+    """Return provenance, inclusion status, token cost and hashes for every candidate context source."""
+    _validate_budget(budget)
+    home = Path(home)
+    order = TASK_FIRST if task_first else PRIORITY
+    items, used, full = [], 0, False
+    for name in order:
+        if name == "TASK":
+            if not task_id:
+                continue
+            path = task_file(home, task_id)
+            label = f"tasks/{path.name}"
+        else:
+            path = home / name
+            label = name
+        if names is not None and name not in names:
+            items.append({"name": label, "status": "excluded (minimal mode)", "tokens": 0, "sha256": "-"})
+            continue
+        if not path.exists():
+            items.append({"name": label, "status": "missing", "tokens": 0, "sha256": "-"})
+            continue
+        text = path.read_text(encoding="utf-8")
+        digest = pack_hash(text)
+        if full:
+            items.append({"name": label, "status": "excluded (budget full)", "tokens": 0, "sha256": digest})
+            continue
+        block = f"=== {label} ===\n{text.strip()}\n"
+        cost = estimate_tokens(block)
+        if used + cost <= budget:
+            items.append({"name": label, "status": "included", "tokens": cost, "sha256": digest})
+            used += cost
+            continue
+        room_chars = (budget - used) * 4 - 80
+        if used == 0:
+            room_chars = max(room_chars, 200)
+        if used == 0 or room_chars > 400:
+            trimmed = f"=== {label} (trimmed to fit {budget} tokens) ===\n{text.strip()[:room_chars]}\n"
+            t_cost = estimate_tokens(trimmed)
+            items.append({"name": label, "status": "trimmed", "tokens": t_cost, "sha256": digest})
+            used += t_cost
+        else:
+            items.append({"name": label, "status": "excluded (budget full)", "tokens": 0, "sha256": digest})
+        full = True
+    pack, total = build_pack(home, task_id, budget, task_first=task_first, names=names)
+    return {"budget": budget, "tokens": total, "sha256": pack_hash(pack), "items": items}
+
+
+def render_explanation(info):
+    lines = [f"Context pack · {info['tokens']} / {info['budget']} tokens · sha256 {info['sha256']}"]
+    for item in info["items"]:
+        lines.append(f"  {item['status']:<24} {item['name']:<32} ~{item['tokens']:>4} tokens  {item['sha256']}")
+    return "\n".join(lines)
+
+
+def build_review_pack(home, task_id, budget=6000, diff_text=""):
+    """Facts-only pack for blind review (rule 7): strips any existing '## Result' blocks so reviewers never see prior answers."""
+    _validate_budget(budget)
+    home = Path(home)
+    path = task_file(home, task_id)
+    facts = path.read_text(encoding="utf-8").split("\n## Result", 1)[0].strip()
+    parts = [(f"tasks/{path.name} (facts only)", facts)]
+    if (home / "rules.md").exists():
+        parts.append(("rules.md", (home / "rules.md").read_text(encoding="utf-8").strip()))
+    if diff_text.strip():
+        parts.append(("diff", diff_text.strip()))
+    blocks, used = [], 0
+    for name, text in parts:
+        block = f"=== {name} ===\n{text}\n"
+        cost = estimate_tokens(block)
+        if used + cost <= budget:
+            blocks.append(block)
+            used += cost
+            continue
+        room = max((budget - used) * 4 - 80, 200 if not blocks else 0)
+        if not blocks or room > 400:
+            blocks.append(f"=== {name} (trimmed to fit {budget} tokens) ===\n{text[:room]}\n")
+        break
+    pack = "\n".join(blocks)
+    return pack, estimate_tokens(pack)

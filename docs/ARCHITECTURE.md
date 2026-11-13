@@ -21,9 +21,9 @@ Imports may point only downward. `tests/test_layering.py` enforces this graph an
 
 ## Read and write paths
 
-- `context` reads only the approved core files and one validated task path.
-- `ask` scans the context, calls one adapter, scans the answer, then passes the result to `store`.
-- `store` is the only writer for model/task results and ledger rows. It uses the CSV module, repairs missing final newlines and owns the stable model-call note contract consumed by `week`.
+- `context` reads only the approved core files and one validated task path, and can explain inclusion, trimming, exclusion and SHA-256 provenance (`explain_pack`). For blind reviews (`build_review_pack`), it strips existing `## Result` sections so reviewers see only pre-committed facts.
+- `ask` scans the context, calls one adapter (or multiple independent adapters in `run_review`), scans the answer, then passes the result and run metadata to `store`.
+- `store` is the only writer for model/task results, ledger rows and immutable execution run records (`logs/runs.jsonl`). It uses atomic sibling temp-file replacement (`os.replace`), suppresses duplicate retry writes, repairs missing final newlines and owns the stable model-call note contract consumed by `week`.
 - MCP writes are restricted to task files and the ledger through the same guarded path.
 - `sort-csv` is separate: it refuses remote Ollama hosts, existing outputs and outputs inside Git repositories.
 
