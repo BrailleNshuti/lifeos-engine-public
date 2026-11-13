@@ -14,6 +14,7 @@ from .home import CORE_FILES, HomeError, estimate_tokens, find_home
 from .tasks import list_tasks, new_task
 from .week import render_markdown, week_numbers
 
+CORE_TOKEN_CAP = 2000
 LINE_LIMITS = {"rules.md": 60, "me.md": 15, "now.md": 60, "CLAUDE.md": 60, "AGENTS.md": 40}
 
 
@@ -145,6 +146,9 @@ def cmd_doctor(args):
         problems += flag != "ok"
         print(f"  {flag:<9} {name:<10} {lines:>3} lines  ~{tokens} tokens")
     print(f"Always-loaded core: ~{total} tokens per conversation that reads rules, me and now.")
+    if total > CORE_TOKEN_CAP:
+        print(f"  too big   core is ~{total} tokens, over the {CORE_TOKEN_CAP}-token cap. Trim rules, me or now.")
+        problems += 1
     for name in ("ledger.csv", "proofs.csv"):
         if not (home / "logs" / name).exists():
             print(f"  missing   logs/{name}")

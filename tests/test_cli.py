@@ -1,3 +1,5 @@
+import shutil
+
 from lifeos.cli import main
 
 
@@ -22,3 +24,13 @@ def test_task_new_and_missing_home(tmp_path, capsys):
     assert main(["--home", str(tmp_path), "task", "new", "Draft", "the", "demo", "checklist"]) == 0
     assert "demo-checklist" in capsys.readouterr().out
     assert main(["--home", str(tmp_path / "nope"), "week"]) == 2
+
+
+def test_doctor_fails_when_core_exceeds_token_cap(demo, tmp_path, capsys):
+    home = tmp_path / "home"
+    shutil.copytree(demo, home)
+    (home / "now.md").write_text("# Now\n" + "word " * 9000 + "\n")
+    assert main(["--home", str(home), "doctor"]) == 1
+    out = capsys.readouterr().out
+    assert "over the 2000-token cap" in out
+    assert "doctor: 1 thing(s) to fix" in out
