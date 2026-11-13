@@ -21,7 +21,7 @@ ASK_NOTE_PREFIX = "asked via lifeos ask"
 FLAGS_LABEL = "flags"
 LOCK_STALE_SECONDS = 30.0
 ALLOWED_JOURNAL_LOGS = {"logs/ledger.csv", "logs/proofs.csv", "logs/runs.jsonl"}
-TASK_REL_RE = re.compile(r"^tasks/T-[A-Za-z0-9-]+\.md$")
+TASK_REL_RE = re.compile(r"^(?:tasks/)?T-[A-Za-z0-9-]+\.md$")
 
 
 def atomic_write_bytes(path, data):
@@ -103,14 +103,15 @@ def store_lock(home, timeout=10.0):
             break
         except FileExistsError:
             try:
-                existing_token, existing_pid, created_ts = _read_lock_meta(lock_path)
-                age = (time.time() - created_ts) if created_ts is not None else (time.time() - lock_path.stat().st_mtime)
-                # Only evict if the lock is older than LOCK_STALE_SECONDS AND its owner PID is no longer alive
-                if age > LOCK_STALE_SECONDS and not _pid_is_alive(existing_pid):
-                    cur_token, _, _ = _read_lock_meta(lock_path)
-                    if cur_token == existing_token:
-                        lock_path.unlink(missing_ok=True)
-                        continue
+                # Check mtime first without opening the file so normal contenders never block unlink on Windows
+                if time.time() - lock_path.stat().st_mtime > LOCK_STALE_SECONDS:
+                    existing_token, existing_pid, created_ts = _read_lock_meta(lock_path)
+                    age = (time.time() - created_ts) if created_ts is not None else (time.time() - lock_path.stat().st_mtime)
+                    if age > LOCK_STALE_SECONDS and not _pid_is_alive(existing_pid):
+                        cur_token, _, _ = _read_lock_meta(lock_path)
+                        if cur_token == existing_token:
+                            lock_path.unlink(missing_ok=True)
+                            continue
             except OSError:
                 pass
             if time.monotonic() >= deadline:
@@ -120,9 +121,16 @@ def store_lock(home, timeout=10.0):
         yield
     finally:
         # Token-checked release: never delete a lock that does not carry our exact owner_token
-        cur_token, _, _ = _read_lock_meta(lock_path)
-        if cur_token == owner_token:
-            lock_path.unlink(missing_ok=True)
+        for _ in range(5):
+            try:
+                if not lock_path.exists():
+                    break
+                cur_token, _, _ = _read_lock_meta(lock_path)
+                if cur_token == owner_token:
+                    lock_path.unlink(missing_ok=True)
+                break
+            except PermissionError:
+                time.sleep(0.005)
 
 
 def _journal_path(home):
