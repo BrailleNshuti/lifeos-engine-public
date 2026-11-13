@@ -721,6 +721,7 @@ def test_full_64_char_sha256_and_per_reviewer_isolated_worktree_review(home, tmp
         )
 
     # Constrained-budget review pack: even when task facts and rules.md are huge, repo_commit and commit_diff are guaranteed
+    # and the returned token estimate never exceeds budget (at 80 and 250 tokens).
     repo_info_for_budget = context.inspect_repo_commit(repo, "HEAD")
     big_task = home / "tasks" / "T-261120-bigreview.md"
     big_task.write_text("# Big Task\n" + ("detailed context line " * 400) + "\n", encoding="utf-8")
@@ -730,11 +731,19 @@ def test_full_64_char_sha256_and_per_reviewer_isolated_worktree_review(home, tmp
     assert f"=== repo_commit ({head_sha[:12]})" in constrained_pack
     assert f"=== commit_diff ({head_sha[:12]})" in constrained_pack
     assert "def add(a, b):" in constrained_pack
-    assert constrained_tokens <= 260
+    assert constrained_tokens <= 250
+    pack_80, tokens_80 = context.build_review_pack(
+        home, "T-261120-bigreview", budget=80, repo_info=repo_info_for_budget
+    )
+    assert f"=== repo_commit ({head_sha[:12]})" in pack_80
+    assert f"=== commit_diff ({head_sha[:12]})" in pack_80
+    assert tokens_80 <= 80
     with pytest.raises(ValueError, match="too small to include repository metadata and commit diff"):
         context.build_review_pack(home, "T-261120-bigreview", budget=40, repo_info=repo_info_for_budget)
+    with pytest.raises(ValueError, match="too small to include repository metadata and commit diff"):
+        context.build_review_pack(home, "T-261120-bigreview", budget=70, repo_info=repo_info_for_budget)
 
-    # Partial-review crash recovery rejects reusing child 1 if HEAD advances before retry!
+    # Partial-review crash recovery rejects reusing child 1 if HEAD advances before retry or if child lacks requested_commit!
     class SimulatedRepoCrash(BaseException):
         pass
 
@@ -752,9 +761,34 @@ def test_full_64_char_sha256_and_per_reviewer_isolated_worktree_review(home, tmp
             adapters={"r1": verifying_reviewer_2, "r2": r2_wt_crash},
             today=TODAY, repo=repo, commit="HEAD", run_id="R-261120-wtcrashsha",
         )
-    (repo / "module.py").write_text(orig_code + "\n# second commit\n", encoding="utf-8")
+    # Also test a legacy/incomplete child record lacking requested_commit during parentless crash recovery
+    runs_file = home / "logs" / "runs.jsonl"
+    legacy_child = dict(store.get_run_record(home, "R-261120-wtcrashsha-c1"))
+    legacy_child["run_id"] = "R-261120-wtcrashnoreq-c1"
+    legacy_child["parent_run_id"] = "R-261120-wtcrashnoreq"
+    legacy_child.pop("requested_commit", None)
+    with open(runs_file, "a", encoding="utf-8") as rf:
+        rf.write(json.dumps(legacy_child) + "\n")
+    with pytest.raises(ValueError, match="already belongs to a different context or commit"):
+        ask.run_review(
+            home, "T-261116", reviewers=("r1", "r2"),
+            adapters={"r1": verifying_reviewer_2, "r2": verifying_reviewer_2},
+            today=TODAY, repo=repo, commit="HEAD", run_id="R-261120-wtcrashnoreq",
+        )
+
+    # Create a feature branch and merge commit (--no-ff): inspect_repo_commit must produce a non-empty first-parent diff!
+    default_branch = subprocess.run(
+        ["git", "rev-parse", "--abbrev-ref", "HEAD"], cwd=repo, check=True, capture_output=True, text=True
+    ).stdout.strip()
+    subprocess.run(["git", "checkout", "-b", "feat-merge-diff"], cwd=repo, check=True, capture_output=True)
+    (repo / "module.py").write_text(orig_code + "\ndef sub(a, b):\n    return a - b\n", encoding="utf-8")
     subprocess.run(["git", "add", "module.py"], cwd=repo, check=True, capture_output=True)
-    subprocess.run(["git", "commit", "-m", "Second commit"], cwd=repo, check=True, capture_output=True)
+    subprocess.run(["git", "commit", "-m", "Add sub helper"], cwd=repo, check=True, capture_output=True)
+    subprocess.run(["git", "checkout", default_branch], cwd=repo, check=True, capture_output=True)
+    subprocess.run(["git", "merge", "--no-ff", "feat-merge-diff", "-m", "Merge feat-merge-diff"], cwd=repo, check=True, capture_output=True)
+    merge_info = context.inspect_repo_commit(repo, "HEAD")
+    assert "def sub(a, b):" in merge_info["diff_text"]
+
     with pytest.raises(ValueError, match="already belongs to a different context or commit"):
         ask.run_review(
             home, "T-261116", reviewers=("r1", "r2"),
@@ -762,12 +796,18 @@ def test_full_64_char_sha256_and_per_reviewer_isolated_worktree_review(home, tmp
             today=TODAY, repo=repo, commit="HEAD", run_id="R-261120-wtcrashsha",
         )
 
-    # Reusing a completed parent run_id with a different requested commit string is rejected with ValueError
+    # Reusing a completed parent run_id with a different requested commit string (includingHEAD vs resolved SHA) is rejected
     with pytest.raises(ValueError, match="already belongs to commit"):
         ask.run_review(
             home, "T-261116", reviewers=("r1", "r2"),
             adapters={"r1": mutating_reviewer_1, "r2": verifying_reviewer_2},
             today=TODAY, repo=repo, commit="HEAD~1", run_id="R-261120-wtgroup1",
+        )
+    with pytest.raises(ValueError, match="already belongs to commit"):
+        ask.run_review(
+            home, "T-261116", reviewers=("r1", "r2"),
+            adapters={"r1": mutating_reviewer_1, "r2": verifying_reviewer_2},
+            today=TODAY, repo=repo, commit=head_sha, run_id="R-261120-wtgroup1",
         )
 
     # Corrupt the existing repository on disk so any git inspection would fail: persisted parent runs still replay
