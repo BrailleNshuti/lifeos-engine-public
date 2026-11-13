@@ -81,6 +81,9 @@ def test_pre_execution_run_id_idempotency_prevents_duplicate_ask_and_review(home
 
     # 3. Crash after first child completes before parent review_group record is written:
     #    retrying the same parent run_id reuses child 1 without re-calling r1 and completes child 2 + parent
+    class SimulatedProcessCrash(BaseException):
+        pass
+
     r1_calls = []
     r2_calls = []
 
@@ -91,10 +94,10 @@ def test_pre_execution_run_id_idempotency_prevents_duplicate_ask_and_review(home
     def r2_crash_once(prompt):
         r2_calls.append(prompt)
         if len(r2_calls) == 1:
-            raise RuntimeError("simulated uncatchable process crash after child 1 committed")
+            raise SimulatedProcessCrash("simulated uncatchable process crash after child 1 committed")
         return CLEAN
 
-    with pytest.raises(RuntimeError, match="simulated uncatchable process crash"):
+    with pytest.raises(SimulatedProcessCrash, match="simulated uncatchable process crash"):
         ask.run_review(
             home, "T-261116", reviewers=("r1", "r2"),
             adapters={"r1": r1_ok, "r2": r2_crash_once}, today=TODAY, run_id="R-261120-revcrash",
@@ -114,6 +117,67 @@ def test_pre_execution_run_id_idempotency_prevents_duplicate_ask_and_review(home
     parent_after = store.get_run_record(home, "R-261120-revcrash")
     assert parent_after is not None and parent_after["status"] == "ok"
     assert parent_after["child_run_ids"] == ["R-261120-revcrash-c1", "R-261120-revcrash-c2"]
+
+    # 4. Mismatched run_id reuse across command, task, model, or reviewer list is rejected with ValueError
+    other_task = home / "tasks" / "T-261120-other.md"
+    other_task.write_text("# Other task\n", encoding="utf-8")
+    with pytest.raises(ValueError, match="already belongs to a different operation"):
+        ask.run_ask(home, "other_model", "T-261116", adapters={"other_model": counting_ask}, today=TODAY, run_id="R-261120-idem0001")
+    with pytest.raises(ValueError, match="already belongs to a different operation"):
+        ask.run_ask(home, "fake", "T-261120-other", adapters={"fake": counting_ask}, today=TODAY, run_id="R-261120-idem0001")
+    with pytest.raises(ValueError, match="already belongs to a different operation"):
+        ask.run_review(home, "T-261116", reviewers=("r1",), adapters={"r1": counting_rev}, today=TODAY, run_id="R-261120-idem0001")
+    with pytest.raises(ValueError, match="already belongs to a different operation"):
+        ask.run_ask(home, "fake", "T-261116", adapters={"fake": counting_ask}, today=TODAY, run_id="R-261120-revidem1")
+    with pytest.raises(ValueError, match="already belongs to a different operation"):
+        ask.run_review(home, "T-261116", reviewers=("r1",), adapters={"r1": counting_rev}, today=TODAY, run_id="R-261120-revidem1")
+    with pytest.raises(ValueError, match="already belongs to a different operation"):
+        ask.run_review(home, "T-261120-other", reviewers=("r1", "r2"), adapters={"r1": counting_rev, "r2": counting_rev}, today=TODAY, run_id="R-261120-revidem1")
+
+    # 5. Simultaneous concurrent retries with the same run_id (ask and review) execute the provider only once
+    simul_ask_calls = []
+
+    def slow_ask(prompt):
+        time.sleep(0.05)
+        simul_ask_calls.append(prompt)
+        return CLEAN
+
+    t_ask1 = threading.Thread(
+        target=lambda: ask.run_ask(home, "fake", "T-261116", adapters={"fake": slow_ask}, today=TODAY, run_id="R-261120-simulask")
+    )
+    t_ask2 = threading.Thread(
+        target=lambda: ask.run_ask(home, "fake", "T-261116", adapters={"fake": slow_ask}, today=TODAY, run_id="R-261120-simulask")
+    )
+    t_ask1.start()
+    t_ask2.start()
+    t_ask1.join()
+    t_ask2.join()
+    assert len(simul_ask_calls) == 1
+
+    simul_rev_calls = []
+
+    def slow_rev(prompt):
+        time.sleep(0.04)
+        simul_rev_calls.append(prompt)
+        return CLEAN
+
+    t_rev1 = threading.Thread(
+        target=lambda: ask.run_review(
+            home, "T-261116", reviewers=("r1", "r2"),
+            adapters={"r1": slow_rev, "r2": slow_rev}, today=TODAY, run_id="R-261120-simulrev"
+        )
+    )
+    t_rev2 = threading.Thread(
+        target=lambda: ask.run_review(
+            home, "T-261116", reviewers=("r1", "r2"),
+            adapters={"r1": slow_rev, "r2": slow_rev}, today=TODAY, run_id="R-261120-simulrev"
+        )
+    )
+    t_rev1.start()
+    t_rev2.start()
+    t_rev1.join()
+    t_rev2.join()
+    assert len(simul_rev_calls) == 2
 
 
 def test_transactional_journal_recovers_partial_crash_and_rejects_unsafe_paths(home, monkeypatch, tmp_path):
@@ -197,17 +261,76 @@ def test_transactional_journal_recovers_partial_crash_and_rejects_unsafe_paths(h
         store.atomic_write_bytes(chunk_target, b"fail")
     monkeypatch.setattr(store.os, "write", real_write)
 
-    # Parent-directory fsync ordering: _fsync_parent_dir is called after every atomic_write_bytes replace
-    # and after journal unlink in commit_transaction
-    fsynced_dirs = []
-    monkeypatch.setattr(store, "_fsync_parent_dir", lambda p: fsynced_dirs.append(store.Path(p).name))
-    store.commit_transaction(home, [
-        (task_path, task_path.read_bytes()),
-        (ledger_path, ledger_path.read_bytes()),
-    ])
-    assert ".store.journal.json" in fsynced_dirs
-    assert task_path.name in fsynced_dirs
-    assert ledger_path.name in fsynced_dirs
+    # Real POSIX parent-directory fsync body tested across commit_transaction, recover_journal, and _quarantine_journal
+    import errno
+    real_supports_dir_fsync = store._SUPPORTS_DIR_FSYNC
+    real_open = store.os.open
+    real_fsync = store.os.fsync
+    real_close = store.os.close
+    dir_events = []
+    DIR_FD = 888888
+
+    def posix_open(path_str, flags, *a, **kw):
+        if flags == store.os.O_RDONLY and store.Path(path_str).is_dir():
+            dir_events.append(("open", store.Path(path_str).name))
+            return DIR_FD
+        return real_open(path_str, flags, *a, **kw)
+
+    def posix_fsync(fd):
+        if fd == DIR_FD:
+            dir_events.append(("fsync", DIR_FD))
+            return
+        return real_fsync(fd)
+
+    def posix_close(fd):
+        if fd == DIR_FD:
+            dir_events.append(("close", DIR_FD))
+            return
+        return real_close(fd)
+
+    monkeypatch.setattr(store, "_SUPPORTS_DIR_FSYNC", True)
+    monkeypatch.setattr(store.os, "open", posix_open)
+    monkeypatch.setattr(store.os, "fsync", posix_fsync)
+    monkeypatch.setattr(store.os, "close", posix_close)
+    try:
+        store.commit_transaction(home, [
+            (task_path, task_path.read_bytes()),
+            (ledger_path, ledger_path.read_bytes()),
+        ])
+        # Recovery path also fsyncs parent directory
+        journal_path.write_text(
+            json.dumps({
+                "operations": [{"path": "logs/ledger.csv", "b64": base64.b64encode(ledger_path.read_bytes()).decode("ascii")}]
+            }),
+            encoding="utf-8",
+        )
+        assert store.recover_journal(home) is True
+        # Quarantine path also fsyncs parent directory
+        journal_path.write_text("{corrupt", encoding="utf-8")
+        with pytest.raises(ValueError, match="Refused"):
+            store.recover_journal(home)
+        for q in (home / "logs").glob(".store.journal.corrupt.*.json"):
+            q.unlink()
+
+        assert ("open", "logs") in dir_events
+        assert ("open", "tasks") in dir_events
+        assert ("fsync", DIR_FD) in dir_events
+        assert ("close", DIR_FD) in dir_events
+
+        # Non-EINVAL/ENOTSUP directory fsync failure is surfaced and still closes the descriptor
+        def failing_dir_fsync(fd):
+            if fd == DIR_FD:
+                raise OSError(errno.EIO, "simulated disk I/O error on directory fsync")
+            return real_fsync(fd)
+
+        monkeypatch.setattr(store.os, "fsync", failing_dir_fsync)
+        with pytest.raises(OSError, match="simulated disk I/O error"):
+            store._fsync_parent_dir(ledger_path)
+    finally:
+        monkeypatch.setattr(store, "_SUPPORTS_DIR_FSYNC", real_supports_dir_fsync)
+        monkeypatch.setattr(store.os, "open", real_open)
+        monkeypatch.setattr(store.os, "fsync", real_fsync)
+        monkeypatch.setattr(store.os, "close", real_close)
 
 
 def test_lock_exclusivity_live_pid_protection_and_token_checked_release(home, monkeypatch):
@@ -350,9 +473,9 @@ def test_blocked_failed_timeout_tool_missing_partial_and_full_fail_runs_recorded
     orig_task = task_path.read_text(encoding="utf-8")
     task_path.write_text(orig_task + f"\nkey {leaked_secret}\n", encoding="utf-8")
     with pytest.raises(ask.Blocked):
-        ask.run_ask(home, "fake", "T-261116", adapters={"fake": lambda p: CLEAN}, today=TODAY, run_id="R-261120-blko0001")
+        ask.run_ask(home, "codex", "T-261116", adapters={"codex": lambda p: CLEAN}, today=TODAY, run_id="R-261120-blko0001")
     with pytest.raises(ask.Blocked):
-        ask.run_review(home, "T-261116", reviewers=("fake",), adapters={"fake": lambda p: CLEAN}, today=TODAY, run_id="R-261120-blkr0001")
+        ask.run_review(home, "T-261116", reviewers=("codex",), adapters={"codex": lambda p: CLEAN}, today=TODAY, run_id="R-261120-blkr0001")
     task_path.write_text(orig_task, encoding="utf-8")
 
     # 0b. Provider-level privacy block (non-loopback OLLAMA_HOST) -> status="blocked", phase="provider_guard"
@@ -366,42 +489,49 @@ def test_blocked_failed_timeout_tool_missing_partial_and_full_fail_runs_recorded
         raise ask.AskError("codex timed out after 600 s.")
 
     with pytest.raises(ask.AskError):
-        ask.run_ask(home, "fake", "T-261116", adapters={"fake": timeout_adapter}, today=TODAY, run_id="R-261120-time0001")
+        ask.run_ask(home, "codex", "T-261116", adapters={"codex": timeout_adapter}, today=TODAY, run_id="R-261120-time0001")
 
     # 2. Provider failure containing a secret in stderr -> status="failed", secret redacted
     def failing_secret_adapter(prompt):
         raise ask.AskError(f"fatal: auth failed for {leaked_secret}")
 
     with pytest.raises(ask.AskError):
-        ask.run_ask(home, "fake", "T-261116", adapters={"fake": failing_secret_adapter}, today=TODAY, run_id="R-261120-fail0001")
+        ask.run_ask(home, "codex", "T-261116", adapters={"codex": failing_secret_adapter}, today=TODAY, run_id="R-261120-fail0001")
+
+    # 2b. Unexpected RuntimeError / CalledProcessError inside adapter -> status="failed", wrapped as AskError
+    def unexpected_crash_adapter(prompt):
+        raise RuntimeError(f"unexpected adapter crash with {leaked_secret}")
+
+    with pytest.raises(ask.AskError):
+        ask.run_ask(home, "codex", "T-261116", adapters={"codex": unexpected_crash_adapter}, today=TODAY, run_id="R-261120-unex0001")
 
     # 3. Missing tool -> status="tool_missing"
     def missing_adapter(prompt):
         raise ask.ToolMissing("codex is not installed or not on PATH.")
 
     with pytest.raises(ask.ToolMissing):
-        ask.run_ask(home, "fake", "T-261116", adapters={"fake": missing_adapter}, today=TODAY, run_id="R-261120-miss0001")
+        ask.run_ask(home, "codex", "T-261116", adapters={"codex": missing_adapter}, today=TODAY, run_id="R-261120-miss0001")
 
     # 4. Inbound answer blocked by guard -> status="blocked", phase="inbound_answer"
     def leaky_answer_adapter(prompt):
         return "key " + leaked_secret
 
     with pytest.raises(ask.Blocked):
-        ask.run_ask(home, "fake", "T-261116", adapters={"fake": leaky_answer_adapter}, today=TODAY, run_id="R-261120-blka0001")
+        ask.run_ask(home, "codex", "T-261116", adapters={"codex": leaky_answer_adapter}, today=TODAY, run_id="R-261120-blka0001")
 
-    # 5. Partial multi-model review (one succeeds, one fails) -> parent status="partial"
+    # 5. Partial multi-model review (one succeeds, one raises unexpected RuntimeError) -> parent status="partial"
     with pytest.raises(ask.AskError):
         ask.run_review(
-            home, "T-261116", reviewers=("ok_rev", "bad_rev"),
-            adapters={"ok_rev": lambda p: CLEAN, "bad_rev": failing_secret_adapter},
+            home, "T-261116", reviewers=("codex", "claude"),
+            adapters={"codex": lambda p: CLEAN, "claude": unexpected_crash_adapter},
             today=TODAY, run_id="R-261120-partgrp1",
         )
 
     # 6. Fully failed multi-model review (all reviewers fail) -> parent status="failed"
     with pytest.raises(ask.AskError):
         ask.run_review(
-            home, "T-261116", reviewers=("bad1", "bad2"),
-            adapters={"bad1": failing_secret_adapter, "bad2": timeout_adapter},
+            home, "T-261116", reviewers=("codex", "claude"),
+            adapters={"codex": failing_secret_adapter, "claude": timeout_adapter},
             today=TODAY, run_id="R-261120-failgrp1",
         )
 
@@ -414,6 +544,8 @@ def test_blocked_failed_timeout_tool_missing_partial_and_full_fail_runs_recorded
     assert by_id["R-261120-time0001"]["status"] == "timeout"
     assert by_id["R-261120-fail0001"]["status"] == "failed"
     assert "[REDACTED]" in by_id["R-261120-fail0001"]["error"]
+    assert by_id["R-261120-unex0001"]["status"] == "failed"
+    assert "[REDACTED]" in by_id["R-261120-unex0001"]["error"]
     assert by_id["R-261120-miss0001"]["status"] == "tool_missing"
     assert by_id["R-261120-blka0001"]["status"] == "blocked" and by_id["R-261120-blka0001"]["phase"] == "inbound_answer"
     assert by_id["R-261120-partgrp1"]["command"] == "review_group" and by_id["R-261120-partgrp1"]["status"] == "partial"
@@ -428,28 +560,32 @@ def test_blocked_failed_timeout_tool_missing_partial_and_full_fail_runs_recorded
         retry_calls.append(prompt)
         return CLEAN
 
-    for blkid in ("R-261120-blko0001", "R-261120-blkp0001", "R-261120-blka0001"):
+    for blkid in ("R-261120-blko0001", "R-261120-blka0001"):
         with pytest.raises(ask.Blocked):
-            ask.run_ask(home, "fake", "T-261116", adapters={"fake": never_called_adapter}, today=TODAY, run_id=blkid)
+            ask.run_ask(home, "codex", "T-261116", adapters={"codex": never_called_adapter}, today=TODAY, run_id=blkid)
         assert cli.main(["--home", str(home), "ask", "codex", "T-261116", "--run-id", blkid]) == 1
 
+    with pytest.raises(ask.Blocked):
+        ask.run_ask(home, "ollama", "T-261116", adapters={"ollama": never_called_adapter}, today=TODAY, run_id="R-261120-blkp0001")
+    assert cli.main(["--home", str(home), "ask", "ollama", "T-261116", "--run-id", "R-261120-blkp0001"]) == 1
+
     with pytest.raises(ask.ToolMissing):
-        ask.run_ask(home, "fake", "T-261116", adapters={"fake": never_called_adapter}, today=TODAY, run_id="R-261120-miss0001")
+        ask.run_ask(home, "codex", "T-261116", adapters={"codex": never_called_adapter}, today=TODAY, run_id="R-261120-miss0001")
     assert cli.main(["--home", str(home), "ask", "codex", "T-261116", "--run-id", "R-261120-miss0001"]) == 2
 
-    for errid in ("R-261120-time0001", "R-261120-fail0001"):
+    for errid in ("R-261120-time0001", "R-261120-fail0001", "R-261120-unex0001"):
         with pytest.raises(ask.AskError):
-            ask.run_ask(home, "fake", "T-261116", adapters={"fake": never_called_adapter}, today=TODAY, run_id=errid)
+            ask.run_ask(home, "codex", "T-261116", adapters={"codex": never_called_adapter}, today=TODAY, run_id=errid)
         assert cli.main(["--home", str(home), "ask", "codex", "T-261116", "--run-id", errid]) == 3
 
     with pytest.raises(ask.Blocked):
-        ask.run_review(home, "T-261116", reviewers=("fake",), adapters={"fake": never_called_adapter}, today=TODAY, run_id="R-261120-blkr0001")
+        ask.run_review(home, "T-261116", reviewers=("codex",), adapters={"codex": never_called_adapter}, today=TODAY, run_id="R-261120-blkr0001")
     assert cli.main(["--home", str(home), "review", "T-261116", "--reviewers", "codex", "--run-id", "R-261120-blkr0001"]) == 1
 
     for grpid in ("R-261120-partgrp1", "R-261120-failgrp1"):
         with pytest.raises(ask.AskError):
-            ask.run_review(home, "T-261116", reviewers=("fake",), adapters={"fake": never_called_adapter}, today=TODAY, run_id=grpid)
-        assert cli.main(["--home", str(home), "review", "T-261116", "--reviewers", "codex", "--run-id", grpid]) == 3
+            ask.run_review(home, "T-261116", reviewers=("codex", "claude"), adapters={"codex": never_called_adapter, "claude": never_called_adapter}, today=TODAY, run_id=grpid)
+        assert cli.main(["--home", str(home), "review", "T-261116", "--reviewers", "codex,claude", "--run-id", grpid]) == 3
 
     assert not retry_calls
     assert len(_read_runs(home)) == run_count_before
@@ -512,6 +648,42 @@ def test_full_64_char_sha256_and_per_reviewer_isolated_worktree_review(home, tmp
     assert parent["command"] == "review_group" and parent["status"] == "ok" and parent["commit_sha"] == head_sha
     for cid in parent["child_run_ids"]:
         assert by_id[cid]["commit_sha"] == head_sha
+
+    # Record a failed repository review as well before mutating/deleting the repo
+    with pytest.raises(ask.AskError):
+        ask.run_review(
+            home, "T-261116", reviewers=("r1",),
+            adapters={"r1": lambda p: (_ for _ in ()).throw(RuntimeError("worktree reviewer boom"))},
+            today=TODAY, repo=repo, commit="HEAD", run_id="R-261120-wtfail01",
+        )
+
+    # Commit collision: advancing HEAD and reusing R-261120-wtgroup1 with commit="HEAD" is rejected with ValueError
+    (repo / "module.py").write_text(orig_code + "\n# second commit\n", encoding="utf-8")
+    subprocess.run(["git", "add", "module.py"], cwd=repo, check=True, capture_output=True)
+    subprocess.run(["git", "commit", "-m", "Second commit"], cwd=repo, check=True, capture_output=True)
+    with pytest.raises(ValueError, match="already belongs to commit"):
+        ask.run_review(
+            home, "T-261116", reviewers=("r1", "r2"),
+            adapters={"r1": mutating_reviewer_1, "r2": verifying_reviewer_2},
+            today=TODAY, repo=repo, commit="HEAD", run_id="R-261120-wtgroup1",
+        )
+
+    # Remove/relocate the reviewed repository from its path completely: retrying with the original run_id still replays
+    # both the persisted ok metadata and the persisted failure without reopening the repository!
+    shutil.move(str(repo), str(tmp_path / "relocated-sample-repo"))
+    assert not repo.exists()
+    replay_ok = ask.run_review(
+        home, "T-261116", reviewers=("r1", "r2"),
+        adapters={"r1": mutating_reviewer_1, "r2": verifying_reviewer_2},
+        today=TODAY, repo=repo, commit="HEAD", run_id="R-261120-wtgroup1",
+    )
+    assert replay_ok["commit_sha"] == head_sha and replay_ok["group_run_id"] == "R-261120-wtgroup1"
+    with pytest.raises(ask.AskError, match="worktree reviewer boom"):
+        ask.run_review(
+            home, "T-261116", reviewers=("r1",),
+            adapters={"r1": verifying_reviewer_2},
+            today=TODAY, repo=repo, commit="HEAD", run_id="R-261120-wtfail01",
+        )
 
 
 def test_doctor_tools_and_live_cli_exit_codes(home, monkeypatch, capsys):

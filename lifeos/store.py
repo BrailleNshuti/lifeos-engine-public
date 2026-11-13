@@ -57,20 +57,25 @@ def _write_all(fd, data):
         total += written
 
 
+_SUPPORTS_DIR_FSYNC = os.name != "nt"
+
+
 def _fsync_parent_dir(path):
     """Fsync the parent directory on POSIX so rename/unlink directory entries survive sudden power loss.
     On Windows, os.open on a directory raises PermissionError/OSError; NTFS metadata journaling orders renames."""
-    if os.name == "nt":
+    if not _SUPPORTS_DIR_FSYNC:
         return
+    import errno
     parent = Path(path).resolve().parent
+    dfd = os.open(str(parent), os.O_RDONLY)
     try:
-        dfd = os.open(str(parent), os.O_RDONLY)
         try:
             os.fsync(dfd)
-        finally:
-            os.close(dfd)
-    except OSError:
-        pass
+        except OSError as err:
+            if err.errno not in (errno.EINVAL, errno.ENOTSUP):
+                raise
+    finally:
+        os.close(dfd)
 
 
 def atomic_write_bytes(path, data):
@@ -149,13 +154,10 @@ def _read_lock_meta(lock_path):
 
 
 @contextmanager
-def store_lock(home, timeout=10.0):
-    """Acquire an exclusive cross-process (OS advisory lock) and cross-thread lock on <home>/logs/.store.lock,
-    holding the file descriptor for the context lifetime so dead-process recovery is kernel-atomic and race-free."""
-    if home is None or not (Path(home) / "logs").is_dir():
-        yield
-        return
-    lock_path = (Path(home) / "logs" / ".store.lock").resolve()
+def _advisory_lock_file(lock_path, timeout=10.0):
+    """Acquire an exclusive cross-process (OS advisory lock) and cross-thread lock on `lock_path`,
+    holding the file descriptor on a persistent inode for the context lifetime."""
+    lock_path = Path(lock_path).resolve()
     held = getattr(_LOCK_TLS, "held", None)
     if held is None:
         held = {}
@@ -209,12 +211,33 @@ def store_lock(home, timeout=10.0):
         finally:
             held.pop(lock_path, None)
     finally:
-        # Never unlink .store.lock: keeping a single persistent inode prevents two processes on POSIX from
+        # Never unlink the lockfile: keeping a single persistent inode prevents two processes on POSIX from
         # locking old and new inodes concurrently during lock handoff.
         if fd is not None:
             _os_unlock(fd)
             os.close(fd)
         tlock.release()
+
+
+@contextmanager
+def store_lock(home, timeout=10.0):
+    """Acquire an exclusive cross-process (OS advisory lock) and cross-thread lock on <home>/logs/.store.lock."""
+    if home is None or not (Path(home) / "logs").is_dir():
+        yield
+        return
+    with _advisory_lock_file(Path(home) / "logs" / ".store.lock", timeout=timeout):
+        yield
+
+
+@contextmanager
+def run_lock(home, run_id, timeout=30.0):
+    """Serialize concurrent executions sharing the same `run_id` from initial lookup through terminal record commit."""
+    if not run_id or home is None or not (Path(home) / "logs").is_dir():
+        yield
+        return
+    safe = re.sub(r"[^A-Za-z0-9_.-]", "_", str(run_id))[:64]
+    with _advisory_lock_file(Path(home) / "logs" / f".run.{safe}.lock", timeout=timeout):
+        yield
 
 
 def _journal_path(home):
