@@ -17,3 +17,6 @@ def test_ledger_writer_quotes_commas_and_repairs_missing_newline(tmp_path):
     append_ledger_row(ledger, dt.date(2026, 11, 20), "T-1", "chat", "written, checked")
     with ledger.open(newline="", encoding="utf-8") as handle:
         assert list(csv.reader(handle))[-1] == ["2026-11-20", "T-1", "chat", "", "written, checked"]
+    raw = ledger.read_bytes()
+    assert not raw.startswith(b"\xef\xbb\xbf") and b"\r\n" not in raw
+
