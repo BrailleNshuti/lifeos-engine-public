@@ -7,6 +7,7 @@ PKG = Path(__file__).resolve().parent.parent / "lifeos"
 
 # A module may import only from a lower layer (a smaller number). Same layer = no import.
 LAYER = {
+    "store": -1,
     "home": 0, "guard": 0, "check": 0, "tasks": 0, "week": 0,
     "context": 1,
     "ask": 2,
@@ -17,15 +18,7 @@ LAYER = {
 
 # Known cross-module uses of private names (importer, owner, name). The ratchet: this set may only shrink.
 # When you make a name public (or move it), delete its row here; the test then fails if a row is stale.
-KNOWN_PRIVATE_USES = {
-    ("ask", "context", "_task_file"),
-    ("ask", "guard", "_private_patterns"),
-    ("delegate", "context", "_task_file"),
-    ("mcp", "context", "_task_file"),
-    ("mcp", "ask", "_check"),
-    ("sortcsv", "ask", "_ollama"),
-    ("sortcsv", "ask", "_qwen_model"),
-}
+KNOWN_PRIVATE_USES = set()
 
 
 def _modules():
@@ -84,3 +77,4 @@ def test_private_cross_module_uses_only_shrink():
                 found.add((name, owner, attr))
     assert not (found - KNOWN_PRIVATE_USES), f"new private cross-module use: {sorted(found - KNOWN_PRIVATE_USES)}"
     assert not (KNOWN_PRIVATE_USES - found), f"fixed: delete from KNOWN_PRIVATE_USES: {sorted(KNOWN_PRIVATE_USES - found)}"
+

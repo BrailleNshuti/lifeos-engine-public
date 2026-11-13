@@ -6,13 +6,24 @@ permissions:
   contents: read
 jobs:
   test:
-    runs-on: ubuntu-latest
+    name: ${{ matrix.name }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - {name: "test (py3.10)", os: ubuntu-latest, python: "3.10"}
+          - {name: "test (py3.11)", os: ubuntu-latest, python: "3.11"}
+          - {name: "test", os: ubuntu-latest, python: "3.12"}
+          - {name: "test (py3.13)", os: ubuntu-latest, python: "3.13"}
+          - {name: "test (windows)", os: windows-latest, python: "3.12"}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
-          python-version: "3.12"
+          python-version: ${{ matrix.python }}
       - run: pip install -e . pytest
       - run: pytest -q
       - name: Privacy guard on every tracked file
         run: lifeos guard $(git ls-files)
+

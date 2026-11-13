@@ -7,9 +7,7 @@ so is an exact 'other' answer, because it means the model does not know. Rows pl
 """
 import csv
 import io
-import os
 import re
-import urllib.parse
 from pathlib import Path
 
 from . import ask
@@ -34,14 +32,14 @@ class Refused(Exception):
 
 
 def require_local():
-    host = os.environ.get("OLLAMA_HOST", "http://localhost:11434")
-    name = urllib.parse.urlparse(host if "://" in host else "http://" + host).hostname
-    if name not in ("localhost", "127.0.0.1", "::1"):
-        raise Refused(f"OLLAMA_HOST points to '{name}'. Bank data only goes to a local model on this computer.")
+    try:
+        ask.ollama_host()
+    except ask.Blocked as error:
+        raise Refused(str(error)) from None
 
 
 def ask_local(prompt):
-    return ask._ollama(prompt, ask._qwen_model(), {"temperature": 0, "num_predict": 12})
+    return ask.ollama_generate(prompt, ask.qwen_model(), {"temperature": 0, "num_predict": 12})
 
 
 def _in_git_repo(path):
@@ -137,3 +135,4 @@ def sort_csv(src, out=None, column=None, categories=None, ask_fn=None):
     with open(out, "w", encoding="utf-8-sig", newline="") as f:
         csv.writer(f, delimiter=delimiter).writerows(result)
     return {**counts, "out": out}
+

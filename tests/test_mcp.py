@@ -62,7 +62,7 @@ def test_result_write_is_stopped_by_the_guard(home):
     path = home / "tasks" / "T-261116-demo-cli.md"
     before = path.read_text(encoding="utf-8")
     text, err = tool(home, "lifeos_result_write", task="T-261116", model="x", text="key " + "ghp_" + "a1" * 18)
-    assert err and "class C" in text
+    assert err and "sensitive finding" in text
     assert path.read_text(encoding="utf-8") == before
 
 
@@ -155,3 +155,5 @@ def test_odd_shapes_of_params_and_tool_name_get_an_error_not_a_crash(home):
     for params in ([1], "x", {"name": ["lifeos_task_list"]}, {"name": {"a": 1}}):
         reply = call(home, "tools/call", params)
         assert reply["error"]["code"] == -32602
+
+

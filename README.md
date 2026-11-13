@@ -16,7 +16,7 @@ The engine is code only. Your life lives in a separate **private data repo** (`l
 | `lifeos delegate <task> [--model M] [--budget N] [--full] [--dry-run]` | Claude is the lead: picks the best-fitting model from the task text (private sorting -> qwen, code -> claude writes and codex tests and reviews, learning -> codex, long reading and live facts -> gemini, plans and decisions -> claude), runs it through `lifeos ask`, prints the answer plus a free CHECK line (no model call: empty or too short, refusal, echoed prompt, success without evidence, undated link, guessing, no next step). A missing tool falls back to the next model and says so (a private task, qwen or ollama, never falls back to a cloud model: it stops); a failed call is shown, never retried elsewhere | One command (or one chat tool call) instead of choosing a model by hand |
 | `lifeos sort-csv <file> [--out F] [--column C] [--categories a,b]` | Adds `lifeos_category` and `lifeos_check` columns to a bank CSV. Fully local: keyword rules first, then local Qwen for the rest; refuses a non-local Ollama address, never overwrites, never writes inside a git repo, prints counts only. The first line must be a header (it decides the delimiter; it is never printed in an error). Rows the model could not place (it answered `other`, or its answer was wordy or outside the list) say `yes` in `lifeos_check`; rows placed by the keyword rules never do | Your spending sorted without bank data touching any cloud or chat |
 | `lifeos mcp` | Runs a local MCP server (standard library only) with six tools: list tasks, new task, context, write result, ask, delegate. Writes go through the privacy guard and stay inside tasks/ and the ledger | Chat apps read and write your task files with no copy and paste |
-| `lifeos guard [files] / --staged` | Blocks IBANs, card numbers, ID and passport numbers, keys and private keys; warns on emails, phone numbers and possible secrets; `--staged` scans what is staged, not the working file; the ok line says how many files were skipped (missing, binary, over 1 MB); UTF-16 text (PowerShell's `>`) is scanned | Class C data never reaches a repo |
+| `lifeos guard [files] / --staged` | Blocks validated IBANs/cards, contextual ID numbers, known key formats, private keys and assigned secrets; warns on emails and phone numbers. `--staged` scans the staged version; UTF-16 and legacy text are scanned | Catches high-confidence leaks before a commit; it is a backstop, not a complete classifier |
 | `lifeos doctor` | Checks the data repo; fails when the always-loaded core is over 2000 tokens or a file is too long | Keeps the core small |
 
 The `Delegation:` line of `lifeos week` judges models by numbers: it counts this week's `lifeos ask` ledger lines (`delegate` and `mcp` write them too) per model, most used first, and how many of those answers the free check flagged; the ledger keeps only that count, never the answer or the flag texts.
@@ -40,6 +40,13 @@ Install the skills for Claude Code and Codex: `scripts/install-skills.ps1` (or `
 Install the privacy guard as a pre-commit hook in the data repo: `scripts/install-hook.sh C:/path/to/lifeos` (Git Bash; forward slashes, because bash drops unquoted backslashes).
 
 Private patterns that must never be committed (your street, your phone number) go in `~/.lifeos/private-patterns.txt`, one regular expression per line, outside every repo. Mark a false alarm with `lifeos-guard: allow` on that line.
+
+## Security boundaries
+
+- `ollama` and `qwen` refuse any `OLLAMA_HOST` that is not `localhost`, `127.0.0.1` or `::1`.
+- The allow marker works only for reviewed file scans; outbound context and model answers cannot exempt themselves.
+- The guard cannot reliably recognize natural-language health, tenant or employer information. Those remain policy rules: do not put them in a task or context pack.
+- Model CLIs run in an empty temporary working directory, which reduces accidental context but is not an operating-system sandbox. Keep CLI permissions narrow and review each tool's configuration.
 
 ## Checks
 
@@ -86,3 +93,4 @@ Other MCP apps (Codex, agy) have their own `mcp add` command with the same progr
 Register `lifeos mcp` in Claude (Desktop or Code). The server tells Claude its role: for work that fits another model it calls `lifeos_delegate`, reads the answer that comes back in the same chat, checks it against rules.md and writes the decision into the task file. You only talk to Claude.
 
 Qwen runs locally through Ollama: `ollama pull qwen2.5:3b` (default). Pick another size with `LIFEOS_QWEN_MODEL`, for example `qwen3:8b` once the laptop has the RAM. `lifeos ask ollama` uses `LIFEOS_OLLAMA_MODEL` (default `llama3.2`); both talk to `OLLAMA_HOST` (default `http://localhost:11434`). Reasoning blocks (`<think>`) are stripped from local answers.
+

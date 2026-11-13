@@ -9,7 +9,7 @@ import re
 from . import ask
 from .ask import ADAPTERS, run_ask  # noqa: F401  (ADAPTERS is patched in tests)
 from .check import check_answer
-from .context import _task_file
+from .context import task_file
 
 # First match wins, so private work stays local before anything else is looked at.
 ROUTES = [
@@ -53,7 +53,7 @@ def last_result(path):
 def run_delegate(home, task_id, model=None, budget=6000, full=False, adapters=None, today=None, dry_run=False):
     """Run the task on the best model. Returns model, reason, tried, path and the answer text."""
     adapters = adapters if adapters is not None else ADAPTERS
-    path = _task_file(home, task_id)
+    path = task_file(home, task_id)
     if model:
         if model not in adapters:
             raise ValueError(f"Unknown model '{model}'. Choose one of: {', '.join(sorted(adapters))}.")
@@ -75,3 +75,4 @@ def run_delegate(home, task_id, model=None, budget=6000, full=False, adapters=No
             continue
         return {"model": name, "reason": reason, "tried": tried, "path": path, "text": last_result(path),
                 "flags": check_answer(last_result(path))}
+

@@ -28,6 +28,7 @@ def test_blocks_class_c_data():
     assert ("BLOCK", "API key (sk-)") in kinds("key " + "sk-ant-" + "x" * 30)
     assert ("BLOCK", "Private key") in kinds("-----BEGIN " + "RSA PRIVATE KEY-----")
     assert ("BLOCK", "ID or passport number") in kinds("Passport: " + "C01X00T47")
+    assert ("BLOCK", "Assigned secret") in kinds("password=" + "made-up-value")
 
 
 def test_warns_but_does_not_block():
@@ -45,6 +46,11 @@ def test_allow_mark_and_private_patterns():
     assert kinds(f"{IBAN}  # lifeos-guard: allow") == set()
     street = re.compile("musterstra(ss|ß)e 12", re.I)
     assert ("BLOCK", "Private pattern") in kinds("I live at Musterstrasse 12", private=[street])
+
+
+def test_untrusted_text_cannot_exempt_itself_with_the_allow_mark():
+    found = kinds(f"{IBAN}  # lifeos-guard: allow", allow_mark=False)
+    assert ("BLOCK", "IBAN") in found
 
 
 def test_staged_file_with_a_non_ascii_name_is_still_scanned(tmp_path, monkeypatch):
@@ -130,7 +136,7 @@ def test_private_patterns_file_with_a_bom_is_read(tmp_path, monkeypatch):
     patterns = tmp_path / "private-patterns.txt"
     patterns.write_bytes("﻿SecretCodename\n".encode("utf-8"))  # Notepad on Windows adds a BOM
     monkeypatch.setattr(guard, "PRIVATE_PATTERNS", patterns)
-    assert ("BLOCK", "Private pattern") in kinds("the SecretCodename project", private=guard._private_patterns())
+    assert ("BLOCK", "Private pattern") in kinds("the SecretCodename project", private=guard.private_patterns())
 
 
 def test_a_bad_private_pattern_stops_the_guard_instead_of_being_ignored(tmp_path, monkeypatch, capsys):
@@ -163,4 +169,5 @@ def test_a_utf16_private_patterns_file_is_read(tmp_path, monkeypatch):
     patterns = tmp_path / "private-patterns.txt"
     patterns.write_bytes("SecretCodename\n".encode("utf-16"))
     monkeypatch.setattr(guard, "PRIVATE_PATTERNS", patterns)
-    assert ("BLOCK", "Private pattern") in kinds("the SecretCodename project", private=guard._private_patterns())
+    assert ("BLOCK", "Private pattern") in kinds("the SecretCodename project", private=guard.private_patterns())
+

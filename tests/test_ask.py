@@ -213,9 +213,16 @@ def test_ledger_never_holds_the_answer_or_the_flag_texts(home):
     assert len(last_ledger_row(home)) == 5  # the comma inside a flag text never became a column
 
 
-def test_commas_in_a_ledger_note_become_spaces(home):
+def test_commas_in_a_ledger_note_are_valid_csv(home):
     ask.write_result(home, "T-261116", "chat", CLEAN, today=TODAY, note="written, then checked, by hand")
-    assert last_ledger_row(home) == ["2026-11-20", "T-261116-demo-cli", "chat", "", "written  then checked  by hand"]
+    assert last_ledger_row(home) == ["2026-11-20", "T-261116-demo-cli", "chat", "", "written, then checked, by hand"]
+
+
+def test_ollama_refuses_a_remote_host_before_sending(monkeypatch):
+    monkeypatch.setenv("OLLAMA_HOST", "https://models.example.com")
+    monkeypatch.setattr(ask, "_open_local", lambda *args: pytest.fail("request must not be opened"))
+    with pytest.raises(ask.Blocked, match="may only use Ollama on this computer"):
+        ask.ask_qwen("private task text")
 
 
 def test_ledger_without_a_final_newline_keeps_its_rows_apart(home):
@@ -270,3 +277,4 @@ def test_an_ollama_timeout_is_not_reported_as_a_missing_tool(monkeypatch):
     with pytest.raises(ask.AskError, match="did not answer") as caught:
         ask.ask_ollama("hello")
     assert not isinstance(caught.value, ask.ToolMissing)
+

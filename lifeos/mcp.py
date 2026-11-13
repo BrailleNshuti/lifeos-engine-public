@@ -6,7 +6,7 @@ Everything stays inside the data repo: tasks/ and logs/ledger.csv. Every write g
 import json
 
 from . import __version__, ask, delegate
-from .context import _task_file, build_pack
+from .context import task_file, build_pack
 from .tasks import list_tasks, new_task
 
 STR = {"type": "string"}
@@ -46,10 +46,10 @@ def _run_tool(home, name, a):
         rows = list_tasks(home, a.get("status"))
         return "\n".join(f"{t['id']}  {t['status']}  {t['due']}  {t['goal']}" for t in rows) or "No tasks."
     if name == "lifeos_task_new":
-        ask._check(a["sentence"], "the task sentence", "No task file was created.")  # same guard as lifeos_result_write
+        ask.check_text(a["sentence"], "the task sentence", "No task file was created.")
         return str(new_task(home, a["sentence"]).relative_to(home))
     if name == "lifeos_context":
-        _task_file(home, a["task"])  # a missing, empty or unsafe id is an error, never a pack without the task
+        task_file(home, a["task"])  # a missing, empty or unsafe id is an error, never a pack without the task
         return build_pack(home, a["task"], a.get("budget", 6000), task_first=True,
                           names=None if a.get("full") else ask.MINIMAL)[0]
     if name == "lifeos_result_write":
@@ -113,3 +113,4 @@ def serve(home, stdin, stdout):
         if reply is not None:
             stdout.write(json.dumps(reply) + "\n")
             stdout.flush()
+

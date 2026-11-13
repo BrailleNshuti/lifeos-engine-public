@@ -1,10 +1,11 @@
 """Weekly numbers from the logs: the part of the Sunday review a machine can do honestly."""
 import csv
 import datetime as dt
-import re
 from pathlib import Path
 
-ASKED = "asked via lifeos ask"  # ledger note of every model call: ask, delegate and mcp all go through it
+from .store import ASK_NOTE_PREFIX, model_call_flags
+
+ASKED = ASK_NOTE_PREFIX  # compatibility name; the contract itself lives in store.py
 
 
 def week_bounds(week=None, today=None):
@@ -46,8 +47,7 @@ def _delegation(ledger):
             continue
         model = (row.get("model") or "?").strip()
         by_model[model] = by_model.get(model, 0) + 1
-        found = re.search(r"flags:\s*(\d+)", note)  # lines from before the check have no flags: they count as 0
-        flagged += bool(found and int(found.group(1)) > 0)
+        flagged += model_call_flags(note) > 0
     by_model = dict(sorted(by_model.items(), key=lambda item: (-item[1], item[0])))
     return {"calls": sum(by_model.values()), "by_model": by_model, "flagged": flagged}
 
@@ -99,3 +99,4 @@ def render_markdown(n):
     lines += [f"- {proof}: {link}" for proof, link in n["proof_links"]] or ["- none this week"]
     lines += ["", "Items 3 to 8 of the weekly review are yours; these numbers come only from the logs."]
     return "\n".join(lines)
+

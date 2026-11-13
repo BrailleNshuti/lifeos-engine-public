@@ -1,8 +1,11 @@
-"""Privacy guard: stops class C data (IDs, bank and card numbers, keys, passwords) before it reaches a repo.
+"""High-confidence privacy scanner for IDs, financial identifiers, keys and assigned secrets.
 
 BLOCK findings fail the check (exit code 1); WARN findings are shown but pass.
 Lines containing 'lifeos-guard: allow' are skipped. Extra private patterns (your street, your phone number)
 live outside every repo in ~/.lifeos/private-patterns.txt, one regular expression per line.
+
+This is a backstop, not a complete data-classification system: natural-language
+medical, tenant or employer information still depends on the human policy.
 """
 import re
 import subprocess
@@ -69,7 +72,7 @@ def _decode(raw):
         return None if b"\0" in raw else raw.decode("latin-1")
 
 
-def _private_patterns():
+def private_patterns():
     if not PRIVATE_PATTERNS.exists():
         return []
     patterns = []
@@ -83,11 +86,11 @@ def _private_patterns():
     return patterns
 
 
-def scan_text(text, private=()):
+def scan_text(text, private=(), allow_mark=True):
     """Return findings as (line_number, severity, kind, masked_excerpt)."""
     findings = []
     for number, line in enumerate(text.splitlines(), 1):
-        if ALLOW_MARK in line:
+        if allow_mark and ALLOW_MARK in line:
             continue
         for kind, pattern in TOKEN_PATTERNS:
             for m in pattern.finditer(line):
@@ -105,7 +108,7 @@ def scan_text(text, private=()):
             for m in pattern.finditer(line):
                 findings.append((number, "BLOCK", "Private pattern", _mask(m.group(0))))
         for m in SECRET_ASSIGNMENT.finditer(line):
-            findings.append((number, "WARN", "Possible secret", _mask(m.group(0))))
+            findings.append((number, "BLOCK", "Assigned secret", _mask(m.group(0))))
         for m in EMAIL.finditer(line):
             findings.append((number, "WARN", "Email address", _mask(m.group(0))))
         for m in PHONE.finditer(line):
@@ -121,7 +124,7 @@ def staged_files():
 
 def scan_paths(paths, skipped=None):
     """Scan text files; return (path, findings) pairs for files with findings. Skipped names go into `skipped`."""
-    private = _private_patterns()
+    private = private_patterns()
     results = []
     for name in paths:
         path = Path(name)
@@ -145,7 +148,7 @@ def scan_paths(paths, skipped=None):
 
 def scan_staged(names, skipped=None):
     """Scan what is staged (the version a commit would carry), not the working file, which may differ."""
-    private = _private_patterns()
+    private = private_patterns()
     results = []
     for name in names:
         proc = subprocess.run(["git", "show", f":{name}"], capture_output=True)
@@ -159,3 +162,4 @@ def scan_staged(names, skipped=None):
         if findings:
             results.append((name, findings))
     return results
+

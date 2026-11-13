@@ -8,7 +8,7 @@ PRIORITY = ("rules.md", "TASK", "now.md", "me.md")
 TASK_FIRST = ("TASK", "rules.md", "now.md", "me.md")
 
 
-def _task_file(home, task_id):
+def task_file(home, task_id):
     if not re.fullmatch(r"T-[A-Za-z0-9-]+", task_id or ""):
         raise ValueError(f"'{task_id}' is not a task id (expected something like T-261116 or T-261116-demo-cli).")
     folder = Path(home) / "tasks"
@@ -24,6 +24,8 @@ def _task_file(home, task_id):
 
 def build_pack(home, task_id=None, budget=6000, task_first=False, names=None):
     """Return (pack_text, token_estimate). Files are added in priority order; the last ones are trimmed to fit."""
+    if isinstance(budget, bool) or not isinstance(budget, int) or not 1 <= budget <= 50000:
+        raise ValueError("Context budget must be an integer from 1 to 50000 tokens.")
     home = Path(home)
     files = []
     for name in (TASK_FIRST if task_first else PRIORITY):
@@ -31,7 +33,7 @@ def build_pack(home, task_id=None, budget=6000, task_first=False, names=None):
             continue
         if name == "TASK":
             if task_id:
-                path = _task_file(home, task_id)
+                path = task_file(home, task_id)
                 files.append((f"tasks/{path.name}", path.read_text(encoding="utf-8")))
         elif (home / name).exists():
             files.append((name, (home / name).read_text(encoding="utf-8")))
@@ -52,3 +54,4 @@ def build_pack(home, task_id=None, budget=6000, task_first=False, names=None):
         break
     pack = "\n".join(blocks)
     return pack, estimate_tokens(pack)
+

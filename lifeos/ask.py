@@ -11,12 +11,13 @@ import shutil
 import subprocess
 import tempfile
 import urllib.error
+import urllib.parse
 import urllib.request
-from pathlib import Path
 
 from .check import check_answer
-from .context import _task_file, build_pack
-from .guard import _private_patterns, scan_text
+from .context import task_file, build_pack
+from .guard import private_patterns, scan_text
+from .store import model_call_note, record_result
 
 TIMEOUT = 600
 MINIMAL = ("TASK", "rules.md")  # now.md and me.md only go out with --full
@@ -76,10 +77,19 @@ def _open_local(req, timeout):
     return urllib.request.build_opener(urllib.request.ProxyHandler({})).open(req, timeout=timeout)
 
 
-def _ollama(prompt, model, options=None):
+def ollama_host():
+    """Return the configured loopback Ollama URL, refusing remote hosts."""
     host = os.environ.get("OLLAMA_HOST", "http://localhost:11434")
     if "://" not in host:
         host = "http://" + host
+    name = urllib.parse.urlparse(host).hostname
+    if name not in ("localhost", "127.0.0.1", "::1"):
+        raise Blocked(f"OLLAMA_HOST points to '{name}'. local-model tasks may only use Ollama on this computer.")
+    return host.rstrip("/")
+
+
+def ollama_generate(prompt, model, options=None):
+    host = ollama_host()
     payload = {"model": model, "prompt": prompt, "stream": False}
     if options:
         payload["options"] = options
@@ -100,15 +110,15 @@ def _ollama(prompt, model, options=None):
 
 
 def ask_ollama(prompt):
-    return _ollama(prompt, os.environ.get("LIFEOS_OLLAMA_MODEL", "llama3.2"))
+    return ollama_generate(prompt, os.environ.get("LIFEOS_OLLAMA_MODEL", "llama3.2"))
 
 
 def ask_qwen(prompt):
     """Qwen through Ollama, local and private. Change the size with LIFEOS_QWEN_MODEL."""
-    return _ollama(prompt, _qwen_model())
+    return ollama_generate(prompt, qwen_model())
 
 
-def _qwen_model():
+def qwen_model():
     return os.environ.get("LIFEOS_QWEN_MODEL", "qwen2.5:3b")
 
 
@@ -117,36 +127,28 @@ def label(model):
     if model == "ollama":
         return "ollama:" + os.environ.get("LIFEOS_OLLAMA_MODEL", "llama3.2")
     if model == "qwen":
-        return "qwen:" + _qwen_model()
+        return "qwen:" + qwen_model()
     return model
 
 
 ADAPTERS = {"codex": ask_codex, "gemini": ask_gemini, "claude": ask_claude, "ollama": ask_ollama, "qwen": ask_qwen}
 
 
-def _check(text, where, action):
-    blocks = [f for f in scan_text(text, _private_patterns()) if f[1] == "BLOCK"]
+def check_text(text, where, action):
+    # The allow marker is for reviewed repository files. Untrusted prompts and
+    # model answers may not exempt themselves from the boundary check.
+    blocks = [f for f in scan_text(text, private_patterns(), allow_mark=False) if f[1] == "BLOCK"]
     if blocks:
         kinds = ", ".join(sorted({f[2] for f in blocks}))
-        raise Blocked(f"{len(blocks)} finding(s) of class C data in {where} ({kinds}). {action}")
-
-
-def _record(home, path, model, text, today, note="asked via lifeos ask"):
-    with open(path, "a", encoding="utf-8") as f:
-        f.write(f"\n## Result · {model} · {today:%Y-%m-%d}\n{text}\n")
-    ledger = Path(home) / "logs" / "ledger.csv"
-    if ledger.exists():
-        glue = "" if ledger.read_bytes()[-1:] in (b"", b"\n") else "\n"  # a hand-edited file may lack its last newline
-        with open(ledger, "a", encoding="utf-8") as f:
-            f.write(f"{glue}{today:%Y-%m-%d},{path.stem},{model},,{note.replace(',', ' ')}\n")  # plain CSV: no commas in a note
+        raise Blocked(f"{len(blocks)} high-confidence sensitive finding(s) in {where} ({kinds}). {action}")
 
 
 def write_result(home, task_id, who, text, today=None, note="written via lifeos mcp"):
     """Append a result written by someone else (a chat, a person) to a task file. The guard checks it first."""
     who = " ".join(str(who).replace(",", " ").split())  # one line, no commas: a name can never add a ledger row or a heading
-    _check(text, "the result", "Nothing was written to your files.")
-    path = _task_file(home, task_id)
-    _record(home, path, who, text, today or dt.date.today(), note)
+    check_text(text, "the result", "Nothing was written to your files.")
+    path = task_file(home, task_id)
+    record_result(home, path, who, text, today or dt.date.today(), note)
     return path
 
 
@@ -156,12 +158,14 @@ def run_ask(home, model, task_id, budget=6000, dry_run=False, adapters=None, tod
     if model not in adapters:
         raise ValueError(f"Unknown model '{model}'. Choose one of: {', '.join(sorted(adapters))}.")
     pack, tokens = build_pack(home, task_id, budget, task_first=True, names=None if full else MINIMAL)
-    _check(pack, "the context pack", "Nothing was sent.")
+    check_text(pack, "the context pack", "Nothing was sent.")
     if dry_run:
         return pack, tokens
-    path = _task_file(home, task_id)
+    path = task_file(home, task_id)
     text = adapters[model](f"{INSTRUCTION}\n\n{pack}")
-    _check(text, "the answer", "Nothing was written to your files.")
-    note = f"asked via lifeos ask; flags: {len(check_answer(text))}"  # the count only: never the answer or the flag texts
-    _record(home, path, label(model), text, today or dt.date.today(), note)
+    check_text(text, "the answer", "Nothing was written to your files.")
+    note = model_call_note(len(check_answer(text)))  # the count only: never the answer or the flag texts
+    record_result(home, path, label(model), text, today or dt.date.today(), note)
     return path
+
+
