@@ -23,7 +23,7 @@ from .context import build_pack, build_review_pack, inspect_repo_commit, pack_ha
 from .guard import TOKEN_PATTERNS, SECRET_ASSIGNMENT, private_patterns, scan_text
 from .store import (
     RUN_SCHEMA_VERSION, append_run_record, get_run_record, has_run_id,
-    model_call_note, new_run_id, record_result, utc_now_iso,
+    model_call_note, new_run_id, record_result, run_lock, utc_now_iso,
 )
 
 TIMEOUT = 600
@@ -354,6 +354,51 @@ def _reconstruct_persisted_error(home, rec):
     return AskError(msg)
 
 
+def _verify_ask_identity(rec, task_stem, expected_model):
+    """Ensure a reused run_id matches the original ask command, task_id, and model."""
+    if (
+        rec.get("command") != "ask"
+        or rec.get("task_id") != task_stem
+        or rec.get("model") != expected_model
+    ):
+        raise ValueError(
+            f"run_id '{rec.get('run_id')}' already belongs to a different operation "
+            f"({rec.get('command')}:{rec.get('task_id')}:{rec.get('model')})."
+        )
+
+
+def _verify_review_identity(rec, task_stem, expected_model, repo, commit):
+    """Ensure a reused run_id matches the original review_group command, task_id, reviewers, repo, and commit."""
+    if (
+        rec.get("command") != "review_group"
+        or rec.get("task_id") != task_stem
+        or rec.get("model") != expected_model
+    ):
+        raise ValueError(
+            f"run_id '{rec.get('run_id')}' already belongs to a different operation "
+            f"({rec.get('command')}:{rec.get('task_id')}:{rec.get('model')})."
+        )
+    rec_repo = rec.get("repo")
+    if bool(repo) != bool(rec_repo):
+        raise ValueError(f"run_id '{rec.get('run_id')}' already belongs to a different repository setting.")
+    if repo:
+        if Path(repo).resolve() != Path(rec_repo).resolve():
+            raise ValueError(f"run_id '{rec.get('run_id')}' already belongs to repository '{rec_repo}'.")
+        rec_sha = str(rec.get("commit_sha") or "")
+        req_commit = str(rec.get("requested_commit") or "HEAD")
+        repo_path = Path(repo)
+        if repo_path.is_dir() and (repo_path / ".git").exists():
+            try:
+                cur_sha = inspect_repo_commit(repo, commit)["commit_sha"]
+            except Exception as err:
+                raise ValueError(f"run_id '{rec.get('run_id')}' commit mismatch: {err}") from err
+            if rec_sha and cur_sha != rec_sha:
+                raise ValueError(f"run_id '{rec.get('run_id')}' already belongs to commit '{rec_sha}'.")
+        else:
+            if commit != req_commit and not (commit and rec_sha.startswith(str(commit))):
+                raise ValueError(f"run_id '{rec.get('run_id')}' already belongs to commit '{rec_sha}'.")
+
+
 def run_ask(home, model, task_id, budget=6000, dry_run=False, adapters=None, today=None, full=False,
             parent_run_id=None, run_id=None):
     """Return the task path after writing the answer, or (pack, tokens) for a dry run."""
@@ -363,78 +408,90 @@ def run_ask(home, model, task_id, budget=6000, dry_run=False, adapters=None, tod
     path = task_file(home, task_id)
     day = today or dt.date.today()
     rid = run_id or new_run_id(day)
-    if not dry_run:
-        existing = get_run_record(home, rid, normalize=True)
-        if existing is not None:
-            if existing.get("status") == "ok":
-                return path
-            raise _reconstruct_persisted_error(home, existing)
+    expected_model = label(model)
 
-    started_iso = utc_now_iso()
-    pack, tokens = build_pack(home, task_id, budget, task_first=True, names=None if full else MINIMAL)
-    digest = pack_hash(pack)
-    locality = PROVIDERS.get(model, {}).get("locality", "remote")
-    base_rec = {
-        "schema_version": RUN_SCHEMA_VERSION, "run_id": rid, "parent_run_id": parent_run_id,
-        "date": day.isoformat(), "started_at": started_iso, "command": "ask",
-        "task_id": path.stem, "model": label(model), "locality": locality,
-        "context_sha256": digest, "tokens": tokens, "terminal": True,
-    }
-    try:
-        check_text(pack, "the context pack", "Nothing was sent.")
-    except Blocked as err:
+    with run_lock(home if not dry_run else None, rid):
         if not dry_run:
+            existing = get_run_record(home, rid, normalize=True)
+            if existing is not None:
+                _verify_ask_identity(existing, path.stem, expected_model)
+                if existing.get("status") == "ok":
+                    return path
+                raise _reconstruct_persisted_error(home, existing)
+
+        started_iso = utc_now_iso()
+        pack, tokens = build_pack(home, task_id, budget, task_first=True, names=None if full else MINIMAL)
+        digest = pack_hash(pack)
+        locality = PROVIDERS.get(model, {}).get("locality", "remote")
+        base_rec = {
+            "schema_version": RUN_SCHEMA_VERSION, "run_id": rid, "parent_run_id": parent_run_id,
+            "date": day.isoformat(), "started_at": started_iso, "command": "ask",
+            "task_id": path.stem, "model": expected_model, "locality": locality,
+            "context_sha256": digest, "tokens": tokens, "terminal": True,
+        }
+        try:
+            check_text(pack, "the context pack", "Nothing was sent.")
+        except Blocked as err:
+            if not dry_run:
+                append_run_record(home, {
+                    **base_rec, "finished_at": utc_now_iso(), "duration_ms": 0, "status": "blocked",
+                    "phase": "outbound_context", "flags": 0, "error": redact_error(err),
+                })
+            raise
+        if dry_run:
+            return pack, tokens
+
+        started = time.monotonic()
+        try:
+            text = adapters[model](f"{INSTRUCTION}\n\n{pack}")
+        except Blocked as err:
+            elapsed_ms = int((time.monotonic() - started) * 1000)
             append_run_record(home, {
-                **base_rec, "finished_at": utc_now_iso(), "duration_ms": 0, "status": "blocked",
-                "phase": "outbound_context", "flags": 0, "error": redact_error(err),
+                **base_rec, "finished_at": utc_now_iso(), "duration_ms": elapsed_ms, "status": "blocked",
+                "phase": "provider_guard", "flags": 0, "error": redact_error(err),
             })
-        raise
-    if dry_run:
-        return pack, tokens
-
-    started = time.monotonic()
-    try:
-        text = adapters[model](f"{INSTRUCTION}\n\n{pack}")
-    except Blocked as err:
+            raise
+        except ToolMissing as err:
+            elapsed_ms = int((time.monotonic() - started) * 1000)
+            append_run_record(home, {
+                **base_rec, "finished_at": utc_now_iso(), "duration_ms": elapsed_ms, "status": "tool_missing",
+                "flags": 0, "error": redact_error(err),
+            })
+            raise
+        except AskError as err:
+            elapsed_ms = int((time.monotonic() - started) * 1000)
+            append_run_record(home, {
+                **base_rec, "finished_at": utc_now_iso(), "duration_ms": elapsed_ms, "status": _classify_ask_error(err),
+                "flags": 0, "error": redact_error(err),
+            })
+            raise
+        except Exception as err:
+            elapsed_ms = int((time.monotonic() - started) * 1000)
+            redacted = redact_error(err)
+            append_run_record(home, {
+                **base_rec, "finished_at": utc_now_iso(), "duration_ms": elapsed_ms, "status": "failed",
+                "flags": 0, "error": redacted,
+            })
+            raise AskError(f"{model} failed: {redacted}") from err
         elapsed_ms = int((time.monotonic() - started) * 1000)
-        append_run_record(home, {
-            **base_rec, "finished_at": utc_now_iso(), "duration_ms": elapsed_ms, "status": "blocked",
-            "phase": "provider_guard", "flags": 0, "error": redact_error(err),
-        })
-        raise
-    except ToolMissing as err:
-        elapsed_ms = int((time.monotonic() - started) * 1000)
-        append_run_record(home, {
-            **base_rec, "finished_at": utc_now_iso(), "duration_ms": elapsed_ms, "status": "tool_missing",
-            "flags": 0, "error": redact_error(err),
-        })
-        raise
-    except AskError as err:
-        elapsed_ms = int((time.monotonic() - started) * 1000)
-        append_run_record(home, {
-            **base_rec, "finished_at": utc_now_iso(), "duration_ms": elapsed_ms, "status": _classify_ask_error(err),
-            "flags": 0, "error": redact_error(err),
-        })
-        raise
-    elapsed_ms = int((time.monotonic() - started) * 1000)
 
-    try:
-        check_text(text, "the answer", "Nothing was written to your files.")
-    except Blocked as err:
-        append_run_record(home, {
-            **base_rec, "finished_at": utc_now_iso(), "duration_ms": elapsed_ms, "status": "blocked",
-            "phase": "inbound_answer", "flags": 0, "error": redact_error(err),
-        })
-        raise
+        try:
+            check_text(text, "the answer", "Nothing was written to your files.")
+        except Blocked as err:
+            append_run_record(home, {
+                **base_rec, "finished_at": utc_now_iso(), "duration_ms": elapsed_ms, "status": "blocked",
+                "phase": "inbound_answer", "flags": 0, "error": redact_error(err),
+            })
+            raise
 
-    flags = check_answer(text)
-    note = model_call_note(len(flags))  # the count only: never the answer or the flag texts
-    run_rec = {
-        **base_rec, "finished_at": utc_now_iso(), "duration_ms": elapsed_ms,
-        "status": "ok", "flags": len(flags),
-    }
-    record_result(home, path, label(model), text, day, note, run_id=rid, run_record=run_rec)
-    return path
+        flags = check_answer(text)
+        note = model_call_note(len(flags))  # the count only: never the answer or the flag texts
+        run_rec = {
+            **base_rec, "finished_at": utc_now_iso(), "duration_ms": elapsed_ms,
+            "status": "ok", "flags": len(flags),
+        }
+        record_result(home, path, expected_model, text, day, note, run_id=rid, run_record=run_rec)
+        return path
 
 
 def run_review(home, task_id, reviewers=("codex", "claude"), budget=6000, dry_run=False, adapters=None,
@@ -451,140 +508,180 @@ def run_review(home, task_id, reviewers=("codex", "claude"), budget=6000, dry_ru
     path = task_file(home, task_id)
     day = today or dt.date.today()
     group_id = run_id or new_run_id(day)
-    group_started_iso = utc_now_iso()
-    repo_info = inspect_repo_commit(repo, commit) if repo else None
-    pack, tokens = build_review_pack(home, task_id, budget, diff_text=diff_text, repo_info=repo_info)
-    digest = pack_hash(pack)
-    commit_sha = repo_info["commit_sha"] if repo_info else None
-    repo_label = str(repo_info["repo"]) if repo_info else None
+    expected_model = ",".join(f"review:{label(r)}" for r in cleaned)
 
-    if not dry_run:
-        existing_group = get_run_record(home, group_id, normalize=True)
-        if existing_group is not None:
-            if existing_group.get("status") == "ok":
-                return {
-                    "pack": pack, "tokens": tokens, "sha256": digest, "reviewers": cleaned, "path": path,
-                    "group_run_id": group_id, "commit_sha": commit_sha, "results": [],
-                }
-            raise _reconstruct_persisted_error(home, existing_group)
-
-    try:
-        check_text(pack, "the review pack", "Nothing was sent.")
-    except Blocked as err:
+    with run_lock(home if not dry_run else None, group_id):
+        # Check persisted parent BEFORE inspecting the repository so retries replay even if the repo was later deleted
         if not dry_run:
-            append_run_record(home, {
-                "schema_version": RUN_SCHEMA_VERSION, "run_id": group_id, "parent_run_id": None,
-                "date": day.isoformat(), "started_at": group_started_iso, "finished_at": utc_now_iso(),
-                "command": "review_group", "task_id": path.stem,
-                "model": ",".join(f"review:{label(r)}" for r in cleaned),
-                "locality": "mixed", "context_sha256": digest, "tokens": tokens, "duration_ms": 0,
-                "status": "blocked", "terminal": True, "phase": "outbound_context", "flags": 0,
-                "child_run_ids": [], "commit_sha": commit_sha, "repo": repo_label, "error": redact_error(err),
-            })
-        raise
+            existing_group = get_run_record(home, group_id, normalize=True)
+            if existing_group is not None:
+                _verify_review_identity(existing_group, path.stem, expected_model, repo, commit)
+                if existing_group.get("status") == "ok":
+                    return {
+                        "pack": "", "tokens": int(existing_group.get("tokens", 0)),
+                        "sha256": existing_group.get("context_sha256", ""), "reviewers": cleaned, "path": path,
+                        "group_run_id": group_id, "commit_sha": existing_group.get("commit_sha"), "results": [],
+                    }
+                raise _reconstruct_persisted_error(home, existing_group)
 
-    if dry_run:
-        return {
-            "pack": pack, "tokens": tokens, "sha256": digest, "reviewers": cleaned, "path": path,
-            "commit_sha": commit_sha, "results": [],
-        }
+        group_started_iso = utc_now_iso()
+        try:
+            repo_info = inspect_repo_commit(repo, commit) if repo else None
+        except Exception as err:
+            if not dry_run:
+                redacted = redact_error(err)
+                append_run_record(home, {
+                    "schema_version": RUN_SCHEMA_VERSION, "run_id": group_id, "parent_run_id": None,
+                    "date": day.isoformat(), "started_at": group_started_iso, "finished_at": utc_now_iso(),
+                    "command": "review_group", "task_id": path.stem, "model": expected_model,
+                    "locality": "mixed", "context_sha256": pack_hash(""), "tokens": 0, "duration_ms": 0,
+                    "status": "failed", "terminal": True, "flags": 0, "child_run_ids": [],
+                    "commit_sha": None, "requested_commit": commit if repo else None,
+                    "repo": str(Path(repo).resolve()) if repo else None, "error": redacted,
+                })
+                raise AskError(redacted) from err
+            raise
 
-    results = []
-    child_ids = []
-    group_started = time.monotonic()
-    first_err = None
+        pack, tokens = build_review_pack(home, task_id, budget, diff_text=diff_text, repo_info=repo_info)
+        digest = pack_hash(pack)
+        commit_sha = repo_info["commit_sha"] if repo_info else None
+        repo_label = str(repo_info["repo"]) if repo_info else None
 
-    for idx, r in enumerate(cleaned, 1):
-        child_id = f"{group_id}-c{idx}" if run_id else new_run_id(day)
-        child_ids.append(child_id)
-        who = f"review:{label(r)}"
-        if run_id:
-            existing_child = get_run_record(home, child_id, normalize=True)
-            if existing_child is not None:
-                if existing_child.get("status") == "ok":
-                    flag_count = int(existing_child.get("flags", 0))
-                    results.append({
-                        "model": r, "label": who, "run_id": child_id,
-                        "text": "", "flags": ["persisted_flag"] * flag_count,
-                    })
-                elif first_err is None:
-                    first_err = _reconstruct_persisted_error(home, existing_child)
+        try:
+            check_text(pack, "the review pack", "Nothing was sent.")
+        except Blocked as err:
+            if not dry_run:
+                append_run_record(home, {
+                    "schema_version": RUN_SCHEMA_VERSION, "run_id": group_id, "parent_run_id": None,
+                    "date": day.isoformat(), "started_at": group_started_iso, "finished_at": utc_now_iso(),
+                    "command": "review_group", "task_id": path.stem, "model": expected_model,
+                    "locality": "mixed", "context_sha256": digest, "tokens": tokens, "duration_ms": 0,
+                    "status": "blocked", "terminal": True, "phase": "outbound_context", "flags": 0,
+                    "child_run_ids": [], "commit_sha": commit_sha, "requested_commit": commit if repo else None,
+                    "repo": repo_label, "error": redact_error(err),
+                })
+            raise
+
+        if dry_run:
+            return {
+                "pack": pack, "tokens": tokens, "sha256": digest, "reviewers": cleaned, "path": path,
+                "commit_sha": commit_sha, "results": [],
+            }
+
+        results = []
+        child_ids = []
+        group_started = time.monotonic()
+        first_err = None
+
+        for idx, r in enumerate(cleaned, 1):
+            child_id = f"{group_id}-c{idx}" if run_id else new_run_id(day)
+            child_ids.append(child_id)
+            who = f"review:{label(r)}"
+            if run_id:
+                existing_child = get_run_record(home, child_id, normalize=True)
+                if existing_child is not None:
+                    if (
+                        existing_child.get("command") != "review"
+                        or existing_child.get("task_id") != path.stem
+                        or existing_child.get("model") != who
+                    ):
+                        raise ValueError(
+                            f"child run_id '{child_id}' already belongs to a different operation."
+                        )
+                    if existing_child.get("status") == "ok":
+                        flag_count = int(existing_child.get("flags", 0))
+                        results.append({
+                            "model": r, "label": who, "run_id": child_id,
+                            "text": "", "flags": ["persisted_flag"] * flag_count,
+                        })
+                    elif first_err is None:
+                        first_err = _reconstruct_persisted_error(home, existing_child)
+                    continue
+
+            locality = PROVIDERS.get(r, {}).get("locality", "remote")
+            child_started_iso = utc_now_iso()
+            base_child = {
+                "schema_version": RUN_SCHEMA_VERSION, "run_id": child_id, "parent_run_id": group_id,
+                "date": day.isoformat(), "started_at": child_started_iso, "command": "review",
+                "task_id": path.stem, "model": who, "locality": locality, "context_sha256": digest,
+                "tokens": tokens, "commit_sha": commit_sha, "repo": repo_label, "terminal": True,
+            }
+            started = time.monotonic()
+            phase = None
+            try:
+                try:
+                    with _isolated_git_worktree(repo_info):
+                        text = adapters[r](f"{REVIEW_INSTRUCTION}\n\n{pack}")
+                except Blocked:
+                    phase = "provider_guard"
+                    raise
+                elapsed_ms = int((time.monotonic() - started) * 1000)
+                try:
+                    check_text(text, f"the review from {r}", "Nothing was written to your files.")
+                except Blocked:
+                    phase = "inbound_answer"
+                    raise
+            except (ToolMissing, AskError, Blocked) as err:
+                elapsed_ms = int((time.monotonic() - started) * 1000)
+                if isinstance(err, ToolMissing):
+                    st = "tool_missing"
+                elif isinstance(err, Blocked):
+                    st = "blocked"
+                else:
+                    st = _classify_ask_error(err)
+                fail_child = {
+                    **base_child, "finished_at": utc_now_iso(), "duration_ms": elapsed_ms, "status": st,
+                    "flags": 0, "error": redact_error(err),
+                }
+                if phase:
+                    fail_child["phase"] = phase
+                append_run_record(home, fail_child)
+                if first_err is None:
+                    first_err = err
+                continue
+            except Exception as err:
+                elapsed_ms = int((time.monotonic() - started) * 1000)
+                redacted = redact_error(err)
+                append_run_record(home, {
+                    **base_child, "finished_at": utc_now_iso(), "duration_ms": elapsed_ms, "status": "failed",
+                    "flags": 0, "error": redacted,
+                })
+                if first_err is None:
+                    first_err = AskError(f"{r} failed: {redacted}")
                 continue
 
-        locality = PROVIDERS.get(r, {}).get("locality", "remote")
-        child_started_iso = utc_now_iso()
-        base_child = {
-            "schema_version": RUN_SCHEMA_VERSION, "run_id": child_id, "parent_run_id": group_id,
-            "date": day.isoformat(), "started_at": child_started_iso, "command": "review",
-            "task_id": path.stem, "model": who, "locality": locality, "context_sha256": digest,
-            "tokens": tokens, "commit_sha": commit_sha, "repo": repo_label, "terminal": True,
-        }
-        started = time.monotonic()
-        phase = None
-        try:
-            try:
-                with _isolated_git_worktree(repo_info):
-                    text = adapters[r](f"{REVIEW_INSTRUCTION}\n\n{pack}")
-            except Blocked:
-                phase = "provider_guard"
-                raise
-            elapsed_ms = int((time.monotonic() - started) * 1000)
-            try:
-                check_text(text, f"the review from {r}", "Nothing was written to your files.")
-            except Blocked:
-                phase = "inbound_answer"
-                raise
-        except (ToolMissing, AskError, Blocked) as err:
-            elapsed_ms = int((time.monotonic() - started) * 1000)
-            if isinstance(err, ToolMissing):
-                st = "tool_missing"
-            elif isinstance(err, Blocked):
-                st = "blocked"
-            else:
-                st = _classify_ask_error(err)
-            fail_child = {
-                **base_child, "finished_at": utc_now_iso(), "duration_ms": elapsed_ms, "status": st,
-                "flags": 0, "error": redact_error(err),
+            flags = check_answer(text)
+            child_rec = {
+                **base_child, "finished_at": utc_now_iso(), "duration_ms": elapsed_ms,
+                "status": "ok", "flags": len(flags),
             }
-            if phase:
-                fail_child["phase"] = phase
-            append_run_record(home, fail_child)
-            if first_err is None:
-                first_err = err
-            continue
+            record_result(home, path, who, text, day, model_call_note(len(flags)), run_id=child_id, run_record=child_rec)
+            results.append({"model": r, "label": who, "run_id": child_id, "text": text, "flags": flags})
 
-        flags = check_answer(text)
-        child_rec = {
-            **base_child, "finished_at": utc_now_iso(), "duration_ms": elapsed_ms,
-            "status": "ok", "flags": len(flags),
+        group_elapsed = int((time.monotonic() - group_started) * 1000)
+        if first_err is None:
+            group_status = "ok"
+        elif results:
+            group_status = "partial"
+        else:
+            group_status = "failed"
+
+        parent_rec = {
+            "schema_version": RUN_SCHEMA_VERSION, "run_id": group_id, "parent_run_id": None,
+            "date": day.isoformat(), "started_at": group_started_iso, "finished_at": utc_now_iso(),
+            "command": "review_group", "task_id": path.stem, "model": expected_model,
+            "locality": "mixed", "context_sha256": digest, "tokens": tokens, "duration_ms": group_elapsed,
+            "status": group_status, "terminal": True, "flags": sum(len(r["flags"]) for r in results),
+            "child_run_ids": child_ids, "commit_sha": commit_sha,
+            "requested_commit": commit if repo else None, "repo": repo_label,
         }
-        record_result(home, path, who, text, day, model_call_note(len(flags)), run_id=child_id, run_record=child_rec)
-        results.append({"model": r, "label": who, "run_id": child_id, "text": text, "flags": flags})
+        if first_err is not None:
+            parent_rec["error"] = redact_error(first_err)
+        append_run_record(home, parent_rec)
+        if first_err is not None:
+            raise first_err
 
-    group_elapsed = int((time.monotonic() - group_started) * 1000)
-    if first_err is None:
-        group_status = "ok"
-    elif results:
-        group_status = "partial"
-    else:
-        group_status = "failed"
-
-    parent_rec = {
-        "schema_version": RUN_SCHEMA_VERSION, "run_id": group_id, "parent_run_id": None,
-        "date": day.isoformat(), "started_at": group_started_iso, "finished_at": utc_now_iso(),
-        "command": "review_group", "task_id": path.stem,
-        "model": ",".join(f"review:{label(r)}" for r in cleaned),
-        "locality": "mixed", "context_sha256": digest, "tokens": tokens, "duration_ms": group_elapsed,
-        "status": group_status, "terminal": True, "flags": sum(len(r["flags"]) for r in results),
-        "child_run_ids": child_ids, "commit_sha": commit_sha, "repo": repo_label,
-    }
-    if first_err is not None:
-        parent_rec["error"] = redact_error(first_err)
-    append_run_record(home, parent_rec)
-    if first_err is not None:
-        raise first_err
-
-    return {
-        "pack": pack, "tokens": tokens, "sha256": digest, "reviewers": cleaned, "path": path,
-        "group_run_id": group_id, "commit_sha": commit_sha, "results": results,
-    }
+        return {
+            "pack": pack, "tokens": tokens, "sha256": digest, "reviewers": cleaned, "path": path,
+            "group_run_id": group_id, "commit_sha": commit_sha, "results": results,
+        }
