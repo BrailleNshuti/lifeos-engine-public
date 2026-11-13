@@ -197,6 +197,18 @@ def test_transactional_journal_recovers_partial_crash_and_rejects_unsafe_paths(h
         store.atomic_write_bytes(chunk_target, b"fail")
     monkeypatch.setattr(store.os, "write", real_write)
 
+    # Parent-directory fsync ordering: _fsync_parent_dir is called after every atomic_write_bytes replace
+    # and after journal unlink in commit_transaction
+    fsynced_dirs = []
+    monkeypatch.setattr(store, "_fsync_parent_dir", lambda p: fsynced_dirs.append(store.Path(p).name))
+    store.commit_transaction(home, [
+        (task_path, task_path.read_bytes()),
+        (ledger_path, ledger_path.read_bytes()),
+    ])
+    assert ".store.journal.json" in fsynced_dirs
+    assert task_path.name in fsynced_dirs
+    assert ledger_path.name in fsynced_dirs
+
 
 def test_lock_exclusivity_live_pid_protection_and_token_checked_release(home, monkeypatch):
     import sys
@@ -228,11 +240,45 @@ def test_lock_exclusivity_live_pid_protection_and_token_checked_release(home, mo
     assert not b_stolen
     release_a.set()
     t_a.join()
-    assert not lock_path.exists()
+    # Persistent lockfile is retained on disk so POSIX advisory locks never split across two inodes
+    assert lock_path.exists()
+    first_ino = lock_path.stat().st_ino
 
-    # 2. Multiprocess dead-owner & two-contender recovery: a child process locks .store.lock and dies via os._exit(0);
-    #    the OS immediately releases the advisory lock, and two contending subprocesses serialize cleanly without race
+    # 2. Three-party handoff: Owner 1 releases, Process 2 acquires and holds the same persistent inode,
+    #    and Contender 3 times out trying to enter while Process 2 holds it
     repo_root = str(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+    ready_file = home / "logs" / "p2_ready.flag"
+    release_file = home / "logs" / "p2_release.flag"
+    p2_code = (
+        f"import pathlib, sys, time; sys.path.insert(0, {repo_root!r}); "
+        f"from lifeos import store; "
+        f"ready = pathlib.Path({str(ready_file)!r}); rel = pathlib.Path({str(release_file)!r}); "
+        f"ctx = store.store_lock({str(home)!r}, timeout=2.0); ctx.__enter__(); "
+        f"ready.write_text('1'); "
+        f"deadline = time.time() + 3.0\n"
+        f"while not rel.exists() and time.time() < deadline:\n"
+        f"    time.sleep(0.01)\n"
+        f"ctx.__exit__(None, None, None)"
+    )
+    p2 = subprocess.Popen([sys.executable, "-c", p2_code])
+    try:
+        deadline = time.time() + 3.0
+        while not ready_file.exists() and time.time() < deadline:
+            time.sleep(0.01)
+        assert ready_file.exists()
+        assert lock_path.stat().st_ino == first_ino
+        with pytest.raises(TimeoutError):
+            with store.store_lock(home, timeout=0.08):
+                b_stolen.append(True)
+        assert not b_stolen
+    finally:
+        release_file.write_text("1", encoding="ascii")
+        assert p2.wait(timeout=5.0) == 0
+        ready_file.unlink(missing_ok=True)
+        release_file.unlink(missing_ok=True)
+
+    # 3. Multiprocess dead-owner & two-contender recovery: a child process locks .store.lock and dies via os._exit(0);
+    #    the OS immediately releases the advisory lock, and two contending subprocesses serialize cleanly without race
     crash_code = (
         f"import os, sys; sys.path.insert(0, {repo_root!r}); "
         f"from lifeos import store; "
@@ -247,9 +293,9 @@ def test_lock_exclusivity_live_pid_protection_and_token_checked_release(home, mo
         f"store.append_run_record({str(home)!r}, {{'run_id': rid, 'date': '2026-11-20', 'command': 'ask', 'status': 'ok'}})"
     )
     p1 = subprocess.Popen([sys.executable, "-c", contend_code, "R-261120-mp0001"])
-    p2 = subprocess.Popen([sys.executable, "-c", contend_code, "R-261120-mp0002"])
+    p2_mp = subprocess.Popen([sys.executable, "-c", contend_code, "R-261120-mp0002"])
     assert p1.wait(timeout=5.0) == 0
-    assert p2.wait(timeout=5.0) == 0
+    assert p2_mp.wait(timeout=5.0) == 0
     mp_ids = {r["run_id"] for r in _read_runs(home)}
     assert {"R-261120-mp0001", "R-261120-mp0002"}.issubset(mp_ids)
 
@@ -372,6 +418,41 @@ def test_blocked_failed_timeout_tool_missing_partial_and_full_fail_runs_recorded
     assert by_id["R-261120-blka0001"]["status"] == "blocked" and by_id["R-261120-blka0001"]["phase"] == "inbound_answer"
     assert by_id["R-261120-partgrp1"]["command"] == "review_group" and by_id["R-261120-partgrp1"]["status"] == "partial"
     assert by_id["R-261120-failgrp1"]["command"] == "review_group" and by_id["R-261120-failgrp1"]["status"] == "failed"
+
+    # 7. Retrying any persisted failed/blocked/timeout/tool_missing/partial run_id replays the failure
+    #    (both Python API and CLI exit codes 1/2/3) without calling the adapter again or adding run records
+    run_count_before = len(_read_runs(home))
+    retry_calls = []
+
+    def never_called_adapter(prompt):
+        retry_calls.append(prompt)
+        return CLEAN
+
+    for blkid in ("R-261120-blko0001", "R-261120-blkp0001", "R-261120-blka0001"):
+        with pytest.raises(ask.Blocked):
+            ask.run_ask(home, "fake", "T-261116", adapters={"fake": never_called_adapter}, today=TODAY, run_id=blkid)
+        assert cli.main(["--home", str(home), "ask", "codex", "T-261116", "--run-id", blkid]) == 1
+
+    with pytest.raises(ask.ToolMissing):
+        ask.run_ask(home, "fake", "T-261116", adapters={"fake": never_called_adapter}, today=TODAY, run_id="R-261120-miss0001")
+    assert cli.main(["--home", str(home), "ask", "codex", "T-261116", "--run-id", "R-261120-miss0001"]) == 2
+
+    for errid in ("R-261120-time0001", "R-261120-fail0001"):
+        with pytest.raises(ask.AskError):
+            ask.run_ask(home, "fake", "T-261116", adapters={"fake": never_called_adapter}, today=TODAY, run_id=errid)
+        assert cli.main(["--home", str(home), "ask", "codex", "T-261116", "--run-id", errid]) == 3
+
+    with pytest.raises(ask.Blocked):
+        ask.run_review(home, "T-261116", reviewers=("fake",), adapters={"fake": never_called_adapter}, today=TODAY, run_id="R-261120-blkr0001")
+    assert cli.main(["--home", str(home), "review", "T-261116", "--reviewers", "codex", "--run-id", "R-261120-blkr0001"]) == 1
+
+    for grpid in ("R-261120-partgrp1", "R-261120-failgrp1"):
+        with pytest.raises(ask.AskError):
+            ask.run_review(home, "T-261116", reviewers=("fake",), adapters={"fake": never_called_adapter}, today=TODAY, run_id=grpid)
+        assert cli.main(["--home", str(home), "review", "T-261116", "--reviewers", "codex", "--run-id", grpid]) == 3
+
+    assert not retry_calls
+    assert len(_read_runs(home)) == run_count_before
 
 
 def test_full_64_char_sha256_and_per_reviewer_isolated_worktree_review(home, tmp_path):

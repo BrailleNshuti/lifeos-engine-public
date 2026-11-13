@@ -57,8 +57,24 @@ def _write_all(fd, data):
         total += written
 
 
+def _fsync_parent_dir(path):
+    """Fsync the parent directory on POSIX so rename/unlink directory entries survive sudden power loss.
+    On Windows, os.open on a directory raises PermissionError/OSError; NTFS metadata journaling orders renames."""
+    if os.name == "nt":
+        return
+    parent = Path(path).resolve().parent
+    try:
+        dfd = os.open(str(parent), os.O_RDONLY)
+        try:
+            os.fsync(dfd)
+        finally:
+            os.close(dfd)
+    except OSError:
+        pass
+
+
 def atomic_write_bytes(path, data):
-    """Write bytes to a sibling temp file via _write_all, fsync to disk, and atomically replace the target."""
+    """Write bytes to a sibling temp file via _write_all, fsync file, atomically replace target, and fsync parent dir."""
     path = Path(path)
     tmp = path.with_name(f".{path.name}.{os.getpid()}.{uuid.uuid4().hex[:6]}.tmp")
     flags = os.O_CREAT | os.O_EXCL | os.O_WRONLY | getattr(os, "O_BINARY", 0)
@@ -70,6 +86,7 @@ def atomic_write_bytes(path, data):
         finally:
             os.close(fd)
         os.replace(tmp, path)
+        _fsync_parent_dir(path)
     finally:
         if tmp.exists():
             tmp.unlink(missing_ok=True)
@@ -192,13 +209,11 @@ def store_lock(home, timeout=10.0):
         finally:
             held.pop(lock_path, None)
     finally:
+        # Never unlink .store.lock: keeping a single persistent inode prevents two processes on POSIX from
+        # locking old and new inodes concurrently during lock handoff.
         if fd is not None:
             _os_unlock(fd)
             os.close(fd)
-            try:
-                lock_path.unlink(missing_ok=True)
-            except OSError:
-                pass
         tlock.release()
 
 
@@ -232,9 +247,11 @@ def _quarantine_journal(jpath):
     corrupt_path = jpath.with_name(f".store.journal.corrupt.{os.getpid()}.{uuid.uuid4().hex[:6]}.json")
     try:
         os.replace(jpath, corrupt_path)
+        _fsync_parent_dir(jpath)
         return corrupt_path
     except OSError:
         jpath.unlink(missing_ok=True)
+        _fsync_parent_dir(jpath)
         return None
 
 
@@ -259,6 +276,7 @@ def recover_journal(home):
     for target, data in validated:
         atomic_write_bytes(target, data)
     jpath.unlink(missing_ok=True)
+    _fsync_parent_dir(jpath)
     return True
 
 
@@ -276,6 +294,7 @@ def commit_transaction(home, operations):
         atomic_write_bytes(Path(target), data)
     if jpath is not None and jpath.exists():
         jpath.unlink(missing_ok=True)
+        _fsync_parent_dir(jpath)
 
 
 def new_run_id(today=None):

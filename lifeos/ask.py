@@ -338,6 +338,22 @@ def write_result(home, task_id, who, text, today=None, note="written via lifeos 
     return path
 
 
+def _reconstruct_persisted_error(home, rec):
+    """Re-raise the terminal exception corresponding to a persisted non-ok run record."""
+    status = rec.get("status")
+    msg = rec.get("error") or f"persisted run {rec.get('run_id')} terminated with status {status}"
+    if status == "tool_missing":
+        return ToolMissing(msg)
+    if status == "blocked":
+        return Blocked(msg)
+    if status in ("partial", "failed"):
+        for cid in rec.get("child_run_ids") or ():
+            child = get_run_record(home, cid, normalize=True)
+            if child and child.get("status") != "ok":
+                return _reconstruct_persisted_error(home, child)
+    return AskError(msg)
+
+
 def run_ask(home, model, task_id, budget=6000, dry_run=False, adapters=None, today=None, full=False,
             parent_run_id=None, run_id=None):
     """Return the task path after writing the answer, or (pack, tokens) for a dry run."""
@@ -347,8 +363,12 @@ def run_ask(home, model, task_id, budget=6000, dry_run=False, adapters=None, tod
     path = task_file(home, task_id)
     day = today or dt.date.today()
     rid = run_id or new_run_id(day)
-    if not dry_run and has_run_id(home, rid):
-        return path
+    if not dry_run:
+        existing = get_run_record(home, rid, normalize=True)
+        if existing is not None:
+            if existing.get("status") == "ok":
+                return path
+            raise _reconstruct_persisted_error(home, existing)
 
     started_iso = utc_now_iso()
     pack, tokens = build_pack(home, task_id, budget, task_first=True, names=None if full else MINIMAL)
@@ -417,16 +437,6 @@ def run_ask(home, model, task_id, budget=6000, dry_run=False, adapters=None, tod
     return path
 
 
-def _reconstruct_child_error(rec):
-    status = rec.get("status")
-    msg = rec.get("error") or f"persisted child run {rec.get('run_id')} failed with status {status}"
-    if status == "tool_missing":
-        return ToolMissing(msg)
-    if status == "blocked":
-        return Blocked(msg)
-    return AskError(msg)
-
-
 def run_review(home, task_id, reviewers=("codex", "claude"), budget=6000, dry_run=False, adapters=None,
                today=None, diff_text="", repo=None, commit="HEAD", run_id=None):
     """Run an independent blind review (rule 7) across multiple models on the same pre-committed facts-only pack."""
@@ -448,11 +458,15 @@ def run_review(home, task_id, reviewers=("codex", "claude"), budget=6000, dry_ru
     commit_sha = repo_info["commit_sha"] if repo_info else None
     repo_label = str(repo_info["repo"]) if repo_info else None
 
-    if not dry_run and has_run_id(home, group_id):
-        return {
-            "pack": pack, "tokens": tokens, "sha256": digest, "reviewers": cleaned, "path": path,
-            "group_run_id": group_id, "commit_sha": commit_sha, "results": [],
-        }
+    if not dry_run:
+        existing_group = get_run_record(home, group_id, normalize=True)
+        if existing_group is not None:
+            if existing_group.get("status") == "ok":
+                return {
+                    "pack": pack, "tokens": tokens, "sha256": digest, "reviewers": cleaned, "path": path,
+                    "group_run_id": group_id, "commit_sha": commit_sha, "results": [],
+                }
+            raise _reconstruct_persisted_error(home, existing_group)
 
     try:
         check_text(pack, "the review pack", "Nothing was sent.")
@@ -494,7 +508,7 @@ def run_review(home, task_id, reviewers=("codex", "claude"), budget=6000, dry_ru
                         "text": "", "flags": ["persisted_flag"] * flag_count,
                     })
                 elif first_err is None:
-                    first_err = _reconstruct_child_error(existing_child)
+                    first_err = _reconstruct_persisted_error(home, existing_child)
                 continue
 
         locality = PROVIDERS.get(r, {}).get("locality", "remote")
