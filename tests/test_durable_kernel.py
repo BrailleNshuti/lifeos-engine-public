@@ -141,13 +141,23 @@ def test_pre_execution_run_id_idempotency_prevents_duplicate_ask_and_review(home
             adapters={"r1": r1_ok, "r2": r2_ctx_crash}, today=TODAY, run_id="R-261120-revcrashctx",
         )
 
-    # 4. Mismatched run_id reuse across command, task, model, or reviewer list is rejected with ValueError
+    # 4. Mismatched run_id reuse across command, task, model, reviewer list, budget, full, parent_run_id, or diff_text
+    #    is rejected with ValueError, zero additional provider calls, and no new run records
     other_task = home / "tasks" / "T-261120-other.md"
     other_task.write_text("# Other task\n", encoding="utf-8")
+    runs_before_mismatch = _read_runs(home)
+    ask_calls_before = len(ask_calls)
+    rev_calls_before = len(rev_calls)
     with pytest.raises(ValueError, match="already belongs to a different operation"):
         ask.run_ask(home, "other_model", "T-261116", adapters={"other_model": counting_ask}, today=TODAY, run_id="R-261120-idem0001")
     with pytest.raises(ValueError, match="already belongs to a different operation"):
         ask.run_ask(home, "fake", "T-261120-other", adapters={"fake": counting_ask}, today=TODAY, run_id="R-261120-idem0001")
+    with pytest.raises(ValueError, match="already belongs to budget"):
+        ask.run_ask(home, "fake", "T-261116", budget=1500, adapters={"fake": counting_ask}, today=TODAY, run_id="R-261120-idem0001")
+    with pytest.raises(ValueError, match="already belongs to full="):
+        ask.run_ask(home, "fake", "T-261116", full=True, adapters={"fake": counting_ask}, today=TODAY, run_id="R-261120-idem0001")
+    with pytest.raises(ValueError, match="already belongs to parent_run_id"):
+        ask.run_ask(home, "fake", "T-261116", parent_run_id="R-261120-parent99", adapters={"fake": counting_ask}, today=TODAY, run_id="R-261120-idem0001")
     with pytest.raises(ValueError, match="already belongs to a different operation"):
         ask.run_review(home, "T-261116", reviewers=("r1",), adapters={"r1": counting_rev}, today=TODAY, run_id="R-261120-idem0001")
     with pytest.raises(ValueError, match="already belongs to a different operation"):
@@ -156,6 +166,13 @@ def test_pre_execution_run_id_idempotency_prevents_duplicate_ask_and_review(home
         ask.run_review(home, "T-261116", reviewers=("r1",), adapters={"r1": counting_rev}, today=TODAY, run_id="R-261120-revidem1")
     with pytest.raises(ValueError, match="already belongs to a different operation"):
         ask.run_review(home, "T-261120-other", reviewers=("r1", "r2"), adapters={"r1": counting_rev, "r2": counting_rev}, today=TODAY, run_id="R-261120-revidem1")
+    with pytest.raises(ValueError, match="already belongs to budget"):
+        ask.run_review(home, "T-261116", reviewers=("r1", "r2"), budget=1500, adapters={"r1": counting_rev, "r2": counting_rev}, today=TODAY, run_id="R-261120-revidem1")
+    with pytest.raises(ValueError, match="already belongs to a different diff_text"):
+        ask.run_review(home, "T-261116", reviewers=("r1", "r2"), diff_text="--- a/x.py\n+++ b/x.py\n", adapters={"r1": counting_rev, "r2": counting_rev}, today=TODAY, run_id="R-261120-revidem1")
+    assert len(ask_calls) == ask_calls_before
+    assert len(rev_calls) == rev_calls_before
+    assert _read_runs(home) == runs_before_mismatch
 
     # 5. Simultaneous concurrent retries with the same run_id (ask and review) execute the provider only once,
     #    never time out at 30s when waiting on a slow provider (>35s simulated elapsed time), and return cleanly in both threads

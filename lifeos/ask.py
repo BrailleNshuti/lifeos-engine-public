@@ -367,8 +367,8 @@ def _reconstruct_persisted_error(home, rec):
     return AskError(msg)
 
 
-def _verify_ask_identity(rec, task_stem, expected_model):
-    """Ensure a reused run_id matches the original ask command, task_id, and model."""
+def _verify_ask_identity(rec, task_stem, expected_model, budget=6000, full=False, parent_run_id=None):
+    """Ensure a reused run_id matches the original ask command, task_id, model, budget, full flag, and parent_run_id."""
     if (
         rec.get("command") != "ask"
         or rec.get("task_id") != task_stem
@@ -378,11 +378,27 @@ def _verify_ask_identity(rec, task_stem, expected_model):
             f"run_id '{rec.get('run_id')}' already belongs to a different operation "
             f"({rec.get('command')}:{rec.get('task_id')}:{rec.get('model')})."
         )
+    if "budget" in rec and rec.get("budget") != budget:
+        raise ValueError(
+            f"run_id '{rec.get('run_id')}' already belongs to budget {rec.get('budget')} (got {budget})."
+        )
+    if "full" in rec and bool(rec.get("full")) != bool(full):
+        raise ValueError(
+            f"run_id '{rec.get('run_id')}' already belongs to full={bool(rec.get('full'))} (got {bool(full)})."
+        )
+    if "parent_run_id" in rec and rec.get("parent_run_id") != parent_run_id:
+        raise ValueError(
+            f"run_id '{rec.get('run_id')}' already belongs to parent_run_id '{rec.get('parent_run_id')}'."
+        )
 
 
-def _verify_review_identity(rec, task_stem, expected_model, repo, commit):
-    """Ensure a reused run_id matches the original review_group command, task_id, reviewers, repo, and literal requested_commit
-    without inspecting Git or reopening the repository."""
+def _diff_digest(diff_text):
+    return pack_hash(diff_text) if (diff_text and diff_text.strip()) else None
+
+
+def _verify_review_identity(rec, task_stem, expected_model, repo, commit, budget=6000, diff_text=""):
+    """Ensure a reused run_id matches the original review_group command, task_id, reviewers, budget, diff_sha256, repo,
+    and literal requested_commit without inspecting Git or reopening the repository."""
     if (
         rec.get("command") != "review_group"
         or rec.get("task_id") != task_stem
@@ -391,6 +407,15 @@ def _verify_review_identity(rec, task_stem, expected_model, repo, commit):
         raise ValueError(
             f"run_id '{rec.get('run_id')}' already belongs to a different operation "
             f"({rec.get('command')}:{rec.get('task_id')}:{rec.get('model')})."
+        )
+    if "budget" in rec and rec.get("budget") != budget:
+        raise ValueError(
+            f"run_id '{rec.get('run_id')}' already belongs to budget {rec.get('budget')} (got {budget})."
+        )
+    expected_diff_sha = _diff_digest(diff_text)
+    if "diff_sha256" in rec and rec.get("diff_sha256") != expected_diff_sha:
+        raise ValueError(
+            f"run_id '{rec.get('run_id')}' already belongs to a different diff_text."
         )
     rec_repo = rec.get("repo")
     if bool(repo) != bool(rec_repo):
@@ -410,8 +435,11 @@ def _verify_review_identity(rec, task_stem, expected_model, repo, commit):
             raise ValueError(f"run_id '{rec.get('run_id')}' already belongs to commit '{rec_sha}'.")
 
 
-def _verify_review_child_identity(child_rec, group_id, task_stem, who, digest, repo_label, commit_sha, req_commit):
-    """Ensure a persisted child review record from an interrupted run matches the parent, task, model, context digest, repo, and commit."""
+def _verify_review_child_identity(
+    child_rec, group_id, task_stem, who, digest, repo_label, commit_sha, req_commit, budget=6000, diff_sha=None
+):
+    """Ensure a persisted child review record from an interrupted run matches the parent, task, model, context digest,
+    budget, diff_sha256, repo, and commit."""
     if (
         child_rec.get("command") != "review"
         or child_rec.get("parent_run_id") != group_id
@@ -421,6 +449,8 @@ def _verify_review_child_identity(child_rec, group_id, task_stem, who, digest, r
         or child_rec.get("repo") != repo_label
         or child_rec.get("commit_sha") != commit_sha
         or child_rec.get("requested_commit") != req_commit
+        or ("budget" in child_rec and child_rec.get("budget") != budget)
+        or ("diff_sha256" in child_rec and child_rec.get("diff_sha256") != diff_sha)
     ):
         raise ValueError(
             f"child run_id '{child_rec.get('run_id')}' already belongs to a different context or commit."
@@ -442,7 +472,7 @@ def run_ask(home, model, task_id, budget=6000, dry_run=False, adapters=None, tod
         if not dry_run:
             existing = get_run_record(home, rid, normalize=True)
             if existing is not None:
-                _verify_ask_identity(existing, path.stem, expected_model)
+                _verify_ask_identity(existing, path.stem, expected_model, budget=budget, full=full, parent_run_id=parent_run_id)
                 if existing.get("status") == "ok":
                     return path
                 raise _reconstruct_persisted_error(home, existing)
@@ -455,7 +485,7 @@ def run_ask(home, model, task_id, budget=6000, dry_run=False, adapters=None, tod
             "schema_version": RUN_SCHEMA_VERSION, "run_id": rid, "parent_run_id": parent_run_id,
             "date": day.isoformat(), "started_at": started_iso, "command": "ask",
             "task_id": path.stem, "model": expected_model, "locality": locality,
-            "context_sha256": digest, "tokens": tokens, "terminal": True,
+            "context_sha256": digest, "tokens": tokens, "budget": budget, "full": bool(full), "terminal": True,
         }
         try:
             check_text(pack, "the context pack", "Nothing was sent.")
@@ -543,7 +573,9 @@ def run_review(home, task_id, reviewers=("codex", "claude"), budget=6000, dry_ru
         if not dry_run:
             existing_group = get_run_record(home, group_id, normalize=True)
             if existing_group is not None:
-                _verify_review_identity(existing_group, path.stem, expected_model, repo, commit)
+                _verify_review_identity(
+                    existing_group, path.stem, expected_model, repo, commit, budget=budget, diff_text=diff_text,
+                )
                 if existing_group.get("status") == "ok":
                     return {
                         "pack": "", "tokens": int(existing_group.get("tokens", 0)),
@@ -553,6 +585,7 @@ def run_review(home, task_id, reviewers=("codex", "claude"), budget=6000, dry_ru
                 raise _reconstruct_persisted_error(home, existing_group)
 
         req_commit = str(commit or "HEAD") if repo else None
+        diff_sha = _diff_digest(diff_text)
         group_started_iso = utc_now_iso()
         try:
             repo_info = inspect_repo_commit(repo, commit) if repo else None
@@ -563,9 +596,9 @@ def run_review(home, task_id, reviewers=("codex", "claude"), budget=6000, dry_ru
                     "schema_version": RUN_SCHEMA_VERSION, "run_id": group_id, "parent_run_id": None,
                     "date": day.isoformat(), "started_at": group_started_iso, "finished_at": utc_now_iso(),
                     "command": "review_group", "task_id": path.stem, "model": expected_model,
-                    "locality": "mixed", "context_sha256": pack_hash(""), "tokens": 0, "duration_ms": 0,
-                    "status": "failed", "terminal": True, "flags": 0, "child_run_ids": [],
-                    "commit_sha": None, "requested_commit": req_commit,
+                    "locality": "mixed", "context_sha256": pack_hash(""), "tokens": 0, "budget": budget,
+                    "diff_sha256": diff_sha, "duration_ms": 0, "status": "failed", "terminal": True, "flags": 0,
+                    "child_run_ids": [], "commit_sha": None, "requested_commit": req_commit,
                     "repo": str(Path(repo).resolve()) if repo else None, "error": redacted,
                 })
                 raise AskError(redacted) from err
@@ -584,10 +617,10 @@ def run_review(home, task_id, reviewers=("codex", "claude"), budget=6000, dry_ru
                     "schema_version": RUN_SCHEMA_VERSION, "run_id": group_id, "parent_run_id": None,
                     "date": day.isoformat(), "started_at": group_started_iso, "finished_at": utc_now_iso(),
                     "command": "review_group", "task_id": path.stem, "model": expected_model,
-                    "locality": "mixed", "context_sha256": digest, "tokens": tokens, "duration_ms": 0,
-                    "status": "blocked", "terminal": True, "phase": "outbound_context", "flags": 0,
-                    "child_run_ids": [], "commit_sha": commit_sha, "requested_commit": req_commit,
-                    "repo": repo_label, "error": redact_error(err),
+                    "locality": "mixed", "context_sha256": digest, "tokens": tokens, "budget": budget,
+                    "diff_sha256": diff_sha, "duration_ms": 0, "status": "blocked", "terminal": True,
+                    "phase": "outbound_context", "flags": 0, "child_run_ids": [], "commit_sha": commit_sha,
+                    "requested_commit": req_commit, "repo": repo_label, "error": redact_error(err),
                 })
             raise
 
@@ -611,6 +644,7 @@ def run_review(home, task_id, reviewers=("codex", "claude"), budget=6000, dry_ru
                 if existing_child is not None:
                     _verify_review_child_identity(
                         existing_child, group_id, path.stem, who, digest, repo_label, commit_sha, req_commit,
+                        budget=budget, diff_sha=diff_sha,
                     )
                     if existing_child.get("status") == "ok":
                         flag_count = int(existing_child.get("flags", 0))
@@ -628,8 +662,8 @@ def run_review(home, task_id, reviewers=("codex", "claude"), budget=6000, dry_ru
                 "schema_version": RUN_SCHEMA_VERSION, "run_id": child_id, "parent_run_id": group_id,
                 "date": day.isoformat(), "started_at": child_started_iso, "command": "review",
                 "task_id": path.stem, "model": who, "locality": locality, "context_sha256": digest,
-                "tokens": tokens, "commit_sha": commit_sha, "requested_commit": req_commit,
-                "repo": repo_label, "terminal": True,
+                "tokens": tokens, "budget": budget, "diff_sha256": diff_sha, "commit_sha": commit_sha,
+                "requested_commit": req_commit, "repo": repo_label, "terminal": True,
             }
             started = time.monotonic()
             phase = None
@@ -695,7 +729,8 @@ def run_review(home, task_id, reviewers=("codex", "claude"), budget=6000, dry_ru
             "schema_version": RUN_SCHEMA_VERSION, "run_id": group_id, "parent_run_id": None,
             "date": day.isoformat(), "started_at": group_started_iso, "finished_at": utc_now_iso(),
             "command": "review_group", "task_id": path.stem, "model": expected_model,
-            "locality": "mixed", "context_sha256": digest, "tokens": tokens, "duration_ms": group_elapsed,
+            "locality": "mixed", "context_sha256": digest, "tokens": tokens, "budget": budget,
+            "diff_sha256": diff_sha, "duration_ms": group_elapsed,
             "status": group_status, "terminal": True, "flags": sum(len(r["flags"]) for r in results),
             "child_run_ids": child_ids, "commit_sha": commit_sha,
             "requested_commit": req_commit, "repo": repo_label,
