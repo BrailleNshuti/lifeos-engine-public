@@ -14,7 +14,7 @@ Read this first (AGENTS.md rule for build repos). Keep it short and update it af
 
 ## Open
 
-- PR #21 is a Prompt Lab design proposal, not an approved implementation.
+- PR #21 merged the Prompt Lab design document only; implementation remains gated on two weekly cycles of real-use evidence.
 - Six historical Actions runs from 11 Nov remain queued with zero jobs; current CI is healthy. Ignore or delete them in the Actions UI.
 - Before a public release, set the GitHub commit email to a private address. Rewrite history only if the owner explicitly chooses it.
 - External CLIs still require periodic live smoke tests; an empty working directory is not an OS sandbox.
