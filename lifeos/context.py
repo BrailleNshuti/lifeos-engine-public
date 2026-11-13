@@ -159,11 +159,11 @@ def inspect_repo_commit(repo_path, commit="HEAD"):
 
 
 def build_review_pack(home, task_id, budget=6000, diff_text="", repo_info=None):
-    """Facts-only pack for blind review (rule 7): strips any existing '## Result' blocks so reviewers never see prior answers."""
+    """Facts-only pack for blind review (rule 7): strips any appended '## Result · ...' blocks so reviewers never see prior answers."""
     _validate_budget(budget)
     home = Path(home)
     path = task_file(home, task_id)
-    facts = path.read_text(encoding="utf-8").split("\n## Result", 1)[0].strip()
+    facts = re.split(r"\n## Result\s*·", path.read_text(encoding="utf-8"), maxsplit=1)[0].strip()
     parts = [(f"tasks/{path.name} (facts only)", facts)]
     if (home / "rules.md").exists():
         parts.append(("rules.md", (home / "rules.md").read_text(encoding="utf-8").strip()))
