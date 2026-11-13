@@ -17,7 +17,7 @@ ASK_NOTE_PREFIX = "asked via lifeos ask"
 FLAGS_LABEL = "flags"
 
 
-def _atomic_write_bytes(path, data):
+def atomic_write_bytes(path, data):
     """Write bytes to a sibling temp file and atomically replace the target."""
     path = Path(path)
     tmp = path.with_name(f".{path.name}.{os.getpid()}.{uuid.uuid4().hex[:6]}.tmp")
@@ -27,6 +27,9 @@ def _atomic_write_bytes(path, data):
     finally:
         if tmp.exists():
             tmp.unlink(missing_ok=True)
+
+
+_atomic_write_bytes = atomic_write_bytes
 
 
 def new_run_id(today=None):
@@ -57,19 +60,33 @@ def append_task_result(path, model, text, today):
     return True
 
 
-def append_ledger_row(ledger, today, task_id, model, note):
+def append_csv_row(path, values):
     """Atomically append one valid CSV row, repairing a missing final newline first."""
-    ledger = Path(ledger)
-    if not ledger.exists():
-        return
-    raw = ledger.read_bytes()
+    path = Path(path)
+    if not path.exists():
+        return False
+    raw = path.read_bytes()
     if raw and raw[-1:] not in (b"\n", b"\r"):
         raw += b"\n"
     buf = io.StringIO()
-    csv.writer(buf, lineterminator="\n").writerow(
-        [today.isoformat(), task_id, model, "", note]
-    )
-    _atomic_write_bytes(ledger, raw + buf.getvalue().encode("utf-8"))
+    csv.writer(buf, lineterminator="\n").writerow(values)
+    _atomic_write_bytes(path, raw + buf.getvalue().encode("utf-8"))
+    return True
+
+
+def append_ledger_row(ledger, today, task_id, model, note):
+    """Atomically append one valid CSV row, repairing a missing final newline first."""
+    append_csv_row(ledger, [today.isoformat(), task_id, model, "", note])
+
+
+def append_proof_row(proofs, date_str, area, proof, link, dedupe_token=None):
+    """Atomically append one row to logs/proofs.csv unless dedupe_token is already present."""
+    proofs = Path(proofs)
+    if not proofs.exists():
+        return False
+    if dedupe_token and dedupe_token in proofs.read_text(encoding="utf-8"):
+        return False
+    return append_csv_row(proofs, [str(date_str), area, proof, str(link)])
 
 
 def has_run_id(home, run_id):

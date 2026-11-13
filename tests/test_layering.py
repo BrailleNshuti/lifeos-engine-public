@@ -8,13 +8,15 @@ PKG = Path(__file__).resolve().parent.parent / "lifeos"
 # A module may import only from a lower layer (a smaller number). Same layer = no import.
 LAYER = {
     "store": -1,
-    "home": 0, "guard": 0, "check": 0, "tasks": 0, "week": 0,
-    "context": 1,
+    "home": 0, "guard": 0, "check": 0, "tasks": 0, "week": 0, "labcard": 0, "labscore": 0,
+    "context": 1, "lab": 1,
     "ask": 2,
     "delegate": 3, "sortcsv": 3,
     "mcp": 4,
     "cli": 5,
 }
+
+FORBIDDEN_IN_LAB = {"ask", "delegate", "mcp", "subprocess", "socket", "urllib", "http"}
 
 # Known cross-module uses of private names (importer, owner, name). The ratchet: this set may only shrink.
 # When you make a name public (or move it), delete its row here; the test then fails if a row is stale.
@@ -64,6 +66,24 @@ def test_interfaces_are_not_imported_by_others():
                 raise AssertionError(f"{name} imports cli")
             if owner == "mcp" and name != "cli":
                 raise AssertionError(f"{name} imports mcp")
+
+
+def test_lab_modules_never_import_models_or_network():
+    for name, tree in _modules().items():
+        if not name.startswith("lab"):
+            continue
+        for node in ast.walk(tree):
+            if isinstance(node, ast.Import):
+                for alias in node.names:
+                    root = alias.name.split(".")[0]
+                    assert root not in FORBIDDEN_IN_LAB, f"{name} imports forbidden module {alias.name}"
+            elif isinstance(node, ast.ImportFrom):
+                if node.module:
+                    root = node.module.split(".")[0]
+                    assert root not in FORBIDDEN_IN_LAB, f"{name} imports forbidden module {node.module}"
+                for alias in node.names:
+                    assert alias.name not in FORBIDDEN_IN_LAB, f"{name} imports forbidden name {alias.name}"
+
 
 
 def test_private_cross_module_uses_only_shrink():

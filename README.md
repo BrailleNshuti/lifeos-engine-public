@@ -19,6 +19,7 @@ The engine is code only. Your life lives in a separate **private data repo** (`l
 | `lifeos mcp` | Runs a local MCP server (standard library only) with seven tools: list tasks, new task, context (with `explain`), write result, ask, delegate, review. Writes go through the privacy guard and stay inside tasks/, the ledger and `logs/runs.jsonl` | Chat apps read and write your task files with no copy and paste |
 | `lifeos guard [files] / --staged` | Blocks validated IBANs/cards, contextual ID numbers, known key formats, private keys and assigned secrets; warns on emails and phone numbers. `--staged` scans the staged version; UTF-16 and legacy text are scanned | Catches high-confidence leaks before a commit; it is a backstop, not a complete classifier |
 | `lifeos doctor [--tools]` | Checks the data repo; fails when the always-loaded core is over 2000 tokens or a file is too long; `--tools` verifies local and remote model CLI availability | Keeps the core small and checks the toolchain |
+| `lifeos lab {check,pack,score} <card> ...` | Offline Prompt Lab runner: `check` validates a prompt card and prints its `prompt` and `tests` hashes; `pack` prints the prompt and five test inputs (or `--filled` prompts, or `--results FILE`); `score` grades a results file offline and logs one proof row in `logs/proofs.csv` | Deterministic prompt testing with zero personal token draw and strict work/personal separation (rule 9) |
 
 The `Delegation:` line of `lifeos week` judges models by numbers: it counts this week's `lifeos ask` ledger lines (`delegate` and `mcp` write them too) per model, most used first, and how many of those answers the free check flagged; the ledger keeps only that count, never the answer or the flag texts.
 
@@ -65,7 +66,7 @@ CI runs both on every push and pull request.
 |---|---|---|
 | v0.1 | Nov 2026 | Task files, weekly numbers, context packs, privacy guard, doctor, five skills, CI |
 | v0.2 | Gate 1, 6 Dec 2026 | Scoreboard from all logs, context packs per tool, the scheduled weekly review using these commands |
-| v0.3 | Gate 2, 17 Jan 2027 | Prompt Lab runner: prompt cards with test cases run through `claude -p` and `codex exec`, scored; repo goes public |
+| v0.3 | Gate 2, 17 Jan 2027 | Prompt Lab runner (`lifeos lab check/pack/score`): prompt cards validated, packed for the work console and scored offline with proof logging; repo goes public |
 | v0.4 | Gate 3, 28 Mar 2027 | Dashboard from the logs; GitHub Actions pipeline |
 | v0.5 | Jun 2027 | Model router (LangGraph, LiteLLM budgets) evaluated on 50 real tasks |
 | v1.0 | Nov 2027 | Hardening, evaluation report and public case study |

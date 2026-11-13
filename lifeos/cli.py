@@ -4,12 +4,13 @@ import json
 import sys
 
 from . import __version__
-from . import mcp, sortcsv
+from . import lab, mcp, sortcsv
 from .delegate import run_delegate
 from .ask import ADAPTERS, AskError, Blocked, ToolMissing, provider_status, run_ask, run_review
 from .context import build_pack, explain_pack, render_explanation
 from .guard import scan_paths, scan_staged, staged_files
 from .home import CORE_FILES, HomeError, estimate_tokens, find_home
+from .labcard import LabRefused
 from .tasks import list_tasks, new_task
 from .week import render_markdown, week_numbers
 
@@ -139,6 +140,45 @@ def cmd_mcp(args):
     return 0
 
 
+def cmd_lab(args):
+    try:
+        home = find_home(args.home)
+    except HomeError:
+        home = None
+    try:
+        if args.lab_action == "check":
+            info = lab.check_card(home, args.card)
+            c = info["card"]
+            print(
+                f"ok  {c['name']} v{c['version']}  prompt:{c['prompt_hash']}  "
+                f"tests:{c['tests_hash']}  ~{info['tokens']} tokens/run"
+            )
+            return 0
+        if args.lab_action == "pack":
+            info = lab.pack_card(home, args.card, filled=args.filled, results_out=args.results)
+            print(info["pack"], end="")
+            if args.results:
+                print(f"[results template written to {args.results}]", file=sys.stderr)
+            return 0
+        if args.lab_action == "score":
+            out = lab.score_results(home, args.card, args.results, dry_run=args.dry_run)
+            for r in out["per_test"]:
+                verdict = "pass" if r["passed"] else "fail"
+                print(f"  {r['id']}: {verdict}")
+            print(f"{out['passed_count']}/5  ({out['proof_text']})")
+            if out["prior_scores"]:
+                print(f"earlier runs: {', '.join(out['prior_scores'])}")
+            if out["same_tests_diff_prompt"]:
+                print("same tests as an earlier prompt version: not independent evidence")
+            print(out["score_line"])
+            return 0
+    except LabRefused as error:
+        print(f"lifeos lab: refused ({error})", file=sys.stderr)
+        return 1
+    return 2
+
+
+
 def cmd_guard(args):
     paths = staged_files() if args.staged else args.paths
     skipped = []
@@ -260,6 +300,20 @@ def build_parser():
     doctor = sub.add_parser("doctor", help="check the data repo and the token cost of its core files")
     doctor.add_argument("--tools", action="store_true", help="also check availability of local and remote model CLIs")
     doctor.set_defaults(func=cmd_doctor)
+
+    lab_p = sub.add_parser("lab", help="Prompt Lab: validate cards, pack test inputs, and score results offline")
+    lab_sub = lab_p.add_subparsers(dest="lab_action", required=True)
+    lab_chk = lab_sub.add_parser("check", help="validate a prompt card and print its prompt and tests hashes")
+    lab_chk.add_argument("card", help="card path or name in prompts/cards/")
+    lab_pck = lab_sub.add_parser("pack", help="print the card's prompt and five test inputs")
+    lab_pck.add_argument("card", help="card path or name in prompts/cards/")
+    lab_pck.add_argument("--filled", action="store_true", help="print five finished prompts instead")
+    lab_pck.add_argument("--results", help="write the empty results file with locked hashes (never overwrites)")
+    lab_scr = lab_sub.add_parser("score", help="score a results file offline and log one proof row")
+    lab_scr.add_argument("card", help="card path or name in prompts/cards/")
+    lab_scr.add_argument("results", help="results file path")
+    lab_scr.add_argument("--dry-run", action="store_true", help="score without writing to logs/proofs.csv")
+    lab_p.set_defaults(func=cmd_lab)
     return parser
 
 

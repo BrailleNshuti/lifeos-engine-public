@@ -13,8 +13,8 @@ LifeOS Engine is a dependency-free Python package. Personal state lives in a sep
 Imports may point only downward. `tests/test_layering.py` enforces this graph and requires zero cross-module uses of underscore-prefixed APIs.
 
 1. Storage foundation: `store`
-2. Core: `home`, `guard`, `check`, `tasks`, `week`
-3. Context assembly: `context`
+2. Core: `home`, `guard`, `check`, `tasks`, `week`, `labcard`, `labscore`
+3. Context assembly and offline Prompt Lab: `context`, `lab`
 4. Model adapters and guarded recording: `ask`
 5. Routing and local CSV work: `delegate`, `sortcsv`
 6. Interfaces: `mcp`, then `cli`

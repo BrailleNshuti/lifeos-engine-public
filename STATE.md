@@ -4,10 +4,11 @@ Read this first (AGENTS.md rule for build repos). Keep it short and update it af
 
 ## Now
 
-- Version 0.1.0 on main. Commands: task, week, context (with `--explain`), ask, delegate, review, sort-csv, mcp, guard, doctor (with `--tools`).
+- Version 0.1.0 on main. Commands: task, week, context (with `--explain`), ask, delegate, review, sort-csv, mcp, guard, doctor (with `--tools`), lab (`check`, `pack`, `score`).
 - PR #18 enforces the 2,000-token always-loaded core cap; the data repo was trimmed below it.
 - PR #22 hardened the privacy and persistence boundaries: remote Ollama is refused centrally, untrusted text cannot self-allow, assigned secrets block, `store.py` owns result/ledger writes, the ask/week contract is shared, context budgets are bounded, and cross-module private API uses are zero.
-- Execution Kernel Lite added: atomic sibling-temp-and-replace writes and duplicate-retry idempotency in `store.py`, immutable JSONL run records (`logs/runs.jsonl` with `run_id`, `parent_run_id`, `context_sha256`, `duration_ms`), `lifeos context --explain`, `lifeos doctor --tools`, and `lifeos review` (Rule 7 blind multi-model review stripping prior `## Result` blocks). 167 tests pass.
+- Execution Kernel Lite added: atomic sibling-temp-and-replace writes and duplicate-retry idempotency in `store.py`, immutable JSONL run records (`logs/runs.jsonl` with `run_id`, `parent_run_id`, `context_sha256`, `duration_ms`), `lifeos context --explain`, `lifeos doctor --tools`, and `lifeos review` (Rule 7 blind multi-model review stripping prior `## Result` blocks).
+- Prompt Lab offline runner (`lifeos/labcard.py`, `lifeos/labscore.py`, `lifeos/lab.py`, `lifeos lab {check,pack,score}`) built per `docs/PROMPT-LAB.md` with strict no-model/no-network layering enforcement and deduplicated proof logging in `logs/proofs.csv`.
 - The private data repo now has its own dependency-free privacy/core-budget workflow (lifeos PR #23).
 - Code routing decision D23 remains: Claude writes, Codex checks.
 - Public from v0.3: no personal data; examples are fabricated.
