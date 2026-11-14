@@ -141,7 +141,14 @@ def ask_gemini(prompt):
 
 
 def ask_claude(prompt):
-    return _run_cli(["claude", "-p", "--model", "sonnet"], prompt)
+    # Automated repository review must not trust project instructions, plugins,
+    # MCP servers, hooks, or mutation-capable tools from the reviewed worktree.
+    return _run_cli([
+        "claude", "-p", "--model", "sonnet",
+        "--safe-mode", "--restricted", "--tools", "Read,Glob,Grep",
+        "--strict-mcp-config", "--no-session-persistence",
+        "--permission-prompts", "none",
+    ], prompt)
 
 
 def _open_local(req, timeout):
