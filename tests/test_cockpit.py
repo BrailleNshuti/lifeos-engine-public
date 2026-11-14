@@ -16,6 +16,23 @@ from lifeos.cli import main
 def home(tmp_path, demo):
     target = tmp_path / "home"
     shutil.copytree(demo, target)
+    chamber = target / "learning" / "career-mastery" / "project-building-chamber.json"
+    chamber.parent.mkdir(parents=True, exist_ok=True)
+    chamber.write_text(json.dumps({
+        "schema_version": 1,
+        "updated": "2026-11-14",
+        "region": "Germany / EU",
+        "market_signals": [{"name": "Production Python", "why": "Employers need reliable services."}],
+        "build_method": [{"stage": "Frame", "done_when": "A measurable problem is written."}],
+        "projects": [{
+            "id": "F01", "title": "Reliable Python service", "track": "Core", "stage": "Foundation",
+            "why": "Proves software fundamentals.", "outcome": "A tested API.", "skills": ["Python"],
+            "procedure": ["Define the contract", "Write tests"], "proofs": ["Green CI"],
+            "metrics": ["All tests pass"], "interview_questions": ["Why this architecture?"],
+        }],
+        "interview_rubric": ["Problem", "Ownership", "Metric", "Trade-off", "Learning"],
+        "sources": [{"label": "Example careers page", "url": "https://example.com/jobs"}],
+    }), encoding="utf-8")
     return target
 
 
@@ -30,6 +47,7 @@ def test_cockpit_export_creates_self_contained_html_and_passes_guard(home, capsy
     assert "Learning Studio" in html
     assert "#focus" in html and "#library" in html and "#recall" in html and "#mastery" in html
     assert "#projects" in html and "#reflect" in html and "#system" in html
+    assert "#build" in html and "Project Building Chamber" in html
     assert "Attempt → Retrieve → Explain → Test → Reflect" in html
     assert "fonts.googleapis.com" not in html and "fonts.gstatic.com" not in html
     assert "T-261116-demo-cli" in html
@@ -37,6 +55,7 @@ def test_cockpit_export_creates_self_contained_html_and_passes_guard(home, capsy
     data = cockpit.build_cockpit_data(home)
     assert "learning" in data
     assert {"focus_tasks", "due_skills", "mastery_pct", "pack_groups"} <= set(data["learning"])
+    assert data["project_chamber"]["projects"][0]["id"] == "F01"
 
 
 def test_cockpit_localhost_http_handler_reads_and_logs(home):

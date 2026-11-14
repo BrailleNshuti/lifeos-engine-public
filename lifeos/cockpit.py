@@ -158,6 +158,35 @@ def _parse_skills(home):
     return skills
 
 
+def _load_project_chamber(home):
+    """Load the versioned, user-owned career project roadmap without coupling it to the engine."""
+    path = Path(home) / "learning" / "career-mastery" / "project-building-chamber.json"
+    empty = {
+        "schema_version": 1,
+        "updated": "",
+        "region": "",
+        "market_signals": [],
+        "build_method": [],
+        "projects": [],
+        "interview_rubric": [],
+        "sources": [],
+    }
+    if not path.is_file():
+        return empty
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, UnicodeDecodeError, json.JSONDecodeError):
+        return empty
+    if not isinstance(payload, dict) or payload.get("schema_version") != 1:
+        return empty
+    for key in ("market_signals", "build_method", "projects", "interview_rubric", "sources"):
+        if not isinstance(payload.get(key), list):
+            payload[key] = []
+    payload["updated"] = str(payload.get("updated", ""))
+    payload["region"] = str(payload.get("region", ""))
+    return {**empty, **payload}
+
+
 def _learning_profile(home, tasks, packs, skills, week):
     """Build a deterministic learning queue from tasks, practice dates and study packs."""
     today = dt.date.today()
@@ -235,6 +264,7 @@ def build_cockpit_data(home, week=None, month=None):
         "prompt_cards": _list_prompt_cards(home),
         "skills": skills,
         "learning": _learning_profile(home, detailed_tasks, packs, skills, week_data),
+        "project_chamber": _load_project_chamber(home),
     }
 
 
@@ -309,6 +339,15 @@ h3{font-size:1.05rem;font-weight:600}
 .focus-card{background:linear-gradient(145deg,rgba(211,154,94,.16),rgba(127,184,168,.06));border-color:rgba(211,154,94,.42)}
 .session-clock{font-family:var(--font-display);font-size:clamp(3.2rem,8vw,5.5rem);line-height:1;color:var(--copper)}
 .soft{background:var(--surface-2)}
+.project-card summary{cursor:pointer;list-style:none}
+.project-card summary::-webkit-details-marker{display:none}
+.project-meta{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}
+.steps{counter-reset:build-step;list-style:none;margin:0;padding:0;display:grid;gap:8px}
+.steps li{counter-increment:build-step;padding:10px 12px 10px 42px;border:1px solid var(--hair);border-radius:9px;position:relative;font-size:.86rem}
+.steps li::before{content:counter(build-step);position:absolute;left:12px;top:10px;color:var(--copper);font-family:var(--font-mono)}
+.interview{background:linear-gradient(145deg,rgba(139,158,184,.13),rgba(211,154,94,.08));border-color:rgba(139,158,184,.38)}
+.rubric{display:grid;gap:7px}
+.rubric label{display:flex;gap:8px;align-items:flex-start;font-size:.84rem;color:var(--mute)}
 @media (max-width:679px){.learning-loop{grid-template-columns:1fr}.rail{position:relative;height:auto}.shell{display:block}}
 .toast{position:fixed;right:24px;bottom:24px;background:var(--surface-3);border:1px solid var(--copper);padding:10px 16px;border-radius:999px;font-size:.85rem;display:none;z-index:99}
 </style>
@@ -326,6 +365,7 @@ h3{font-size:1.05rem;font-weight:600}
     <button class="nav" data-tab="study"><span>#library · IU & German</span><span class="mono">packs</span></button>
     <button class="nav" data-tab="recall"><span>#recall · Exams & Review</span><span class="mono" id="nav-recall-count"></span></button>
     <button class="nav" data-tab="mastery"><span>#mastery · Skill Map</span><span class="mono" id="nav-mastery"></span></button>
+    <button class="nav" data-tab="build"><span>#build · Project Chamber</span><span class="mono" id="nav-project-count"></span></button>
     <div class="grp">Plan & Reflect</div>
     <button class="nav" data-tab="projects"><span>#projects · Tasks</span><span class="mono" id="nav-tasks-count"></span></button>
     <button class="nav" data-tab="reflection"><span>#reflect · Weekly Loop</span><span class="mono">review</span></button>
@@ -338,7 +378,7 @@ h3{font-size:1.05rem;font-weight:600}
 <script>
 const DATA = __LIFEOS_DATA_JSON__;
 const WRITE_NONCE = "__LIFEOS_WRITE_NONCE__";
-let state = { tab: (location.hash.replace('#','') || 'learning'), lane: 'study', status: 'all', checkin: localStorage.getItem('lifeos_checkin_'+new Date().toISOString().slice(0,10)) || '', timerSec: 35*60, plannedMin: 35, timerRunning: false };
+let state = { tab: (location.hash.replace('#','') || 'learning'), lane: 'study', status: 'all', projectTrack: 'all', projectStage: 'all', interviewProject: 0, interviewQuestion: 0, checkin: localStorage.getItem('lifeos_checkin_'+new Date().toISOString().slice(0,10)) || '', timerSec: 35*60, plannedMin: 35, timerRunning: false };
 
 function esc(value){
   return String(value ?? '').replace(/[&<>"']/g, ch => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch]));
@@ -374,6 +414,7 @@ document.getElementById('nav-tasks-count').textContent = DATA.tasks.length;
 document.getElementById('nav-runs-count').textContent = DATA.runs.total_matching;
 document.getElementById('nav-recall-count').textContent = DATA.learning.due_count;
 document.getElementById('nav-mastery').textContent = DATA.learning.mastery_pct + '%';
+document.getElementById('nav-project-count').textContent = (DATA.project_chamber.projects || []).length;
 
 function renderLearning(){
   const l = DATA.learning;
@@ -666,9 +707,91 @@ function renderCareer(){
         <li><span><b>4. AWS Machine Learning Engineer Associate (MLA-C01) / Databricks Data Engineer Associate</b><br><span class="mono">Target: Aug/Sep 2027 (after P2 & P3) · Medallion Lakehouse, Delta Lake, Point-in-Time Feature Joins, PSI Drift</span></span><span class="pill steel">Prep Pack Ready</span></li>
       </ul>
     </div>
-    <h2 style="margin:22px 0 12px">12 Core Skills Ledger (logs/skills.md · Level 3 = Timed No-AI · Level 4 = Shipped)</h2>
+    <h2 style="margin:22px 0 12px">19-Skill Reset Ledger (Level 0 = fresh baseline · Level 3 = timed no-AI · Level 4 = shipped)</h2>
+    <div class="notice" style="margin-bottom:12px"><b>Fresh start:</b> every progress bar is deliberately at zero. Old projects are study material; mastery returns only when you re-prove the skill from the basics.</div>
     <div class="grid c2">${skills}</div>
   `;
+}
+
+function renderProjectChamber(){
+  const c = DATA.project_chamber || {};
+  const projects = c.projects || [];
+  const tracks = ['all', ...new Set(projects.map(p=>p.track).filter(Boolean))];
+  const stages = ['all', ...new Set(projects.map(p=>p.stage).filter(Boolean))];
+  const filtered = projects.filter(p => (state.projectTrack==='all' || p.track===state.projectTrack) && (state.projectStage==='all' || p.stage===state.projectStage));
+  const signals = (c.market_signals || []).map(s => `
+    <div class="card"><span class="eyebrow">${esc(s.name || s.signal)}</span><h3>${esc(s.demand || s.why || '')}</h3><p class="mono">${esc(s.proof || s.evidence || '')}</p></div>
+  `).join('');
+  const method = (c.build_method || []).map(s => `<li><b>${esc(s.stage || s.name)}</b><br><span class="mono">${esc(s.done_when || s.outcome || '')}</span></li>`).join('');
+  const cards = filtered.map((p, projectIndex) => {
+    const procedure = (p.procedure || []).map(step=>`<li>${esc(step)}</li>`).join('');
+    const proofs = (p.proofs || []).map(x=>`<li><span>${esc(x)}</span><span class="pill mint">Evidence</span></li>`).join('');
+    const metrics = (p.metrics || []).map(x=>`<span class="pill steel">${esc(x)}</span>`).join('');
+    const questions = (p.interview_questions || []).map((q, questionIndex)=>`<button class="chip" onclick="beginInterview(${projects.indexOf(p)},${questionIndex})">${esc(q)}</button>`).join('');
+    return `<details class="card project-card">
+      <summary><span class="eyebrow">${esc(p.id)} · ${esc(p.stage)}</span><h3>${esc(p.title)}</h3><div class="project-meta"><span class="pill copper">${esc(p.track)}</span><span class="pill">${esc(p.scope || 'portfolio build')}</span>${(p.skills||[]).slice(0,4).map(x=>`<span class="pill">${esc(x)}</span>`).join('')}</div></summary>
+      <div class="notice"><b>Why this shapes you:</b> ${esc(p.why)}</div>
+      <p><b>Finished outcome:</b> ${esc(p.outcome)}</p>
+      <span class="eyebrow">Build procedure</span><ol class="steps">${procedure}</ol>
+      <span class="eyebrow">Proof required</span><ul class="list">${proofs}</ul>
+      <div class="chips">${metrics}</div>
+      <span class="eyebrow">Recruiter drill</span><div class="chips">${questions}</div>
+    </details>`;
+  }).join('');
+  const project = projects[Math.min(state.interviewProject, Math.max(0, projects.length-1))] || {};
+  const questions = project.interview_questions || ['What problem did you solve and why did it matter?'];
+  const question = questions[state.interviewQuestion % questions.length];
+  const rubric = (c.interview_rubric || ['Problem', 'Ownership', 'Metric', 'Trade-off', 'Learning']).map((x,i)=>`<label><input type="checkbox" class="interview-check" value="${i}"> ${esc(x)}</label>`).join('');
+  return `
+    <section class="hero">
+      <div class="eyebrow">Market → Fundamentals → Build → Measure → Explain</div>
+      <h1>Project Building Chamber</h1>
+      <p class="mono">A ${esc(c.region || 'Germany / EU')} career forge, refreshed ${esc(c.updated || 'when market evidence changes')}. Build fewer shallow demos; build cumulative systems you can defend without AI.</p>
+    </section>
+    <h2 style="margin-bottom:12px">What the market is asking you to prove</h2>
+    <div class="grid c3">${signals || '<div class="card">Market evidence is being prepared.</div>'}</div>
+    <div class="grid c2" style="margin-top:16px">
+      <div class="card"><span class="eyebrow">The production build method</span><ol class="steps">${method}</ol></div>
+      <div class="card interview">
+        <span class="eyebrow">Recruiter Room · Explain it without hiding behind the code</span>
+        <select class="input" onchange="state.interviewProject=Number(this.value);state.interviewQuestion=0;render()">${projects.map((p,i)=>`<option value="${i}" ${i===state.interviewProject?'selected':''}>${esc(p.id)} · ${esc(p.title)}</option>`).join('')}</select>
+        <h3>${esc(question)}</h3>
+        <textarea id="interview-answer" class="input" rows="7" placeholder="Answer aloud first, then write: problem → your decision → evidence → trade-off → lesson."></textarea>
+        <div class="rubric">${rubric}</div>
+        <div class="chips"><button class="btn primary" onclick="saveInterviewAnswer()">Score & save locally</button><button class="btn" onclick="nextInterviewQuestion()">Next question</button></div>
+        <p class="mono">Target: 90 seconds for a recruiter, 5 minutes for a hiring manager. Saved only in this browser.</p>
+      </div>
+    </div>
+    <section class="hero" style="margin-top:22px"><div class="eyebrow">Cumulative portfolio roadmap · ${filtered.length} of ${projects.length}</div><h2>Choose the next proof, not the next tutorial</h2>
+      <div class="chips">${tracks.map(x=>`<button class="chip ${state.projectTrack===x?'on':''}" onclick="state.projectTrack='${esc(x)}';render()">${esc(x)}</button>`).join('')}</div>
+      <div class="chips">${stages.map(x=>`<button class="chip ${state.projectStage===x?'on':''}" onclick="state.projectStage='${esc(x)}';render()">${esc(x)}</button>`).join('')}</div>
+    </section>
+    <div class="grid c2">${cards || '<div class="card">No projects match these filters.</div>'}</div>
+    <div class="card" style="margin-top:16px"><span class="eyebrow">Evidence sources</span><ul class="list">${(c.sources||[]).map(s=>`<li><span>${esc(s.label)}</span><a href="${esc(s.url)}" target="_blank" rel="noreferrer" class="mono">source ↗</a></li>`).join('')}</ul></div>
+  `;
+}
+
+function beginInterview(projectIndex, questionIndex){
+  state.interviewProject = projectIndex; state.interviewQuestion = questionIndex; setTab('build');
+}
+
+function nextInterviewQuestion(){
+  const projects = (DATA.project_chamber || {}).projects || [];
+  const p = projects[state.interviewProject] || {};
+  state.interviewQuestion = (state.interviewQuestion + 1) % Math.max(1, (p.interview_questions || []).length);
+  render();
+}
+
+function saveInterviewAnswer(){
+  const answer = (document.getElementById('interview-answer') || {}).value || '';
+  const checks = [...document.querySelectorAll('.interview-check')].filter(x=>x.checked).length;
+  if(answer.trim().length < 40){ toast('Explain with enough detail to show ownership (at least 40 characters).'); return; }
+  const key = 'lifeos_project_interviews';
+  const rows = JSON.parse(localStorage.getItem(key) || '[]');
+  const projects = (DATA.project_chamber || {}).projects || [];
+  rows.push({project:(projects[state.interviewProject]||{}).id || '', question:state.interviewQuestion, score:checks, answer, at:new Date().toISOString()});
+  localStorage.setItem(key, JSON.stringify(rows.slice(-50)));
+  toast('Interview answer saved locally · self-score '+checks+'/'+document.querySelectorAll('.interview-check').length);
 }
 
 function renderAgents(){
@@ -831,6 +954,7 @@ function render(){
   else if(state.tab === 'study') el.innerHTML = renderStudy();
   else if(state.tab === 'recall') el.innerHTML = renderRecall();
   else if(state.tab === 'mastery' || state.tab === 'career') el.innerHTML = renderCareer();
+  else if(state.tab === 'build') el.innerHTML = renderProjectChamber();
   else if(state.tab === 'system' || state.tab === 'agents') el.innerHTML = renderAgents();
   else if(state.tab === 'reflection' || state.tab === 'loops') el.innerHTML = renderLoops();
   else el.innerHTML = renderLearning();
