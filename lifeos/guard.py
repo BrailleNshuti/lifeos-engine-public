@@ -27,7 +27,7 @@ ID_DOCUMENT = re.compile(
     r"(?i)\b(?:passport|reisepass|personalausweis|ausweis|aufenthaltstitel|residence permit|id card)"
     r"(?:\s*(?:no\.?|nr\.?|number|nummer))?\s*[:#]?\s*([A-Z0-9]{8,10})\b")
 IBAN_CANDIDATE = re.compile(r"\b[A-Z]{2}\d{2}(?: ?[A-Z0-9]{4}){2,7}(?: ?[A-Z0-9]{1,3})?\b")
-CARD_CANDIDATE = re.compile(r"(?<![\d.])(?:\d[ -]?){12,18}\d(?![\d.])")
+CARD_CANDIDATE = re.compile(r"(?<![\w.])(?:\d[ -]?){12,18}\d(?![\w.])")
 SECRET_ASSIGNMENT = re.compile(r"(?i)\b(?:password|passwort|api[_-]?key|secret|token)\b\s*[:=]\s*['\"]?[^\s'\"]{8,}")
 EMAIL = re.compile(r"\b[A-Za-z0-9._%+\-]+@[A-Za-z0-9.\-]+\.[A-Za-z]{2,}\b")
 PHONE = re.compile(r"(?<!\w)\+\d{2,3}[ \-]?\d{2,4}[ \-]?\d{3,}[ \-]?\d{0,6}")
