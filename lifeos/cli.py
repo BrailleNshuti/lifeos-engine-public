@@ -4,7 +4,7 @@ import json
 import sys
 
 from . import __version__
-from . import lab, log, mcp, sortcsv
+from . import lab, log, mcp, runs, sortcsv
 from .delegate import run_delegate
 from .ask import ADAPTERS, AskError, Blocked, ToolMissing, provider_status, run_ask, run_review
 from .context import build_pack, explain_pack, render_explanation
@@ -49,6 +49,13 @@ def cmd_log(args):
     else:
         return 2
     print(line)
+    return 0
+
+
+def cmd_runs(args):
+    home = find_home(args.home)
+    summary = runs.summarize_runs(home, status=args.status, model=args.model, task=args.task, limit=args.limit)
+    print(json.dumps(summary, indent=2) if args.json else runs.render_runs(summary))
     return 0
 
 
@@ -381,6 +388,14 @@ def build_parser():
     log_hrs.add_argument("--note", default="")
     log_hrs.add_argument("--date", help="YYYY-MM-DD (default: today)")
     log_p.set_defaults(func=cmd_log)
+
+    runs_p = sub.add_parser("runs", help="inspect execution run records and summary analytics from logs/runs.jsonl")
+    runs_p.add_argument("--status", help="filter by terminal status (ok, failed, timeout, blocked, tool_missing, partial)")
+    runs_p.add_argument("--model", help="filter by provider model name")
+    runs_p.add_argument("--task", help="filter by task id or prefix")
+    runs_p.add_argument("--limit", type=int, default=20, help="max recent records to display (default: 20)")
+    runs_p.add_argument("--json", action="store_true", help="output structured JSON summary and records")
+    runs_p.set_defaults(func=cmd_runs)
     return parser
 
 
