@@ -4,7 +4,7 @@ import json
 import sys
 
 from . import __version__
-from . import lab, mcp, sortcsv
+from . import lab, log, mcp, sortcsv
 from .delegate import run_delegate
 from .ask import ADAPTERS, AskError, Blocked, ToolMissing, provider_status, run_ask, run_review
 from .context import build_pack, explain_pack, render_explanation
@@ -33,6 +33,22 @@ def cmd_task(args):
 def cmd_week(args):
     numbers = week_numbers(find_home(args.home), args.week)
     print(json.dumps(numbers, indent=2) if args.json else render_markdown(numbers))
+    return 0
+
+
+def cmd_log(args):
+    home = find_home(args.home)
+    if args.log_action == "proof":
+        line = log.log_proof(home, args.area, args.proof, args.link, date=args.date)
+    elif args.log_action == "ledger":
+        line = log.log_ledger(home, args.task, args.model, args.minutes, args.note, date=args.date)
+    elif args.log_action == "health":
+        line = log.log_health(home, args.sleep, args.gym, args.energy, note=args.note, date=args.date)
+    elif args.log_action == "hours":
+        line = log.log_hours(home, args.area, args.hours, note=args.note, date=args.date)
+    else:
+        return 2
+    print(line)
     return 0
 
 
@@ -339,6 +355,32 @@ def build_parser():
     lab_scr.add_argument("results", help="results file path")
     lab_scr.add_argument("--dry-run", action="store_true", help="score without writing to logs/proofs.csv")
     lab_p.set_defaults(func=cmd_lab)
+
+    log_p = sub.add_parser("log", help="append a validated row to proofs.csv, ledger.csv, health.csv, or hours.csv")
+    log_sub = log_p.add_subparsers(dest="log_action", required=True)
+    log_prf = log_sub.add_parser("proof", help="append a proof row to logs/proofs.csv")
+    log_prf.add_argument("--area", required=True)
+    log_prf.add_argument("--proof", required=True)
+    log_prf.add_argument("--link", required=True)
+    log_prf.add_argument("--date", help="YYYY-MM-DD (default: today)")
+    log_ldg = log_sub.add_parser("ledger", help="append a ledger row to logs/ledger.csv")
+    log_ldg.add_argument("--task", required=True)
+    log_ldg.add_argument("--model", required=True)
+    log_ldg.add_argument("--minutes", required=True)
+    log_ldg.add_argument("--note", required=True)
+    log_ldg.add_argument("--date", help="YYYY-MM-DD (default: today)")
+    log_hlt = log_sub.add_parser("health", help="append a daily health row to logs/health.csv")
+    log_hlt.add_argument("--sleep", required=True)
+    log_hlt.add_argument("--gym", required=True)
+    log_hlt.add_argument("--energy", required=True)
+    log_hlt.add_argument("--note", default="")
+    log_hlt.add_argument("--date", help="YYYY-MM-DD (default: today)")
+    log_hrs = log_sub.add_parser("hours", help="append a study/work hours row to logs/hours.csv")
+    log_hrs.add_argument("--area", required=True)
+    log_hrs.add_argument("--hours", required=True)
+    log_hrs.add_argument("--note", default="")
+    log_hrs.add_argument("--date", help="YYYY-MM-DD (default: today)")
+    log_p.set_defaults(func=cmd_log)
     return parser
 
 
