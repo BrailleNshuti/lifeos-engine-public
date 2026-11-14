@@ -97,7 +97,14 @@ def test_cli_adapters_use_stdin_and_current_flags(monkeypatch):
     assert ask.ask_claude("P") == "OUT"
     assert calls[0][0] == ["codex", "exec", "--skip-git-repo-check", "-s", "read-only", "-"]
     assert calls[1][0] == ["agy", "--sandbox", "-p", "P"] and calls[1][1]["input"] is None
-    assert calls[2][0] == ["claude", "-p", "--model", "sonnet"]
+    claude_cmd = calls[2][0]
+    assert claude_cmd == [
+        "claude", "-p", "--model", "sonnet",
+        "--safe-mode", "--restricted", "--tools", "Read,Glob,Grep",
+        "--strict-mcp-config", "--no-session-persistence",
+        "--permission-prompts", "none",
+    ]
+    assert not any(tool in claude_cmd for tool in ("Bash", "PowerShell", "Edit", "Write", "WebFetch"))
     assert all(kw["cwd"] for _, kw in calls)  # runs in an empty temp folder
     assert calls[0][1]["input"] == "P" and calls[2][1]["input"] == "P"
 
