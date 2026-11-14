@@ -33,6 +33,7 @@ def test_initialize_and_tool_list(home):
         "lifeos_task_list", "lifeos_task_new", "lifeos_context", "lifeos_result_write",
         "lifeos_ask", "lifeos_delegate", "lifeos_review",
         "lifeos_week", "lifeos_log", "lifeos_runs", "lifeos_kaizen",
+        "lifeos_route", "lifeos_cockpit",
     }
 
 
@@ -334,6 +335,12 @@ def test_mcp_week_log_runs_and_kaizen_tools(home):
     assert not err and "# System Health · 2026-11" in kzn_txt
     kzn_dr, err = tool(home, "lifeos_kaizen", month="2026-11", draft=True)
     assert not err and "2026-11.md" in kzn_dr
+
+    # lifeos_route & lifeos_cockpit
+    rte_txt, err = tool(home, "lifeos_route", target="T-261116")
+    assert not err and "Route Decision" in rte_txt
+    ckp_txt, err = tool(home, "lifeos_cockpit")
+    assert not err and "cockpit" in ckp_txt
 
 
 

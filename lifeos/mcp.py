@@ -5,7 +5,7 @@ Everything stays inside the data repo: tasks/ and logs/ledger.csv. Every write g
 """
 import json
 
-from . import __version__, ask, delegate, kaizen, log, runs
+from . import __version__, ask, cockpit, delegate, kaizen, log, router, runs
 from .context import build_pack, explain_pack, render_explanation, task_file
 from .store import new_run_id, validate_run_id
 from .tasks import list_tasks, new_task
@@ -47,6 +47,10 @@ TOOLS = [
      _schema({"status": STR, "model": STR, "task": STR, "limit": {"type": "integer"}}, [])),
     ("lifeos_kaizen", "Run the monthly System Health check (Section 10.3) and optionally draft reviews/<YYYY-MM>.md.",
      _schema({"month": STR, "draft": {"type": "boolean"}}, [])),
+    ("lifeos_route", "Evaluate the 6-question Section 8.2 routing decision (work-lane check, Tier-0 check, 5-tier data policy, model pick, L0-L3 blind review, budget guard).",
+     _schema({"target": STR, "tier": STR, "full": {"type": "boolean"}}, ["target"])),
+    ("lifeos_cockpit", "Export the self-contained visual Braille × LifeOS Cockpit HTML file (<home>/cockpit/index.html).",
+     _schema({"export": STR}, [])),
 ]
 
 INSTRUCTIONS = ("You are the lead. Work happens in task files. For work that fits another model (code, long reading, "
@@ -122,6 +126,14 @@ def _run_tool(home, name, a):
         if a.get("draft"):
             return f"drafted {kaizen.draft_system_health(home, month=a.get('month')).relative_to(home)}"
         return kaizen.render_system_health(kaizen.system_health(home, month=a.get("month")))
+    if name == "lifeos_route":
+        return router.render_route(router.evaluate_route(home, a["target"], tier=a.get("tier"), full=bool(a.get("full"))))
+    if name == "lifeos_cockpit":
+        out = cockpit.export_cockpit(home, out_path=a.get("export"))
+        try:
+            return f"exported {out.relative_to(home)}"
+        except ValueError:
+            return f"exported {out}"
     raise KeyError(name)
 
 
