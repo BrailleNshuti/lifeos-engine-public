@@ -1000,8 +1000,9 @@ def test_schema_versioning_v1_normalization_and_locked_proof_logging(home):
         "context_sha256": "b" * 64,
         "status": "ok",
     })
-    # Also verify that if a malformed v2 record on disk lacks budget/full/diff_sha256, _verify_ask_identity and
-    # _verify_review_identity reject it with ValueError instead of silently accepting arbitrary values
+    # Also verify that if a malformed v2 record on disk lacks budget/full/diff_sha256 or lacks requested_commit/repo/commit_sha
+    # (even when None), or has a boolean/out-of-range budget (e.g. budget=True with requested budget=1),
+    # _verify_ask_identity, _verify_review_identity, and _verify_review_child_identity reject it with ValueError!
     with open(runs_path, "a", encoding="utf-8") as rf:
         rf.write(json.dumps({
             "schema_version": 2, "run_id": "R-261120-incompletev2ask", "date": TODAY.isoformat(),
@@ -1011,10 +1012,67 @@ def test_schema_versioning_v1_normalization_and_locked_proof_logging(home):
             "schema_version": 2, "run_id": "R-261120-incompletev2rev", "date": TODAY.isoformat(),
             "command": "review_group", "task_id": "T-261116-demo-cli", "model": "review:fake", "status": "ok",
         }) + "\n")
+        for missing_key in ("requested_commit", "repo", "commit_sha"):
+            parent_no_key = {
+                "schema_version": 2, "run_id": f"R-261120-parentno-{missing_key}", "date": TODAY.isoformat(),
+                "command": "review_group", "task_id": "T-261116-demo-cli", "model": "review:fake",
+                "budget": 6000, "diff_sha256": None, "requested_commit": None, "repo": None, "commit_sha": None,
+                "status": "ok",
+            }
+            parent_no_key.pop(missing_key)
+            rf.write(json.dumps(parent_no_key) + "\n")
+
+            child_no_key = {
+                "schema_version": 2, "run_id": f"R-261120-childno-{missing_key}-c1",
+                "parent_run_id": f"R-261120-childno-{missing_key}", "date": TODAY.isoformat(),
+                "command": "review", "task_id": "T-261116-demo-cli", "model": "review:fake",
+                "context_sha256": "c" * 64, "budget": 6000, "diff_sha256": None,
+                "requested_commit": None, "repo": None, "commit_sha": None, "status": "ok",
+            }
+            child_no_key.pop(missing_key)
+            rf.write(json.dumps(child_no_key) + "\n")
+
+        # Boolean budget=True on disk must NOT match requested integer budget=1
+        rf.write(json.dumps({
+            "schema_version": 2, "run_id": "R-261120-boolbudgetask", "date": TODAY.isoformat(),
+            "command": "ask", "task_id": "T-261116-demo-cli", "model": "fake",
+            "budget": True, "full": False, "parent_run_id": None, "status": "ok",
+        }) + "\n")
+        rf.write(json.dumps({
+            "schema_version": 2, "run_id": "R-261120-boolbudgetrev", "date": TODAY.isoformat(),
+            "command": "review_group", "task_id": "T-261116-demo-cli", "model": "review:fake",
+            "budget": True, "diff_sha256": None, "requested_commit": None, "repo": None, "commit_sha": None,
+            "status": "ok",
+        }) + "\n")
+        rf.write(json.dumps({
+            "schema_version": 2, "run_id": "R-261120-boolbudgetchild-c1",
+            "parent_run_id": "R-261120-boolbudgetchild", "date": TODAY.isoformat(),
+            "command": "review", "task_id": "T-261116-demo-cli", "model": "review:fake",
+            "context_sha256": "d" * 64, "budget": True, "diff_sha256": None,
+            "requested_commit": None, "repo": None, "commit_sha": None, "status": "ok",
+        }) + "\n")
+
     with pytest.raises(ValueError, match="missing mandatory v2 ask identity fields"):
         ask.run_ask(home, "fake", "T-261116", adapters={"fake": lambda p: CLEAN}, today=TODAY, run_id="R-261120-incompletev2ask")
     with pytest.raises(ValueError, match="missing mandatory v2 review identity fields"):
         ask.run_review(home, "T-261116", reviewers=("fake",), adapters={"fake": lambda p: CLEAN}, today=TODAY, run_id="R-261120-incompletev2rev")
+    for missing_key in ("requested_commit", "repo", "commit_sha"):
+        with pytest.raises(ValueError, match="missing mandatory v2 review identity fields"):
+            ask.run_review(
+                home, "T-261116", reviewers=("fake",), adapters={"fake": lambda p: CLEAN},
+                today=TODAY, run_id=f"R-261120-parentno-{missing_key}",
+            )
+        with pytest.raises(ValueError, match="missing mandatory v2 review identity fields"):
+            ask.run_review(
+                home, "T-261116", reviewers=("fake",), adapters={"fake": lambda p: CLEAN},
+                today=TODAY, run_id=f"R-261120-childno-{missing_key}",
+            )
+    with pytest.raises(ValueError, match="already belongs to budget"):
+        ask.run_ask(home, "fake", "T-261116", budget=1, adapters={"fake": lambda p: CLEAN}, today=TODAY, run_id="R-261120-boolbudgetask")
+    with pytest.raises(ValueError, match="already belongs to budget"):
+        ask.run_review(home, "T-261116", reviewers=("fake",), budget=1, adapters={"fake": lambda p: CLEAN}, today=TODAY, run_id="R-261120-boolbudgetrev")
+    with pytest.raises(ValueError, match="child run_id"):
+        ask.run_review(home, "T-261116", reviewers=("fake",), budget=1, adapters={"fake": lambda p: CLEAN}, today=TODAY, run_id="R-261120-boolbudgetchild")
     ask.run_ask(
         home, "fake", "T-261116", adapters={"fake": lambda p: CLEAN}, today=TODAY, run_id="R-261120-v2rec001"
     )
