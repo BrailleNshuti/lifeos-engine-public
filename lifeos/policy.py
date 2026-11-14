@@ -1,9 +1,22 @@
-"""5-tier data classification policy (PUBLIC, INTERNAL, PERSONAL, SENSITIVE, SECRET) and provider locality rules."""
+"""5-tier data classification policy and enforceable provider-locality rules."""
+import re
 
 TIERS = ("PUBLIC", "INTERNAL", "PERSONAL", "SENSITIVE", "SECRET")
 TIER_RANK = {name: idx for idx, name in enumerate(TIERS)}
 LOCAL_PROVIDERS = frozenset({"ollama", "qwen"})
 REMOTE_PROVIDERS = frozenset({"claude", "codex", "gemini"})
+
+# These expressions intentionally favor privacy over convenience. They identify
+# natural-language content that the byte-pattern guard cannot reliably classify.
+# Actual credentials and identity numbers remain the guard's responsibility.
+SENSITIVE_CONTENT = re.compile(
+    r"\b(?:bank(?:ing)?\s+(?:csv|statement|account|transaction)|"
+    r"my\s+health|health\s+(?:record|data|condition|diagnosis|note)|medical|diagnos(?:is|ed)|"
+    r"residence\s+permit(?:\s+(?:number|document|scan|application))?|"
+    r"passport(?:\s+(?:number|document|scan))?|tenant\s+(?:data|record|name)|"
+    r"tax\s+(?:record|return|id)|salary\s+(?:statement|slip))\b",
+    re.IGNORECASE,
+)
 
 
 def normalize_tier(tier):
@@ -41,6 +54,22 @@ def classify_path(rel_path):
     if lower.startswith(("examples/", "docs/", "skills/")) or lower in ("readme.md", "claude.md", "agents.md", "rules.md"):
         return "PUBLIC"
     return "INTERNAL"
+
+
+def classify_content(text, rel_path=""):
+    """Classify a file plus its natural-language content conservatively.
+
+    Path classification supplies the baseline. Recognizable health, banking,
+    identity-document, tenant, tax, or salary context promotes the result to
+    SENSITIVE so remote execution cannot depend on a human remembering to run
+    the router first.
+    """
+    base = classify_path(rel_path)
+    if base == "SECRET":
+        return base
+    if SENSITIVE_CONTENT.search(str(text or "")):
+        return "SENSITIVE"
+    return base
 
 
 def check_provider_allowed(tier, model, full=False):
