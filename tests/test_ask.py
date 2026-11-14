@@ -416,3 +416,40 @@ def test_blind_multi_model_review_hides_earlier_answers_and_logs_parent_run(home
     assert runs[-1]["run_id"] == out["group_run_id"] and runs[-1]["command"] == "review_group"
 
 
+def test_execution_policy_blocks_sensitive_task_on_remote_but_allows_local(home):
+    import json as _json
+
+    task = home / "tasks" / "T-261116-demo-cli.md"
+    original = task.read_text(encoding="utf-8")
+    task.write_text(original.replace("## Task", "## Task\nReview my health condition notes locally."), encoding="utf-8")
+    calls = []
+
+    def answer(prompt):
+        calls.append(prompt)
+        return "Local review complete with evidence. Next step: none."
+
+    with pytest.raises(ask.Blocked, match="Provider policy blocked"):
+        ask.run_ask(home, "codex", "T-261116", adapters={"codex": answer})
+    assert calls == []
+    blocked = [_json.loads(line) for line in (home / "logs" / "runs.jsonl").read_text(encoding="utf-8").splitlines()][-1]
+    assert blocked["status"] == "blocked"
+    assert blocked["phase"] == "provider_policy"
+
+    ask.run_ask(home, "qwen", "T-261116", adapters={"qwen": answer})
+    assert len(calls) == 1
+
+
+def test_execution_policy_blocks_sensitive_remote_blind_review(home):
+    task = home / "tasks" / "T-261116-demo-cli.md"
+    task.write_text(task.read_text(encoding="utf-8") + "\nTenant data and a medical diagnosis are in scope.\n", encoding="utf-8")
+    calls = []
+
+    def answer(prompt):
+        calls.append(prompt)
+        return "Should never be called."
+
+    with pytest.raises(ask.Blocked, match="Provider policy blocked review"):
+        ask.run_review(home, "T-261116", reviewers=("codex",), adapters={"codex": answer})
+    assert calls == []
+
+
