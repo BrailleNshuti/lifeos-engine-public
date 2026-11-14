@@ -1,11 +1,13 @@
-"""Braille × LifeOS · cockpit: unified visual command centre across Personal, Education (IU & German), Lab, and Work Prompt Lab.
+"""Braille × LifeOS Learning Studio: focus, recall, exams, mastery, projects, reflection, and system health.
 
 Supports both static single-file HTML export (`lifeos cockpit --export FILE`) and a live localhost web server
 (`lifeos cockpit --serve [--port 8765]`) backed by store_lock and the privacy guard.
 """
+import datetime as dt
 from http.server import BaseHTTPRequestHandler, HTTPServer
 import json
 import re
+import secrets
 from pathlib import Path
 from urllib.parse import urlparse
 
@@ -156,8 +158,56 @@ def _parse_skills(home):
     return skills
 
 
+def _learning_profile(home, tasks, packs, skills, week):
+    """Build a deterministic learning queue from tasks, practice dates and study packs."""
+    today = dt.date.today()
+    study_tasks = [t for t in tasks if t.get("lane") == "study" and t.get("status") != "done"]
+    study_tasks.sort(key=lambda t: (t.get("due") or "9999-99-99", t.get("status") != "doing", t.get("id", "")))
+
+    due_skills = []
+    for skill in skills:
+        raw = (skill.get("last_practice") or "").strip()
+        try:
+            practiced = dt.date.fromisoformat(raw[:10])
+        except ValueError:
+            practiced = None
+        days = (today - practiced).days if practiced else None
+        gap = max(0, int(skill.get("target", 0)) - int(skill.get("level", 0)))
+        if gap and (days is None or days >= 7):
+            due_skills.append({**skill, "days_since_practice": days, "gap": gap})
+    due_skills.sort(key=lambda s: (-s["gap"], -(s["days_since_practice"] or 9999), s["skill"]))
+
+    groups = {}
+    for pack in packs:
+        parts = pack["path"].split("/")
+        group = parts[1] if len(parts) > 2 else "general"
+        groups[group] = groups.get(group, 0) + 1
+
+    exam_dir = Path(home) / "reviews"
+    exams = []
+    if exam_dir.is_dir():
+        for path in sorted(exam_dir.glob("exam-*.md"), reverse=True):
+            exams.append({"path": path.relative_to(home).as_posix(), "title": path.stem.replace("exam-", "Exam ")})
+
+    level_total = sum(int(s.get("level", 0)) for s in skills)
+    target_total = sum(max(1, int(s.get("target", 0))) for s in skills)
+    mastery = round(100 * level_total / target_total) if target_total else 0
+    hours_by_area = week.get("hours_by_area") or {}
+    return {
+        "focus_tasks": study_tasks[:3],
+        "open_study_tasks": len(study_tasks),
+        "due_skills": due_skills,
+        "due_count": len(due_skills),
+        "mastery_pct": mastery,
+        "pack_groups": [{"name": name, "count": count} for name, count in sorted(groups.items())],
+        "exam_drafts": exams,
+        "study_hours": float(hours_by_area.get("study", 0) or 0),
+        "german_hours": float(hours_by_area.get("german", 0) or 0),
+    }
+
+
 def build_cockpit_data(home, week=None, month=None):
-    """Collect structured, privacy-guarded data for the LifeOS Cockpit from the data repository."""
+    """Collect structured, privacy-guarded learning data for the LifeOS Cockpit."""
     home = Path(home)
     tasks_dir = home / "tasks"
     detailed_tasks = []
@@ -172,15 +222,19 @@ def build_cockpit_data(home, week=None, month=None):
                 "results_count": 0, "latest_result": "",
             })
 
+    week_data = week_numbers(home, week=week)
+    packs = _list_study_packs(home)
+    skills = _parse_skills(home)
     return {
         "now": _parse_now_sections(home),
-        "week": week_numbers(home, week=week),
+        "week": week_data,
         "kaizen": system_health(home, month=month),
         "runs": summarize_runs(home, limit=15),
         "tasks": detailed_tasks,
-        "study_packs": _list_study_packs(home),
+        "study_packs": packs,
         "prompt_cards": _list_prompt_cards(home),
-        "skills": _parse_skills(home),
+        "skills": skills,
+        "learning": _learning_profile(home, detailed_tasks, packs, skills, week_data),
     }
 
 
@@ -192,9 +246,6 @@ COCKPIT_HTML_TEMPLATE = """<!doctype html>
 <meta name="theme-color" content="#0A0A0A">
 <meta name="color-scheme" content="dark">
 <title>Braille × LifeOS · cockpit</title>
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,300;9..144,400;9..144,500&family=Newsreader:ital,opsz,wght@0,6..72,300;0,6..72,400;1,6..72,400&family=Inter:wght@400;500;600&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
 <style>
 :root{
   --ink:#0A0A0A;--surface:#111;--surface-2:#161513;--surface-3:#1D1B18;
@@ -202,9 +253,9 @@ COCKPIT_HTML_TEMPLATE = """<!doctype html>
   --text:rgba(255,255,255,.96);--mute:rgba(255,255,255,.70);--dim:rgba(255,255,255,.55);
   --copper:#D39A5E;--copper-ink:#7A4A1E;--mint:#7FB8A8;--steel:#8B9EB8;--clay:#B0746A;
   --paper:#EDEAE4;--on-paper:#1A1815;--on-paper-dim:#67604D;
-  --font-display:'Fraunces',Georgia,serif;--font-serif:'Newsreader',Georgia,serif;
-  --font-sans:'Inter',-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;
-  --font-mono:'Space Mono',ui-monospace,Consolas,monospace;
+  --font-display:Georgia,'Times New Roman',serif;--font-serif:Georgia,'Times New Roman',serif;
+  --font-sans:-apple-system,BlinkMacSystemFont,'Segoe UI',Arial,sans-serif;
+  --font-mono:ui-monospace,'Cascadia Mono',Consolas,monospace;
   --r:14px;--r-s:8px;--gutter:clamp(16px,4vw,36px);
 }
 *,*::before,*::after{box-sizing:border-box}
@@ -252,6 +303,13 @@ h3{font-size:1.05rem;font-weight:600}
 .paper{background:var(--paper);color:var(--on-paper);border-radius:var(--r);padding:clamp(20px,4vw,36px);font-family:var(--font-serif);font-size:1.04rem}
 .paper h2{font-family:var(--font-display);color:var(--on-paper);margin-bottom:10px}
 .notice{border-left:2px solid var(--copper);padding:10px 14px;background:rgba(211,154,94,.07);border-radius:0 8px 8px 0;font-size:.86rem}
+.learning-loop{display:grid;grid-template-columns:repeat(5,1fr);gap:8px;margin-top:12px}
+.learning-step{padding:12px 8px;border:1px solid var(--hair);border-radius:10px;text-align:center;font-size:.78rem;color:var(--mute)}
+.learning-step b{display:block;color:var(--text);font-family:var(--font-mono);font-size:.7rem;margin-bottom:4px}
+.focus-card{background:linear-gradient(145deg,rgba(211,154,94,.16),rgba(127,184,168,.06));border-color:rgba(211,154,94,.42)}
+.session-clock{font-family:var(--font-display);font-size:clamp(3.2rem,8vw,5.5rem);line-height:1;color:var(--copper)}
+.soft{background:var(--surface-2)}
+@media (max-width:679px){.learning-loop{grid-template-columns:1fr}.rail{position:relative;height:auto}.shell{display:block}}
 .toast{position:fixed;right:24px;bottom:24px;background:var(--surface-3);border:1px solid var(--copper);padding:10px 16px;border-radius:999px;font-size:.85rem;display:none;z-index:99}
 </style>
 </head>
@@ -263,22 +321,28 @@ h3{font-size:1.05rem;font-weight:600}
       <b>Braille · LifeOS</b>
       <span class="mono" id="week-badge"></span>
     </div>
-    <div class="grp">Command Centre</div>
-    <button class="nav on" data-tab="today"><span>#today · Focus & Check-in</span><span class="mono">01</span></button>
-    <button class="nav" data-tab="tasks"><span>#tasks · All Lanes</span><span class="mono" id="nav-tasks-count"></span></button>
-    <div class="grp">Growth & Study</div>
-    <button class="nav" data-tab="study"><span>#study · IU & German</span><span class="mono">6 mod</span></button>
-    <button class="nav" data-tab="career"><span>#career · Skills & Certs</span><span class="mono">19 skills</span></button>
-    <div class="grp">Machinery & Loops</div>
-    <button class="nav" data-tab="agents"><span>#agents · Kernel & Router</span><span class="mono" id="nav-runs-count"></span></button>
-    <button class="nav" data-tab="loops"><span>#loops · Kaizen & Code</span><span class="mono">12 laws</span></button>
+    <div class="grp">Learning Studio</div>
+    <button class="nav on" data-tab="learning"><span>#focus · Learn Today</span><span class="mono">01</span></button>
+    <button class="nav" data-tab="study"><span>#library · IU & German</span><span class="mono">packs</span></button>
+    <button class="nav" data-tab="recall"><span>#recall · Exams & Review</span><span class="mono" id="nav-recall-count"></span></button>
+    <button class="nav" data-tab="mastery"><span>#mastery · Skill Map</span><span class="mono" id="nav-mastery"></span></button>
+    <div class="grp">Plan & Reflect</div>
+    <button class="nav" data-tab="projects"><span>#projects · Tasks</span><span class="mono" id="nav-tasks-count"></span></button>
+    <button class="nav" data-tab="reflection"><span>#reflect · Weekly Loop</span><span class="mono">review</span></button>
+    <div class="grp">System (secondary)</div>
+    <button class="nav" data-tab="system"><span>#system · Reliability</span><span class="mono" id="nav-runs-count"></span></button>
   </aside>
   <main class="main" id="view"></main>
 </div>
 <div class="toast" id="toast"></div>
 <script>
 const DATA = __LIFEOS_DATA_JSON__;
-let state = { tab: (location.hash.replace('#','') || 'today'), lane: 'all', status: 'all', checkin: localStorage.getItem('lifeos_checkin_'+new Date().toISOString().slice(0,10)) || '', timerSec: 35*60, timerRunning: false };
+const WRITE_NONCE = "__LIFEOS_WRITE_NONCE__";
+let state = { tab: (location.hash.replace('#','') || 'learning'), lane: 'study', status: 'all', checkin: localStorage.getItem('lifeos_checkin_'+new Date().toISOString().slice(0,10)) || '', timerSec: 35*60, plannedMin: 35, timerRunning: false };
+
+function esc(value){
+  return String(value ?? '').replace(/[&<>"']/g, ch => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch]));
+}
 
 function toast(msg){
   const el = document.getElementById('toast');
@@ -288,7 +352,7 @@ function toast(msg){
 
 async function apiPost(path, payload){
   try {
-    const r = await fetch(path, {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(payload)});
+    const r = await fetch(path, {method:'POST', headers:{'Content-Type':'application/json','X-LifeOS-Nonce':WRITE_NONCE}, body:JSON.stringify(payload)});
     const d = await r.json();
     if(!r.ok) throw new Error(d.error || 'Request failed');
     return d;
@@ -308,6 +372,107 @@ document.querySelectorAll('.nav').forEach(b => b.addEventListener('click', () =>
 document.getElementById('week-badge').textContent = DATA.week.week + ' · ' + DATA.week.from + ' → ' + DATA.week.to;
 document.getElementById('nav-tasks-count').textContent = DATA.tasks.length;
 document.getElementById('nav-runs-count').textContent = DATA.runs.total_matching;
+document.getElementById('nav-recall-count').textContent = DATA.learning.due_count;
+document.getElementById('nav-mastery').textContent = DATA.learning.mastery_pct + '%';
+
+function renderLearning(){
+  const l = DATA.learning;
+  const w = DATA.week;
+  const focus = (l.focus_tasks || []).map((t, i) => `
+    <li><span><b>${i+1}. ${esc(t.goal)}</b><br><span class="mono">${esc(t.id)}${t.due ? ' · due '+esc(t.due) : ''}</span></span><span class="pill copper">${esc(t.status)}</span></li>
+  `).join('') || '<li><span>No open study task. Create one in #projects.</span></li>';
+  const due = (l.due_skills || []).slice(0,5).map(s => `
+    <li><span><b>${esc(s.skill)}</b><br><span class="mono">Level ${s.level} → ${s.target} · ${s.days_since_practice == null ? 'never practiced' : s.days_since_practice+' days ago'}</span></span><button class="chip" onclick="setTab('recall')">Retrieve</button></li>
+  `).join('') || '<li><span>Nothing overdue. Use the exam draft for mixed retrieval.</span></li>';
+  const mins = String(Math.floor(state.timerSec/60)).padStart(2,'0');
+  const secs = String(state.timerSec%60).padStart(2,'0');
+  return `
+    <section class="hero">
+      <div class="eyebrow">Learning Studio · Attempt → Retrieve → Explain → Test → Reflect</div>
+      <h1>Learn something you can reproduce without AI.</h1>
+      <p class="mono">The Cockpit now starts with study. Projects and system machinery stay secondary.</p>
+      <div class="learning-loop">
+        <div class="learning-step"><b>01 · ATTEMPT</b>Closed-book first</div>
+        <div class="learning-step"><b>02 · RETRIEVE</b>Recall from memory</div>
+        <div class="learning-step"><b>03 · EXPLAIN</b>Teach it aloud</div>
+        <div class="learning-step"><b>04 · TEST</b>Solve or build</div>
+        <div class="learning-step"><b>05 · REFLECT</b>Log the weak point</div>
+      </div>
+    </section>
+    <div class="grid c4">
+      <div class="card stat"><span class="eyebrow">Study This Week</span><div class="n">${l.study_hours} h</div><div class="l">IU / technical study</div></div>
+      <div class="card stat"><span class="eyebrow">German This Week</span><div class="n">${l.german_hours} h</div><div class="l">Attempt-first practice</div></div>
+      <div class="card stat"><span class="eyebrow">Recall Queue</span><div class="n">${l.due_count}</div><div class="l">Skills due for retrieval</div></div>
+      <div class="card stat"><span class="eyebrow">Mastery</span><div class="n">${l.mastery_pct}%</div><div class="l">Verified level / target</div></div>
+    </div>
+    <div class="grid c2" style="margin-top:16px">
+      <div class="card focus-card">
+        <span class="eyebrow">Deep Study Session · AI stays closed until the attempt ends</span>
+        <div class="session-clock" id="session-clock">${mins}:${secs}</div>
+        <select id="session-topic" class="input">
+          ${(l.focus_tasks||[]).map(t=>`<option value="${esc(t.goal)}">${esc(t.goal)}</option>`).join('')}
+          <option value="Independent recall practice">Independent recall practice</option>
+        </select>
+        <input id="session-proof" class="input" placeholder="Proof goal: what will you solve, explain, or reproduce?">
+        <div class="chips">
+          ${[25,35,45].map(n=>`<button class="chip ${state.plannedMin===n?'on':''}" onclick="setSessionLength(${n})">${n} min</button>`).join('')}
+        </div>
+        <div class="chips">
+          <button class="btn primary" id="timer-toggle" onclick="toggleTimer()">${state.timerRunning?'Pause':'Start closed-book block'}</button>
+          <button class="btn" onclick="finishStudySession()">Finish & log learning</button>
+        </div>
+      </div>
+      <div class="card">
+        <span class="eyebrow">Hard Thing First · Study Queue</span>
+        <h3>Your next three learning outcomes</h3>
+        <ul class="list">${focus}</ul>
+        <span class="eyebrow" style="margin-top:10px">Due for active recall</span>
+        <ul class="list">${due}</ul>
+      </div>
+    </div>
+    <div class="grid c2" style="margin-top:16px">
+      <div class="card soft">
+        <span class="eyebrow">Quick Learning Log</span>
+        <select id="q-area" class="input"><option value="study">IU / technical study</option><option value="german">German</option><option value="lab">learning project</option></select>
+        <input id="q-hours" class="input" type="number" step="0.25" placeholder="Focused hours">
+        <input id="q-note" class="input" placeholder="What can you now do without help?">
+        <button class="btn primary" onclick="submitHours()">Log deliberate practice</button>
+      </div>
+      <div class="card">
+        <span class="eyebrow">Evidence, not activity</span>
+        <h3>A strong study session ends with one proof</h3>
+        <ul class="list">
+          <li><span>Closed-book answer or derivation</span><span class="pill mint">Recall</span></li>
+          <li><span>Passing test or working query</span><span class="pill mint">Apply</span></li>
+          <li><span>Five-minute explanation aloud</span><span class="pill mint">Explain</span></li>
+          <li><span>One error written for the next review</span><span class="pill copper">Reflect</span></li>
+        </ul>
+      </div>
+    </div>
+  `;
+}
+
+function renderRecall(){
+  const l = DATA.learning;
+  const due = (l.due_skills || []).map((s, idx) => `
+    <div class="card">
+      <div style="display:flex;justify-content:space-between;gap:8px"><h3>${esc(s.skill)}</h3><span class="pill copper">gap ${s.gap}</span></div>
+      <div class="mono">Last practice: ${s.days_since_practice == null ? 'not recorded' : s.days_since_practice+' days ago'} · Current ${s.level}, target ${s.target}</div>
+      <div class="notice"><b>Next proof:</b> ${esc(s.next_proof || 'Explain it, then solve one unseen problem.')}</div>
+      <div class="chips"><button class="chip" onclick="markRecall(${idx},'again')">Again</button><button class="chip" onclick="markRecall(${idx},'hard')">Hard</button><button class="chip" onclick="markRecall(${idx},'good')">Good</button></div>
+    </div>`).join('') || '<div class="card">No overdue skill. Run a mixed no-AI exam.</div>';
+  const exams = (l.exam_drafts || []).map(e=>`<li><span><b>${esc(e.title)}</b><br><span class="mono">${esc(e.path)}</span></span><span class="pill mint">Ready</span></li>`).join('');
+  return `
+    <section class="hero"><div class="eyebrow">Active Recall · Spaced Review · No-AI Exams</div><h1>Prove what stayed in memory.</h1><p class="mono">Rate retrieval honestly. “Good” means you produced the answer before checking notes.</p></section>
+    <div class="grid c3">
+      <div class="card stat"><span class="eyebrow">Due Now</span><div class="n">${l.due_count}</div><div class="l">skill reviews</div></div>
+      <div class="card stat"><span class="eyebrow">Exam Drafts</span><div class="n">${(l.exam_drafts||[]).length}</div><div class="l">offline, timed</div></div>
+      <div class="card stat"><span class="eyebrow">Rule</span><div class="n">70%</div><div class="l">below this returns next month</div></div>
+    </div>
+    <h2 style="margin:22px 0 12px">Retrieval queue</h2><div class="grid c2">${due}</div>
+    <div class="card" style="margin-top:16px"><span class="eyebrow">Monthly No-AI Exam</span><ul class="list">${exams || '<li>No exam draft found yet.</li>'}</ul><p class="mono">Open the file locally, disconnect AI help, use 60–90 minutes, then record the score with lifeos exam --score-skill.</p></div>
+  `;
+}
 
 function renderToday(){
   const w = DATA.week;
@@ -371,20 +536,20 @@ function renderTasks(){
   const filtered = DATA.tasks.filter(t => (state.lane==='all' || t.lane===state.lane) && (state.status==='all' || t.status===state.status));
   const cards = filtered.map(t => {
     const pillColor = t.status==='done'?'mint':(t.status==='doing'?'copper':'steel');
-    const checks = (t.checklist||[]).map(c => `<li style="justify-content:flex-start"><input type="checkbox" ${c.done?'checked':''} disabled> <span style="${c.done?'text-decoration:line-through;color:var(--dim)':''}">${c.text}</span></li>`).join('');
+    const checks = (t.checklist||[]).map(c => `<li style="justify-content:flex-start"><input type="checkbox" ${c.done?'checked':''} disabled> <span style="${c.done?'text-decoration:line-through;color:var(--dim)':''}">${esc(c.text)}</span></li>`).join('');
     return `
       <div class="card">
         <div style="display:flex;justify-content:space-between;gap:8px;align-items:center">
-          <span class="mono">${t.id}</span>
+          <span class="mono">${esc(t.id)}</span>
           <div style="display:flex;gap:6px">
-            <span class="pill">${t.lane}</span>
-            <span class="pill">${t.level}</span>
-            <span class="pill ${pillColor}">${t.status}</span>
+            <span class="pill">${esc(t.lane)}</span>
+            <span class="pill">${esc(t.level)}</span>
+            <span class="pill ${pillColor}">${esc(t.status)}</span>
           </div>
         </div>
-        <h3>${t.goal}</h3>
-        ${t.done_when ? `<div class="notice"><b>Done when:</b> ${t.done_when}</div>` : ''}
-        <div class="mono">Route: ${t.route || 'Claude -> Codex'} ${t.due ? ' · Due: '+t.due : ''} · Results: ${t.results_count}</div>
+        <h3>${esc(t.goal)}</h3>
+        ${t.done_when ? `<div class="notice"><b>Done when:</b> ${esc(t.done_when)}</div>` : ''}
+        <div class="mono">Route: ${esc(t.route || 'Claude -> Codex')} ${t.due ? ' · Due: '+esc(t.due) : ''} · Results: ${Number(t.results_count)||0}</div>
         ${checks ? `<ul class="list">${checks}</ul>` : ''}
       </div>
     `;
@@ -392,7 +557,8 @@ function renderTasks(){
   return `
     <section class="hero">
       <div class="eyebrow">Hand-off Bus · tasks/T-YYMMDD-name.md</div>
-      <h1>Unified Task Board (${filtered.length})</h1>
+      <h1>Study & Project Plan (${filtered.length})</h1>
+      <p class="mono">Study is the default lane. Personal projects remain available without taking over the learning space.</p>
       <div class="chips">
         ${lanes.map(l => `<button class="chip ${state.lane===l?'on':''}" onclick="state.lane='${l}';render()">Lane: ${l}</button>`).join('')}
       </div>
@@ -415,19 +581,20 @@ function renderTasks(){
 function renderStudy(){
   const mins = String(Math.floor(state.timerSec/60)).padStart(2,'0');
   const secs = String(state.timerSec%60).padStart(2,'0');
-  const packs = (DATA.study_packs||[]).map(p => `<li><span><b>${p.title}</b><br><span class="mono">${p.path}</span></span><span class="pill mint">Pack Ready</span></li>`).join('');
+  const packs = (DATA.study_packs||[]).map(p => `<li><span><b>${esc(p.title)}</b><br><span class="mono">${esc(p.path)}</span></span><span class="pill mint">Pack Ready</span></li>`).join('');
   return `
     <section class="hero">
       <div class="eyebrow">Law 3 · Attempt First (25 to 45 min without AI) · IU 6 Modules & German B2</div>
-      <h1>Study & Technical German Command</h1>
+      <h1>Curriculum Library & Technical German</h1>
+      <p class="mono">Choose a pack only after defining the question you want to answer from memory.</p>
     </section>
     <div class="grid c2">
       <div class="card">
         <span class="eyebrow">Law 3 · Attempt-First Gate</span>
-        <h2>${mins}:${secs}</h2>
+        <h2 id="session-clock">${mins}:${secs}</h2>
         <p class="mono">Work 35 minutes closed-book before asking ChatGPT, Codex or Claude for feedback.</p>
         <div class="chips">
-          <button class="btn primary" onclick="toggleTimer()">${state.timerRunning?'Pause Timer':'Start 35-min Attempt Block'}</button>
+          <button class="btn primary" id="timer-toggle" onclick="toggleTimer()">${state.timerRunning?'Pause Timer':'Start 35-min Attempt Block'}</button>
           <button class="btn" onclick="state.timerSec=35*60;state.timerRunning=false;render()">Reset</button>
         </div>
       </div>
@@ -455,19 +622,19 @@ function renderCareer(){
     return `
       <div class="card">
         <div style="display:flex;justify-content:space-between;align-items:center">
-          <h3>${s.skill}</h3>
+          <h3>${esc(s.skill)}</h3>
           <span class="pill ${s.level>=3?'mint':'copper'}">Lvl ${s.level} → Target ${s.target}</span>
         </div>
         <div class="bar ${s.level>=3?'mint':''}"><b style="width:${pct}%"></b></div>
-        <div class="mono"><b>Verified Proof:</b> ${s.proof || 'pending'}</div>
-        <div class="notice"><b>Next Small Proof:</b> ${s.next_proof || 'See learning/career-mastery/README.md'}</div>
+        <div class="mono"><b>Verified Proof:</b> ${esc(s.proof || 'pending')}</div>
+        <div class="notice"><b>Next Small Proof:</b> ${esc(s.next_proof || 'See learning/career-mastery/README.md')}</div>
       </div>
     `;
   }).join('');
   return `
     <section class="hero">
-      <div class="eyebrow">Section 13 & 14 · AI Engineer + Data Engineer + ML Engineer</div>
-      <h1>Master Skills, Certifications & Career Ladder</h1>
+      <div class="eyebrow">Verified mastery · Evidence replaces course completion</div>
+      <h1>Skill Map & Learning Progression</h1>
       <p class="mono">Full reference packs in learning/career-mastery/: README.md · certifications-and-prep.md · sql-and-data-engineering-lab.md · ml-dl-and-ai-engineering-lab.md</p>
     </section>
     <div class="grid c3">
@@ -506,12 +673,12 @@ function renderCareer(){
 
 function renderAgents(){
   const r = DATA.runs;
-  const cards = (DATA.prompt_cards||[]).map(c => `<li><span><b>${c.name} (v${c.version})</b> — ${c.goal}<br><span class="mono">${c.file}</span></span><span class="pill copper">5/5 Offline Runner</span></li>`).join('');
-  const runRows = (r.runs||[]).map(x => `<li><span><b class="mono">${x.run_id}</b> · ${x.command} · ${x.model || (x.reviewers||[]).join(',')}<br><span class="mono">${x.task || ''} · ${x.started_at || x.date}</span></span><span class="pill ${x.status==='ok'?'mint':'clay'}">${x.status}</span></li>`).join('');
+  const cards = (DATA.prompt_cards||[]).map(c => `<li><span><b>${esc(c.name)} (v${esc(c.version)})</b> — ${esc(c.goal)}<br><span class="mono">${esc(c.file)}</span></span><span class="pill copper">5/5 Offline Runner</span></li>`).join('');
+  const runRows = (r.runs||[]).map(x => `<li><span><b class="mono">${esc(x.run_id)}</b> · ${esc(x.command)} · ${esc(x.model || (x.reviewers||[]).join(','))}<br><span class="mono">${esc(x.task || '')} · ${esc(x.started_at || x.date)}</span></span><span class="pill ${x.status==='ok'?'mint':'clay'}">${esc(x.status)}</span></li>`).join('');
   return `
     <section class="hero">
-      <div class="eyebrow">Execution Kernel Durable · 6-Question Router · Prompt Lab (rule 9)</div>
-      <h1>Agents, Audit Trail & Work Prompt Lab</h1>
+      <div class="eyebrow">Secondary system view · Reliability supports learning</div>
+      <h1>System Health, Agents & Audit Trail</h1>
     </section>
     <div class="grid c3">
       <div class="card stat"><span class="eyebrow">Total Logged Runs</span><div class="n">${r.total_matching}</div><div class="l">Status ok: ${(r.by_status||{}).ok || 0}</div></div>
@@ -535,8 +702,8 @@ function renderLoops(){
   const wk = k.weakest_area || {};
   return `
     <section class="hero">
-      <div class="eyebrow">Section 10 · Weekly Inner Loop & Monthly Kaizen Outer Loop</div>
-      <h1>Self-Improving System Health (${k.month})</h1>
+      <div class="eyebrow">Learning reflection · Weekly inner loop & monthly Kaizen</div>
+      <h1>Reflect, Adjust, Repeat (${k.month})</h1>
     </section>
     <div class="grid c2">
       <div class="card">
@@ -582,13 +749,57 @@ function saveCheckin(val){
 function toggleTimer(){
   state.timerRunning = !state.timerRunning;
   if(window._timerInt) clearInterval(window._timerInt);
+  const button = document.getElementById('timer-toggle');
+  if(button) button.textContent = state.timerRunning ? 'Pause' : 'Start closed-book block';
   if(state.timerRunning){
     window._timerInt = setInterval(()=>{
-      if(state.timerSec > 0){ state.timerSec--; render(); }
-      else { state.timerRunning = false; clearInterval(window._timerInt); toast('35-min Attempt-First block complete! AI feedback unlocked.'); render(); }
+      if(state.timerSec > 0){
+        state.timerSec--;
+        const clock = document.getElementById('session-clock');
+        if(clock){
+          const mins = String(Math.floor(state.timerSec/60)).padStart(2,'0');
+          const secs = String(state.timerSec%60).padStart(2,'0');
+          clock.textContent = mins + ':' + secs;
+        }
+      } else {
+        state.timerRunning = false;
+        clearInterval(window._timerInt);
+        if(button) button.textContent = 'Start closed-book block';
+        toast('Attempt-first block complete. Explain the answer before opening AI feedback.');
+      }
     }, 1000);
   }
+}
+
+function setSessionLength(minutes){
+  if(state.timerRunning){ toast('Pause the current block before changing its length.'); return; }
+  state.plannedMin = minutes;
+  state.timerSec = minutes * 60;
   render();
+}
+
+async function finishStudySession(){
+  const elapsedMin = state.plannedMin - (state.timerSec / 60);
+  if(elapsedMin < 1){ toast('Study for at least one minute before logging the session.'); return; }
+  const topicEl = document.getElementById('session-topic');
+  const proofEl = document.getElementById('session-proof');
+  const topic = topicEl ? topicEl.value : 'Study session';
+  const proof = proofEl ? proofEl.value.trim() : '';
+  const hours = Math.round((elapsedMin / 60) * 100) / 100;
+  const note = (topic + (proof ? ' · proof: ' + proof : ' · recall proof pending')).slice(0,200);
+  state.timerRunning = false;
+  if(window._timerInt) clearInterval(window._timerInt);
+  const res = await apiPost('/api/log', {action:'hours', area:'study', hours, note});
+  if(res){ toast('Learning session logged: ' + elapsedMin.toFixed(0) + ' min'); location.reload(); }
+}
+
+function markRecall(index, rating){
+  const skill = ((DATA.learning.due_skills || [])[index] || {}).skill || 'skill';
+  const key = 'lifeos_recall_' + new Date().toISOString().slice(0,10);
+  const rows = JSON.parse(localStorage.getItem(key) || '[]');
+  rows.push({skill, rating, at:new Date().toISOString()});
+  localStorage.setItem(key, JSON.stringify(rows));
+  toast('Recall rated ' + rating + '. Log a proof after solving or explaining it.');
 }
 
 async function submitHours(){
@@ -616,12 +827,13 @@ async function submitNewTask(){
 
 function render(){
   const el = document.getElementById('view');
-  if(state.tab === 'tasks') el.innerHTML = renderTasks();
+  if(state.tab === 'projects' || state.tab === 'tasks') el.innerHTML = renderTasks();
   else if(state.tab === 'study') el.innerHTML = renderStudy();
-  else if(state.tab === 'career') el.innerHTML = renderCareer();
-  else if(state.tab === 'agents') el.innerHTML = renderAgents();
-  else if(state.tab === 'loops') el.innerHTML = renderLoops();
-  else el.innerHTML = renderToday();
+  else if(state.tab === 'recall') el.innerHTML = renderRecall();
+  else if(state.tab === 'mastery' || state.tab === 'career') el.innerHTML = renderCareer();
+  else if(state.tab === 'system' || state.tab === 'agents') el.innerHTML = renderAgents();
+  else if(state.tab === 'reflection' || state.tab === 'loops') el.innerHTML = renderLoops();
+  else el.innerHTML = renderLearning();
 }
 render();
 </script>
@@ -630,7 +842,7 @@ render();
 """
 
 
-def render_cockpit_html(home, week=None, month=None):
+def render_cockpit_html(home, week=None, month=None, write_nonce=""):
     """Render the self-contained Braille × LifeOS cockpit HTML after scanning embedded data with the privacy guard."""
     data = build_cockpit_data(home, week=week, month=month)
     payload_json = json.dumps(data, ensure_ascii=False).replace("</", "<\\/")
@@ -639,7 +851,9 @@ def render_cockpit_html(home, week=None, month=None):
     if blocks:
         kinds = ", ".join(sorted({f[2] for f in blocks}))
         raise ValueError(f"Cockpit export refused by privacy guard ({kinds}).")
-    return COCKPIT_HTML_TEMPLATE.replace("__LIFEOS_DATA_JSON__", payload_json)
+    return (COCKPIT_HTML_TEMPLATE
+            .replace("__LIFEOS_DATA_JSON__", payload_json)
+            .replace("__LIFEOS_WRITE_NONCE__", write_nonce))
 
 
 def export_cockpit(home, out_path=None, week=None, month=None):
@@ -655,6 +869,7 @@ def export_cockpit(home, out_path=None, week=None, month=None):
 def make_cockpit_handler(home):
     """Create a localhost HTTP handler serving the cockpit UI and JSON write endpoints."""
     home = Path(home)
+    write_nonce = secrets.token_urlsafe(32)
 
     class Handler(BaseHTTPRequestHandler):
         def log_message(self, fmt, *args):  # pragma: no cover - quiet server logs
@@ -665,27 +880,64 @@ def make_cockpit_handler(home):
             self.send_response(status)
             self.send_header("Content-Type", "application/json; charset=utf-8")
             self.send_header("Content-Length", str(len(body)))
+            self.send_header("Cache-Control", "no-store")
+            self.send_header("X-Content-Type-Options", "nosniff")
+            self.send_header("Referrer-Policy", "no-referrer")
+            self.end_headers()
+            self.wfile.write(body)
+
+        def _trusted_host(self):
+            host = (self.headers.get("Host") or "").lower()
+            name = host.rsplit(":", 1)[0].strip("[]")
+            return name in ("127.0.0.1", "localhost", "::1")
+
+        def _authorized_write(self):
+            return secrets.compare_digest(self.headers.get("X-LifeOS-Nonce") or "", write_nonce)
+
+        def _send_html(self, body):
+            self.send_response(200)
+            self.send_header("Content-Type", "text/html; charset=utf-8")
+            self.send_header("Content-Length", str(len(body)))
+            self.send_header("Cache-Control", "no-store")
+            self.send_header("X-Content-Type-Options", "nosniff")
+            self.send_header("Referrer-Policy", "no-referrer")
+            self.send_header("Content-Security-Policy", "default-src 'self'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; connect-src 'self'; img-src 'self' data:; font-src 'self'")
             self.end_headers()
             self.wfile.write(body)
 
         def do_GET(self):
+            if not self._trusted_host():
+                self._send_json(403, {"error": "Localhost access required."})
+                return
             parsed = urlparse(self.path)
             if parsed.path == "/api/state":
                 self._send_json(200, build_cockpit_data(home))
                 return
-            html = render_cockpit_html(home).encode("utf-8")
-            self.send_response(200)
-            self.send_header("Content-Type", "text/html; charset=utf-8")
-            self.send_header("Content-Length", str(len(html)))
-            self.end_headers()
-            self.wfile.write(html)
+            if parsed.path != "/":
+                self._send_json(404, {"error": "Not found"})
+                return
+            self._send_html(render_cockpit_html(home, write_nonce=write_nonce).encode("utf-8"))
 
         def do_POST(self):
+            if not self._trusted_host() or not self._authorized_write():
+                self._send_json(403, {"error": "Local cockpit authorization required."})
+                return
             parsed = urlparse(self.path)
-            length = int(self.headers.get("Content-Length") or 0)
+            if (self.headers.get("Content-Type") or "").split(";", 1)[0].strip().lower() != "application/json":
+                self._send_json(415, {"error": "JSON request required."})
+                return
+            try:
+                length = int(self.headers.get("Content-Length") or 0)
+            except ValueError:
+                length = -1
+            if length < 0 or length > 16_384:
+                self._send_json(413, {"error": "Request too large."})
+                return
             raw = self.rfile.read(length).decode("utf-8") if length > 0 else "{}"
             try:
                 body = json.loads(raw)
+                if not isinstance(body, dict):
+                    raise ValueError("JSON object required")
                 if parsed.path == "/api/log":
                     act = body.get("action")
                     if act == "hours":
@@ -705,9 +957,10 @@ def make_cockpit_handler(home):
                     self._send_json(200, {"ok": True, "path": path.relative_to(home).as_posix()})
                     return
                 self._send_json(404, {"error": "Not found"})
-            except Exception as err:
-                self._send_json(400, {"error": str(err)})
+            except Exception:
+                self._send_json(400, {"error": "Invalid or unsafe request."})
 
+    Handler.lifeos_write_nonce = write_nonce
     return Handler
 
 

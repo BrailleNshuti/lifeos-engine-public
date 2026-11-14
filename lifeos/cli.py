@@ -490,7 +490,7 @@ def build_parser():
     rte_p.add_argument("--json", action="store_true", help="output structured JSON routing decision")
     rte_p.set_defaults(func=cmd_route)
 
-    ckp_p = sub.add_parser("cockpit", help="export or serve the visual Braille × LifeOS Cockpit (#today, #tasks, #study, #agents, #loops)")
+    ckp_p = sub.add_parser("cockpit", help="export or serve the learning-first LifeOS Cockpit (#focus, #library, #recall, #mastery)")
     ckp_p.add_argument("--export", help="output HTML file path (default: <home>/cockpit/index.html)")
     ckp_p.add_argument("--serve", action="store_true", help="run a local HTTP server bound strictly to 127.0.0.1")
     ckp_p.add_argument("--port", type=int, default=8765, help="localhost port for --serve (default: 8765)")
