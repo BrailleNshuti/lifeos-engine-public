@@ -157,8 +157,11 @@ def inspect_repo_commit(repo_path, commit="HEAD"):
         stat = _git("show", "--root", "--stat", f"--format={COMMIT_META_FORMAT}", commit_sha)
         patch = _git("show", "--root", "--format=", commit_sha)
     files = _git("ls-tree", "--name-only", "-r", commit_sha)
+    # The resolved path is retained in repo_info["repo"] for local worktree
+    # operations only. It must never enter a review pack: absolute paths can
+    # disclose the OS username or private directory names to a remote model.
     meta = (
-        f"repo: {repo.name} ({repo.as_posix()})\n"
+        f"repo: {repo.name}\n"
         f"branch: {branch}\n"
         f"commit_sha: {commit_sha}\n\n"
         f"--- commit summary ---\n{stat}\n\n"
