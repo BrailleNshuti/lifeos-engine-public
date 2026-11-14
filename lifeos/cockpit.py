@@ -126,6 +126,36 @@ def _list_prompt_cards(home):
     return out
 
 
+def _parse_skills(home):
+    p = Path(home) / "logs" / "skills.md"
+    if not p.exists():
+        return []
+    skills = []
+    for line in p.read_text(encoding="utf-8").splitlines():
+        if not line.strip().startswith("|"):
+            continue
+        cells = [c.strip() for c in line.strip().strip("|").split("|")]
+        if len(cells) < 6 or cells[0].lower() in ("skill", "---") or set(cells[0]) <= {"-"}:
+            continue
+        try:
+            lvl = int(cells[1]) if cells[1].strip().isdigit() else 0
+        except ValueError:
+            lvl = 0
+        try:
+            tgt = int(cells[2]) if cells[2].strip().isdigit() else 4
+        except ValueError:
+            tgt = 4
+        skills.append({
+            "skill": cells[0],
+            "level": lvl,
+            "target": tgt,
+            "proof": cells[3],
+            "last_practice": cells[4],
+            "next_proof": cells[5],
+        })
+    return skills
+
+
 def build_cockpit_data(home, week=None, month=None):
     """Collect structured, privacy-guarded data for the LifeOS Cockpit from the data repository."""
     home = Path(home)
@@ -150,6 +180,7 @@ def build_cockpit_data(home, week=None, month=None):
         "tasks": detailed_tasks,
         "study_packs": _list_study_packs(home),
         "prompt_cards": _list_prompt_cards(home),
+        "skills": _parse_skills(home),
     }
 
 
@@ -237,6 +268,7 @@ h3{font-size:1.05rem;font-weight:600}
     <button class="nav" data-tab="tasks"><span>#tasks · All Lanes</span><span class="mono" id="nav-tasks-count"></span></button>
     <div class="grp">Growth & Study</div>
     <button class="nav" data-tab="study"><span>#study · IU & German</span><span class="mono">6 mod</span></button>
+    <button class="nav" data-tab="career"><span>#career · Skills & Certs</span><span class="mono">19 skills</span></button>
     <div class="grp">Machinery & Loops</div>
     <button class="nav" data-tab="agents"><span>#agents · Kernel & Router</span><span class="mono" id="nav-runs-count"></span></button>
     <button class="nav" data-tab="loops"><span>#loops · Kaizen & Code</span><span class="mono">12 laws</span></button>
@@ -417,6 +449,61 @@ function renderStudy(){
   `;
 }
 
+function renderCareer(){
+  const skills = (DATA.skills||[]).map(s => {
+    const pct = Math.min(100, Math.round((s.level / 5) * 100));
+    return `
+      <div class="card">
+        <div style="display:flex;justify-content:space-between;align-items:center">
+          <h3>${s.skill}</h3>
+          <span class="pill ${s.level>=3?'mint':'copper'}">Lvl ${s.level} → Target ${s.target}</span>
+        </div>
+        <div class="bar ${s.level>=3?'mint':''}"><b style="width:${pct}%"></b></div>
+        <div class="mono"><b>Verified Proof:</b> ${s.proof || 'pending'}</div>
+        <div class="notice"><b>Next Small Proof:</b> ${s.next_proof || 'See learning/career-mastery/README.md'}</div>
+      </div>
+    `;
+  }).join('');
+  return `
+    <section class="hero">
+      <div class="eyebrow">Section 13 & 14 · AI Engineer + Data Engineer + ML Engineer</div>
+      <h1>Master Skills, Certifications & Career Ladder</h1>
+      <p class="mono">Full reference packs in learning/career-mastery/: README.md · certifications-and-prep.md · sql-and-data-engineering-lab.md · ml-dl-and-ai-engineering-lab.md</p>
+    </section>
+    <div class="grid c3">
+      <div class="card">
+        <span class="eyebrow">Track A · Data Engineer</span>
+        <h3>Pipelines, SQL & Cloud IaC</h3>
+        <p class="mono">SQL Window Functions · OLTP vs Star Schema · SCD Type 2 · Data Quality Contracts · Docker & Scheduled Pipelines · AWS S3/CloudFront/Terraform</p>
+        <span class="pill mint">8-Step Ladder Ready</span>
+      </div>
+      <div class="card">
+        <span class="eyebrow">Track B · ML Engineer</span>
+        <h3>PyTorch, Vision & MLOps</h3>
+        <p class="mono">Leakage-Free Pipelines · PyTorch Autograd & Training Loops · MobileNetV2/ResNet Vision (P3 SDNET2018) · FastAPI Serving & PSI Drift Monitoring</p>
+        <span class="pill copper">Blueprints Ready</span>
+      </div>
+      <div class="card">
+        <span class="eyebrow">Track C · AI Engineer</span>
+        <h3>RAG, Agents & MCP</h3>
+        <p class="mono">Hybrid Search (BM25 + Dense RRF) · Citation Faithfulness & Recall@k (P2 Docs) · Multi-Agent Orchestration & 13 MCP Tools (LifeOS Engine)</p>
+        <span class="pill mint">Flagship Live</span>
+      </div>
+    </div>
+    <div class="card" style="margin-top:16px">
+      <span class="eyebrow">High-ROI Certifications & Exam Roadmap (learning/career-mastery/certifications-and-prep.md)</span>
+      <ul class="list">
+        <li><span><b>1. Goethe-Zertifikat B1 → B2 (D10 Language Gate)</b><br><span class="mono">B1 Target: May/Jun 2027 · B2 Target: Nov/Dec 2027 · Technical German (heise/golem) + 5-min monthly recordings</span></span><span class="pill copper">Priority 1</span></li>
+        <li><span><b>2. AWS Certified Solutions Architect – Associate (SAA-C03) / CLF-C02</b><br><span class="mono">Target: Apr/May 2027 (right after DLBDSCC01 Cloud Computing exam) · IAM, VPC, S3 OAC, RDS Multi-AZ, FinOps</span></span><span class="pill mint">Prep Pack Ready</span></li>
+        <li><span><b>3. HashiCorp Certified: Terraform Associate (003)</b><br><span class="mono">Target: May/Jun 2027 · State locking (S3+DynamoDB), modules, lifecycle, validates AWS Terraform repo</span></span><span class="pill mint">Prep Pack Ready</span></li>
+        <li><span><b>4. AWS Machine Learning Engineer Associate (MLA-C01) / Databricks Data Engineer Associate</b><br><span class="mono">Target: Aug/Sep 2027 (after P2 & P3) · Medallion Lakehouse, Delta Lake, Point-in-Time Feature Joins, PSI Drift</span></span><span class="pill steel">Prep Pack Ready</span></li>
+      </ul>
+    </div>
+    <h2 style="margin:22px 0 12px">12 Core Skills Ledger (logs/skills.md · Level 3 = Timed No-AI · Level 4 = Shipped)</h2>
+    <div class="grid c2">${skills}</div>
+  `;
+}
+
 function renderAgents(){
   const r = DATA.runs;
   const cards = (DATA.prompt_cards||[]).map(c => `<li><span><b>${c.name} (v${c.version})</b> — ${c.goal}<br><span class="mono">${c.file}</span></span><span class="pill copper">5/5 Offline Runner</span></li>`).join('');
@@ -531,6 +618,7 @@ function render(){
   const el = document.getElementById('view');
   if(state.tab === 'tasks') el.innerHTML = renderTasks();
   else if(state.tab === 'study') el.innerHTML = renderStudy();
+  else if(state.tab === 'career') el.innerHTML = renderCareer();
   else if(state.tab === 'agents') el.innerHTML = renderAgents();
   else if(state.tab === 'loops') el.innerHTML = renderLoops();
   else el.innerHTML = renderToday();
