@@ -987,6 +987,28 @@ def test_schema_versioning_v1_normalization_and_locked_proof_logging(home):
             "model": "review:fake",
             "status": "ok",
         })
+    # _stamp_v2_run_record enforces consistent (repo, requested_commit, commit_sha) triples
+    for bad_triple in (
+        {"repo": "", "requested_commit": None, "commit_sha": None},
+        {"repo": None, "requested_commit": None, "commit_sha": "deadbeef"},
+        {"repo": None, "requested_commit": None, "commit_sha": ""},
+        {"repo": None, "requested_commit": "HEAD", "commit_sha": None},
+        {"repo": "/some/repo", "requested_commit": "HEAD", "commit_sha": None},
+        {"repo": "/some/repo", "requested_commit": "HEAD", "commit_sha": ""},
+        {"repo": "/some/repo", "requested_commit": "", "commit_sha": "deadbeef"},
+    ):
+        with pytest.raises(ValueError, match="v2 review_group run record"):
+            store.append_run_record(home, {
+                "run_id": "R-261120-badtriple",
+                "date": TODAY.isoformat(),
+                "command": "review_group",
+                "task_id": "T-261116-demo-cli",
+                "model": "review:fake",
+                "budget": 6000,
+                "diff_sha256": None,
+                "status": "ok",
+                **bad_triple,
+            })
     store.append_run_record(home, {
         "schema_version": 1,
         "run_id": "R-261120-forcedv2",
@@ -1002,7 +1024,10 @@ def test_schema_versioning_v1_normalization_and_locked_proof_logging(home):
     })
     # Also verify that if a malformed v2 record on disk lacks budget/full/diff_sha256 or lacks requested_commit/repo/commit_sha
     # (even when None), or has a boolean/out-of-range budget (e.g. budget=True with requested budget=1),
+    # or has corrupted nullable values (repo="", commit_sha="deadbeef" or "", requested_commit="HEAD" when repo=None),
     # _verify_ask_identity, _verify_review_identity, and _verify_review_child_identity reject it with ValueError!
+    norepo_pack, _ = context.build_review_pack(home, "T-261116", 6000)
+    norepo_digest = context.pack_hash(norepo_pack)
     with open(runs_path, "a", encoding="utf-8") as rf:
         rf.write(json.dumps({
             "schema_version": 2, "run_id": "R-261120-incompletev2ask", "date": TODAY.isoformat(),
@@ -1026,11 +1051,30 @@ def test_schema_versioning_v1_normalization_and_locked_proof_logging(home):
                 "schema_version": 2, "run_id": f"R-261120-childno-{missing_key}-c1",
                 "parent_run_id": f"R-261120-childno-{missing_key}", "date": TODAY.isoformat(),
                 "command": "review", "task_id": "T-261116-demo-cli", "model": "review:fake",
-                "context_sha256": "c" * 64, "budget": 6000, "diff_sha256": None,
+                "context_sha256": norepo_digest, "budget": 6000, "diff_sha256": None,
                 "requested_commit": None, "repo": None, "commit_sha": None, "status": "ok",
             }
             child_no_key.pop(missing_key)
             rf.write(json.dumps(child_no_key) + "\n")
+
+        for suffix, corrupt_triple in (
+            ("emptyrepo", {"repo": "", "requested_commit": None, "commit_sha": None}),
+            ("nonnullsha", {"repo": None, "requested_commit": None, "commit_sha": "deadbeef"}),
+            ("emptysha", {"repo": None, "requested_commit": None, "commit_sha": ""}),
+            ("nonnullreq", {"repo": None, "requested_commit": "HEAD", "commit_sha": None}),
+        ):
+            rf.write(json.dumps({
+                "schema_version": 2, "run_id": f"R-261120-parentcorrupt-{suffix}", "date": TODAY.isoformat(),
+                "command": "review_group", "task_id": "T-261116-demo-cli", "model": "review:fake",
+                "budget": 6000, "diff_sha256": None, "status": "ok", **corrupt_triple,
+            }) + "\n")
+            rf.write(json.dumps({
+                "schema_version": 2, "run_id": f"R-261120-childcorrupt-{suffix}-c1",
+                "parent_run_id": f"R-261120-childcorrupt-{suffix}", "date": TODAY.isoformat(),
+                "command": "review", "task_id": "T-261116-demo-cli", "model": "review:fake",
+                "context_sha256": norepo_digest, "budget": 6000, "diff_sha256": None,
+                "status": "ok", **corrupt_triple,
+            }) + "\n")
 
         # Boolean budget=True on disk must NOT match requested integer budget=1
         rf.write(json.dumps({
@@ -1048,10 +1092,12 @@ def test_schema_versioning_v1_normalization_and_locked_proof_logging(home):
             "schema_version": 2, "run_id": "R-261120-boolbudgetchild-c1",
             "parent_run_id": "R-261120-boolbudgetchild", "date": TODAY.isoformat(),
             "command": "review", "task_id": "T-261116-demo-cli", "model": "review:fake",
-            "context_sha256": "d" * 64, "budget": True, "diff_sha256": None,
+            "context_sha256": norepo_digest, "budget": True, "diff_sha256": None,
             "requested_commit": None, "repo": None, "commit_sha": None, "status": "ok",
         }) + "\n")
 
+    with pytest.raises(ValueError, match="repo must be a non-empty path or None"):
+        ask.run_review(home, "T-261116", reviewers=("fake",), adapters={"fake": lambda p: CLEAN}, today=TODAY, repo="")
     with pytest.raises(ValueError, match="missing mandatory v2 ask identity fields"):
         ask.run_ask(home, "fake", "T-261116", adapters={"fake": lambda p: CLEAN}, today=TODAY, run_id="R-261120-incompletev2ask")
     with pytest.raises(ValueError, match="missing mandatory v2 review identity fields"):
@@ -1067,6 +1113,23 @@ def test_schema_versioning_v1_normalization_and_locked_proof_logging(home):
                 home, "T-261116", reviewers=("fake",), adapters={"fake": lambda p: CLEAN},
                 today=TODAY, run_id=f"R-261120-childno-{missing_key}",
             )
+    for suffix in ("emptyrepo", "nonnullsha", "emptysha", "nonnullreq"):
+        corrupt_calls = []
+        before_corrupt = _read_runs(home)
+        with pytest.raises(ValueError, match="already belongs to"):
+            ask.run_review(
+                home, "T-261116", reviewers=("fake",),
+                adapters={"fake": lambda p: corrupt_calls.append(p) or CLEAN},
+                today=TODAY, repo=None, run_id=f"R-261120-parentcorrupt-{suffix}",
+            )
+        with pytest.raises(ValueError, match="child run_id"):
+            ask.run_review(
+                home, "T-261116", reviewers=("fake",),
+                adapters={"fake": lambda p: corrupt_calls.append(p) or CLEAN},
+                today=TODAY, repo=None, run_id=f"R-261120-childcorrupt-{suffix}",
+            )
+        assert corrupt_calls == []
+        assert _read_runs(home) == before_corrupt
     with pytest.raises(ValueError, match="already belongs to budget"):
         ask.run_ask(home, "fake", "T-261116", budget=1, adapters={"fake": lambda p: CLEAN}, today=TODAY, run_id="R-261120-boolbudgetask")
     with pytest.raises(ValueError, match="already belongs to budget"):

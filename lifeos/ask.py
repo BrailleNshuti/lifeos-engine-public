@@ -438,26 +438,45 @@ def _verify_review_identity(rec, task_stem, expected_model, repo, commit, budget
         raise ValueError(
             f"run_id '{rec.get('run_id')}' already belongs to a different diff_text."
         )
+    if repo is not None and (not isinstance(repo, (str, Path)) or not str(repo).strip()):
+        raise ValueError("repo must be a non-empty path or None.")
     rec_repo = rec.get("repo")
-    if bool(repo) != bool(rec_repo):
-        raise ValueError(f"run_id '{rec.get('run_id')}' already belongs to a different repository setting.")
-    if repo:
+    rec_req = rec.get("requested_commit")
+    rec_sha = rec.get("commit_sha")
+    if repo is None:
+        if rec_repo is not None:
+            raise ValueError(f"run_id '{rec.get('run_id')}' already belongs to a different repository setting.")
+        if rec_req is not None:
+            raise ValueError(f"run_id '{rec.get('run_id')}' already belongs to commit '{rec_req}'.")
+        if rec_sha is not None:
+            raise ValueError(f"run_id '{rec.get('run_id')}' already belongs to commit '{rec_sha}'.")
+    else:
+        if not isinstance(rec_repo, str) or not rec_repo.strip():
+            raise ValueError(f"run_id '{rec.get('run_id')}' already belongs to a different repository setting.")
         if Path(repo).resolve() != Path(rec_repo).resolve():
             raise ValueError(f"run_id '{rec.get('run_id')}' already belongs to repository '{rec_repo}'.")
         req_arg = str(commit or "HEAD")
-        rec_req = rec.get("requested_commit")
-        rec_sha = str(rec.get("commit_sha") or "")
-        if is_v2 or rec_req is not None:
-            if not rec_req or req_arg != str(rec_req):
+        if is_v2:
+            if not isinstance(rec_req, str) or not rec_req.strip() or req_arg != rec_req:
                 raise ValueError(
                     f"run_id '{rec.get('run_id')}' already belongs to commit '{rec_req}'."
                 )
-        elif rec_sha and req_arg not in ("HEAD", rec_sha):
-            raise ValueError(f"run_id '{rec.get('run_id')}' already belongs to commit '{rec_sha}'.")
-    elif is_v2 and rec.get("requested_commit") is not None:
-        raise ValueError(
-            f"run_id '{rec.get('run_id')}' already belongs to commit '{rec.get('requested_commit')}'."
-        )
+            allow_null_sha = rec.get("status") == "failed"
+            if rec_sha is None:
+                if not allow_null_sha:
+                    raise ValueError(f"run_id '{rec.get('run_id')}' is missing commit_sha for repository review.")
+            elif not isinstance(rec_sha, str) or not rec_sha.strip():
+                raise ValueError(f"run_id '{rec.get('run_id')}' has invalid commit_sha '{rec_sha}'.")
+        else:
+            if rec_req is not None:
+                if not isinstance(rec_req, str) or not rec_req.strip() or req_arg != rec_req:
+                    raise ValueError(
+                        f"run_id '{rec.get('run_id')}' already belongs to commit '{rec_req}'."
+                    )
+            elif rec_sha is not None and (
+                not isinstance(rec_sha, str) or not rec_sha.strip() or req_arg not in ("HEAD", rec_sha)
+            ):
+                raise ValueError(f"run_id '{rec.get('run_id')}' already belongs to commit '{rec_sha}'.")
 
 
 def _verify_review_child_identity(
@@ -475,15 +494,30 @@ def _verify_review_child_identity(
         )
     rec_budget = child_rec.get("budget") if is_v2 else child_rec.get("budget", 6000)
     rec_diff_sha = child_rec.get("diff_sha256") if is_v2 else child_rec.get("diff_sha256", None)
+    rec_repo = child_rec.get("repo")
+    rec_req = child_rec.get("requested_commit")
+    rec_sha = child_rec.get("commit_sha")
+    if repo_label is None:
+        repo_ok = rec_repo is None and rec_req is None and rec_sha is None
+    else:
+        repo_ok = (
+            isinstance(rec_repo, str)
+            and bool(rec_repo.strip())
+            and Path(rec_repo).resolve() == Path(repo_label).resolve()
+            and isinstance(rec_req, str)
+            and bool(rec_req.strip())
+            and rec_req == req_commit
+            and isinstance(rec_sha, str)
+            and bool(rec_sha.strip())
+            and rec_sha == commit_sha
+        )
     if (
         child_rec.get("command") != "review"
         or child_rec.get("parent_run_id") != group_id
         or child_rec.get("task_id") != task_stem
         or child_rec.get("model") != who
         or child_rec.get("context_sha256") != digest
-        or child_rec.get("repo") != repo_label
-        or child_rec.get("commit_sha") != commit_sha
-        or child_rec.get("requested_commit") != req_commit
+        or not repo_ok
         or not _valid_persisted_budget(rec_budget)
         or rec_budget != budget
         or rec_diff_sha != diff_sha
@@ -598,6 +632,8 @@ def run_review(home, task_id, reviewers=("codex", "claude"), budget=6000, dry_ru
     for r in cleaned:
         if r not in adapters:
             raise ValueError(f"Unknown model '{r}'. Choose one of: {', '.join(sorted(adapters))}.")
+    if repo is not None and (not isinstance(repo, (str, Path)) or not str(repo).strip()):
+        raise ValueError("repo must be a non-empty path or None.")
 
     path = task_file(home, task_id)
     day = today or dt.date.today()
@@ -620,11 +656,11 @@ def run_review(home, task_id, reviewers=("codex", "claude"), budget=6000, dry_ru
                     }
                 raise _reconstruct_persisted_error(home, existing_group)
 
-        req_commit = str(commit or "HEAD") if repo else None
+        req_commit = str(commit or "HEAD") if repo is not None else None
         diff_sha = _diff_digest(diff_text)
         group_started_iso = utc_now_iso()
         try:
-            repo_info = inspect_repo_commit(repo, commit) if repo else None
+            repo_info = inspect_repo_commit(repo, commit) if repo is not None else None
         except Exception as err:
             if not dry_run:
                 redacted = redact_error(err)
@@ -635,7 +671,7 @@ def run_review(home, task_id, reviewers=("codex", "claude"), budget=6000, dry_ru
                     "locality": "mixed", "context_sha256": pack_hash(""), "tokens": 0, "budget": budget,
                     "diff_sha256": diff_sha, "duration_ms": 0, "status": "failed", "terminal": True, "flags": 0,
                     "child_run_ids": [], "commit_sha": None, "requested_commit": req_commit,
-                    "repo": str(Path(repo).resolve()) if repo else None, "error": redacted,
+                    "repo": str(Path(repo).resolve()) if repo is not None else None, "error": redacted,
                 })
                 raise AskError(redacted) from err
             raise
