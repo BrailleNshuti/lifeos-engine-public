@@ -23,7 +23,7 @@ from .check import check_answer
 from .context import build_pack, build_review_pack, inspect_repo_commit, pack_hash, task_file
 from .guard import TOKEN_PATTERNS, SECRET_ASSIGNMENT, private_patterns, scan_text
 from .store import (
-    RUN_SCHEMA_VERSION, append_run_record, get_run_record, has_run_id,
+    RUN_SCHEMA_VERSION, append_run_record, get_run_record, has_run_id, is_valid_git_oid,
     model_call_note, new_run_id, record_result, run_lock, utc_now_iso,
 )
 
@@ -409,6 +409,17 @@ def _diff_digest(diff_text):
     return pack_hash(diff_text) if (diff_text and diff_text.strip()) else None
 
 
+def _normalize_repo_and_commit(repo, commit):
+    """Validate and normalize (repo, commit) once before execution or identity verification."""
+    if repo is None:
+        return None, None
+    if not isinstance(repo, (str, Path)) or not str(repo).strip():
+        raise ValueError("repo must be a non-empty path or None.")
+    if not isinstance(commit, str) or not commit.strip():
+        raise ValueError("commit must be a non-empty string when repo is set.")
+    return repo, commit.strip()
+
+
 def _verify_review_identity(rec, task_stem, expected_model, repo, commit, budget=6000, diff_text=""):
     """Ensure a reused run_id matches the original review_group command, task_id, reviewers, budget, diff_sha256, repo,
     and literal requested_commit without inspecting Git or reopening the repository.
@@ -438,12 +449,11 @@ def _verify_review_identity(rec, task_stem, expected_model, repo, commit, budget
         raise ValueError(
             f"run_id '{rec.get('run_id')}' already belongs to a different diff_text."
         )
-    if repo is not None and (not isinstance(repo, (str, Path)) or not str(repo).strip()):
-        raise ValueError("repo must be a non-empty path or None.")
+    norm_repo, req_arg = _normalize_repo_and_commit(repo, commit)
     rec_repo = rec.get("repo")
     rec_req = rec.get("requested_commit")
     rec_sha = rec.get("commit_sha")
-    if repo is None:
+    if norm_repo is None:
         if rec_repo is not None:
             raise ValueError(f"run_id '{rec.get('run_id')}' already belongs to a different repository setting.")
         if rec_req is not None:
@@ -453,9 +463,8 @@ def _verify_review_identity(rec, task_stem, expected_model, repo, commit, budget
     else:
         if not isinstance(rec_repo, str) or not rec_repo.strip():
             raise ValueError(f"run_id '{rec.get('run_id')}' already belongs to a different repository setting.")
-        if Path(repo).resolve() != Path(rec_repo).resolve():
+        if Path(norm_repo).resolve() != Path(rec_repo).resolve():
             raise ValueError(f"run_id '{rec.get('run_id')}' already belongs to repository '{rec_repo}'.")
-        req_arg = str(commit or "HEAD")
         if is_v2:
             if not isinstance(rec_req, str) or not rec_req.strip() or req_arg != rec_req:
                 raise ValueError(
@@ -465,7 +474,7 @@ def _verify_review_identity(rec, task_stem, expected_model, repo, commit, budget
             if rec_sha is None:
                 if not allow_null_sha:
                     raise ValueError(f"run_id '{rec.get('run_id')}' is missing commit_sha for repository review.")
-            elif not isinstance(rec_sha, str) or not rec_sha.strip():
+            elif not is_valid_git_oid(rec_sha):
                 raise ValueError(f"run_id '{rec.get('run_id')}' has invalid commit_sha '{rec_sha}'.")
         else:
             if rec_req is not None:
@@ -474,7 +483,7 @@ def _verify_review_identity(rec, task_stem, expected_model, repo, commit, budget
                         f"run_id '{rec.get('run_id')}' already belongs to commit '{rec_req}'."
                     )
             elif rec_sha is not None and (
-                not isinstance(rec_sha, str) or not rec_sha.strip() or req_arg not in ("HEAD", rec_sha)
+                not is_valid_git_oid(rec_sha) or req_arg not in ("HEAD", rec_sha)
             ):
                 raise ValueError(f"run_id '{rec.get('run_id')}' already belongs to commit '{rec_sha}'.")
 
@@ -507,8 +516,7 @@ def _verify_review_child_identity(
             and isinstance(rec_req, str)
             and bool(rec_req.strip())
             and rec_req == req_commit
-            and isinstance(rec_sha, str)
-            and bool(rec_sha.strip())
+            and is_valid_git_oid(rec_sha)
             and rec_sha == commit_sha
         )
     if (
@@ -632,8 +640,7 @@ def run_review(home, task_id, reviewers=("codex", "claude"), budget=6000, dry_ru
     for r in cleaned:
         if r not in adapters:
             raise ValueError(f"Unknown model '{r}'. Choose one of: {', '.join(sorted(adapters))}.")
-    if repo is not None and (not isinstance(repo, (str, Path)) or not str(repo).strip()):
-        raise ValueError("repo must be a non-empty path or None.")
+    repo, req_commit = _normalize_repo_and_commit(repo, commit)
 
     path = task_file(home, task_id)
     day = today or dt.date.today()
@@ -646,7 +653,7 @@ def run_review(home, task_id, reviewers=("codex", "claude"), budget=6000, dry_ru
             existing_group = get_run_record(home, group_id, normalize=True)
             if existing_group is not None:
                 _verify_review_identity(
-                    existing_group, path.stem, expected_model, repo, commit, budget=budget, diff_text=diff_text,
+                    existing_group, path.stem, expected_model, repo, req_commit, budget=budget, diff_text=diff_text,
                 )
                 if existing_group.get("status") == "ok":
                     return {
@@ -656,11 +663,10 @@ def run_review(home, task_id, reviewers=("codex", "claude"), budget=6000, dry_ru
                     }
                 raise _reconstruct_persisted_error(home, existing_group)
 
-        req_commit = str(commit or "HEAD") if repo is not None else None
         diff_sha = _diff_digest(diff_text)
         group_started_iso = utc_now_iso()
         try:
-            repo_info = inspect_repo_commit(repo, commit) if repo is not None else None
+            repo_info = inspect_repo_commit(repo, req_commit) if repo is not None else None
         except Exception as err:
             if not dry_run:
                 redacted = redact_error(err)

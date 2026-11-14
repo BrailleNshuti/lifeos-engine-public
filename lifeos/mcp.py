@@ -69,7 +69,7 @@ def _run_tool(home, name, a):
         revs = [r.strip() for r in (a.get("reviewers") or "codex,claude").split(",") if r.strip()]
         out = ask.run_review(
             home, a["task"], reviewers=revs, budget=a.get("budget", 6000),
-            repo=a.get("repo"), commit=a.get("commit") or "HEAD",
+            repo=a.get("repo"), commit=a.get("commit", "HEAD") if "commit" in a else "HEAD",
         )
         parts = [f"Blind review ({out['group_run_id']}, pack {out['sha256']}) appended to {out['path'].relative_to(home)}:"]
         for r in out["results"]:
