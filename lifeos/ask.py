@@ -21,7 +21,10 @@ import urllib.request
 
 from .check import check_answer
 from .context import build_pack, build_review_pack, inspect_repo_commit, pack_hash, task_file
-from .guard import TOKEN_PATTERNS, SECRET_ASSIGNMENT, private_patterns, scan_text
+from .guard import (
+    CARD_CANDIDATE, EMAIL, IBAN_CANDIDATE, ID_DOCUMENT, PHONE,
+    SECRET_ASSIGNMENT, TOKEN_PATTERNS, iban_valid, luhn_valid, private_patterns, scan_text,
+)
 from .store import (
     RUN_SCHEMA_VERSION, append_run_record, get_run_record, has_run_id, is_valid_git_oid,
     model_call_note, new_run_id, record_result, run_lock, utc_now_iso,
@@ -124,7 +127,7 @@ def _run_cli(cmd, prompt, timeout=TIMEOUT, via_stdin=True):
     except subprocess.TimeoutExpired:
         raise AskError(f"{cmd[0]} timed out after {timeout} s.") from None
     if done.returncode != 0:
-        raise AskError(f"{cmd[0]} failed: {done.stderr.strip()[:300]}")
+        raise AskError(f"{cmd[0]} failed: {redact_error(done.stderr)}")
     return done.stdout.strip()
 
 
@@ -184,7 +187,7 @@ def ollama_generate(prompt, model, options=None):
     except TimeoutError:
         raise AskError(f"ollama did not answer within {TIMEOUT} s (a slow or busy model, not a missing tool).") from None
     except OSError as error:
-        raise ToolMissing(f"ollama is not reachable at {host}: {error}") from None
+        raise ToolMissing(f"ollama is not reachable at {host}: {redact_error(error)}") from None
     return re.sub(r"<think>.*?</think>", "", text, flags=re.S).strip()  # reasoning models: keep the answer only
 
 
@@ -321,11 +324,18 @@ def provider_status(probe=False, smoke=False, adapters=None):
 
 
 def redact_error(text):
-    """Redact any secret or token pattern from an error string before writing to runs.jsonl."""
+    """Redact any secret, token, ID, financial identifier, contact detail, or private pattern from an error string."""
     msg = " ".join(str(text or "").splitlines()).strip()
     for _, pat in TOKEN_PATTERNS:
         msg = pat.sub("[REDACTED]", msg)
     msg = SECRET_ASSIGNMENT.sub("[REDACTED]", msg)
+    msg = ID_DOCUMENT.sub(
+        lambda m: "[REDACTED]" if any(c.isdigit() for c in m.group(1)) else m.group(0), msg
+    )
+    msg = IBAN_CANDIDATE.sub(lambda m: "[REDACTED]" if iban_valid(m.group(0)) else m.group(0), msg)
+    msg = CARD_CANDIDATE.sub(lambda m: "[REDACTED]" if luhn_valid(m.group(0)) else m.group(0), msg)
+    msg = EMAIL.sub("[REDACTED]", msg)
+    msg = PHONE.sub("[REDACTED]", msg)
     for pat in private_patterns():
         msg = pat.sub("[REDACTED]", msg)
     if any(f[1] == "BLOCK" for f in scan_text(msg, private_patterns(), allow_mark=False)):
@@ -589,25 +599,29 @@ def run_ask(home, model, task_id, budget=6000, dry_run=False, adapters=None, tod
             text = adapters[model](f"{INSTRUCTION}\n\n{pack}")
         except Blocked as err:
             elapsed_ms = int((time.monotonic() - started) * 1000)
+            redacted = redact_error(err)
             append_run_record(home, {
                 **base_rec, "finished_at": utc_now_iso(), "duration_ms": elapsed_ms, "status": "blocked",
-                "phase": "provider_guard", "flags": 0, "error": redact_error(err),
+                "phase": "provider_guard", "flags": 0, "error": redacted,
             })
-            raise
+            raise Blocked(redacted) from None
         except ToolMissing as err:
             elapsed_ms = int((time.monotonic() - started) * 1000)
+            redacted = redact_error(err)
             append_run_record(home, {
                 **base_rec, "finished_at": utc_now_iso(), "duration_ms": elapsed_ms, "status": "tool_missing",
-                "flags": 0, "error": redact_error(err),
+                "flags": 0, "error": redacted,
             })
-            raise
+            raise ToolMissing(redacted) from None
         except AskError as err:
             elapsed_ms = int((time.monotonic() - started) * 1000)
+            status = _classify_ask_error(err)
+            redacted = redact_error(err)
             append_run_record(home, {
-                **base_rec, "finished_at": utc_now_iso(), "duration_ms": elapsed_ms, "status": _classify_ask_error(err),
-                "flags": 0, "error": redact_error(err),
+                **base_rec, "finished_at": utc_now_iso(), "duration_ms": elapsed_ms, "status": status,
+                "flags": 0, "error": redacted,
             })
-            raise
+            raise AskError(redacted) from None
         except Exception as err:
             elapsed_ms = int((time.monotonic() - started) * 1000)
             redacted = redact_error(err)
@@ -615,7 +629,7 @@ def run_ask(home, model, task_id, budget=6000, dry_run=False, adapters=None, tod
                 **base_rec, "finished_at": utc_now_iso(), "duration_ms": elapsed_ms, "status": "failed",
                 "flags": 0, "error": redacted,
             })
-            raise AskError(f"{model} failed: {redacted}") from err
+            raise AskError(f"{model} failed: {redacted}") from None
         elapsed_ms = int((time.monotonic() - started) * 1000)
 
         try:
@@ -773,15 +787,16 @@ def run_review(home, task_id, reviewers=("codex", "claude"), budget=6000, dry_ru
                     st = "blocked"
                 else:
                     st = _classify_ask_error(err)
+                redacted = redact_error(err)
                 fail_child = {
                     **base_child, "finished_at": utc_now_iso(), "duration_ms": elapsed_ms, "status": st,
-                    "flags": 0, "error": redact_error(err),
+                    "flags": 0, "error": redacted,
                 }
                 if phase:
                     fail_child["phase"] = phase
                 append_run_record(home, fail_child)
                 if first_err is None:
-                    first_err = err
+                    first_err = type(err)(redacted)
                 continue
             except Exception as err:
                 elapsed_ms = int((time.monotonic() - started) * 1000)

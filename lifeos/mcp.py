@@ -109,9 +109,10 @@ def handle(home, msg):
         try:
             text, bad = _run_tool(home, name, params.get("arguments") or {}), False
         except (ask.Blocked, ask.AskError, FileNotFoundError, ValueError, KeyError) as error:
-            text, bad = str(error.args[0] if isinstance(error, KeyError) else error), True
+            raw = str(error.args[0] if isinstance(error, KeyError) else error)
+            text, bad = ask.redact_error(raw), True
         except Exception as error:  # a tool must never take the whole server down
-            text, bad = f"{type(error).__name__}: {error}", True
+            text, bad = ask.redact_error(f"{type(error).__name__}: {error}"), True
         return _reply(id, {"content": [{"type": "text", "text": text}], "isError": bad})
     return _reply(id, error={"code": -32601, "message": f"Method not found: {method}"})
 
