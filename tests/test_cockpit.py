@@ -26,8 +26,9 @@ def test_cockpit_export_creates_self_contained_html_and_passes_guard(home, capsy
     assert html_path.exists()
     html = html_path.read_text(encoding="utf-8")
     assert "Braille × LifeOS · cockpit" in html
-    assert "#today" in html and "#tasks" in html and "#study" in html and "#agents" in html and "#loops" in html
+    assert "#today" in html and "#tasks" in html and "#study" in html and "#career" in html and "#agents" in html and "#loops" in html
     assert "T-261116-demo-cli" in html
+    assert "AWS Certified Solutions Architect" in html
 
 
 def test_cockpit_localhost_http_handler_reads_and_logs(home):
