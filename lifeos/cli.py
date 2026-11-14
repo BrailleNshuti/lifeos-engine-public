@@ -4,7 +4,7 @@ import json
 import sys
 
 from . import __version__
-from . import cockpit, kaizen, lab, log, mcp, router, runs, sortcsv
+from . import bakeoff, cockpit, exam, kaizen, lab, log, mcp, router, runs, showcase, sortcsv
 from .delegate import run_delegate
 from .ask import ADAPTERS, AskError, Blocked, ToolMissing, provider_status, run_ask, run_review
 from .context import build_pack, explain_pack, render_explanation
@@ -96,6 +96,44 @@ def cmd_cockpit(args):
         print(target.relative_to(home))
     except ValueError:
         print(target)
+    return 0
+
+
+def cmd_exam(args):
+    home = find_home(args.home)
+    if getattr(args, "score_skill", None) is not None:
+        res = exam.record_exam_score(home, args.score_skill, args.score_pct, proof_link=args.link or "reviews/exam.md")
+        print(json.dumps(res))
+        return 0
+    if getattr(args, "draft", False):
+        target = exam.write_exam_draft(home, month=args.month, module=args.module, overwrite=args.overwrite)
+        print(target.relative_to(home))
+        return 0
+    print(exam.generate_monthly_exam(home, month=args.month, module=args.module))
+    return 0
+
+
+def cmd_bakeoff(args):
+    home = find_home(args.home)
+    if getattr(args, "draft", False):
+        target = bakeoff.write_bakeoff(
+            home, quarter=args.quarter, task_type=args.task_type,
+            model_a=args.model_a, model_b=args.model_b, scores_json=args.scores, overwrite=args.overwrite,
+        )
+        print(target.relative_to(home))
+        return 0
+    scores = json.loads(args.scores) if args.scores else None
+    print(bakeoff.render_bakeoff_card(args.quarter or "2026-Q4", args.task_type, model_a=args.model_a, model_b=args.model_b, scores=scores))
+    return 0
+
+
+def cmd_showcase(args):
+    home = find_home(args.home)
+    if getattr(args, "draft", False):
+        target = showcase.write_weekly_post(home, week=args.week, overwrite=args.overwrite)
+        print(target.relative_to(home))
+        return 0
+    print(showcase.generate_weekly_post(home, week=args.week))
     return 0
 
 
@@ -457,6 +495,32 @@ def build_parser():
     ckp_p.add_argument("--serve", action="store_true", help="run a local HTTP server bound strictly to 127.0.0.1")
     ckp_p.add_argument("--port", type=int, default=8765, help="localhost port for --serve (default: 8765)")
     ckp_p.set_defaults(func=cmd_cockpit)
+
+    exm_p = sub.add_parser("exam", help="generate or score a 60-90 min Monthly No-AI Exam (Section 13.4 & Appendix B8)")
+    exm_p.add_argument("--month", help="YYYY-MM (default: current month)")
+    exm_p.add_argument("--module", default="CSEBDSDSSE01 · Data Science Software Engineering", help="IU module focus")
+    exm_p.add_argument("--draft", action="store_true", help="write reviews/exam-<YYYY-MM>.md")
+    exm_p.add_argument("--overwrite", action="store_true", help="overwrite existing exam draft")
+    exm_p.add_argument("--score-skill", help="skill name in logs/skills.md to record a graded no-AI exam score")
+    exm_p.add_argument("--score-pct", type=int, default=0, help="exam score percentage (0-100); >=80 elevates level to 3")
+    exm_p.add_argument("--link", help="proof link for logs/proofs.csv")
+    exm_p.set_defaults(func=cmd_exam)
+
+    bkf_p = sub.add_parser("bakeoff", help="generate or score a blind Role Bake-Off scorecard (Section 10.4 & Appendix A8)")
+    bkf_p.add_argument("--quarter", help="YYYY-Q1..Q4 (default: current quarter)")
+    bkf_p.add_argument("--task-type", default="Decision Memo", help="task category being compared")
+    bkf_p.add_argument("--model-a", default="claude")
+    bkf_p.add_argument("--model-b", default="chatgpt")
+    bkf_p.add_argument("--scores", help="JSON dict of X/Y task scores to unseal winner")
+    bkf_p.add_argument("--draft", action="store_true", help="write reviews/bakeoff-<quarter>-<slug>.md")
+    bkf_p.add_argument("--overwrite", action="store_true")
+    bkf_p.set_defaults(func=cmd_bakeoff)
+
+    shw_p = sub.add_parser("showcase", help="draft a 20-minute Build-in-Public weekly proof post & case study (Section 14.4 / D12)")
+    shw_p.add_argument("--week", help="ISO week such as 2026-W46")
+    shw_p.add_argument("--draft", action="store_true", help="write reviews/post-<week>.md")
+    shw_p.add_argument("--overwrite", action="store_true")
+    shw_p.set_defaults(func=cmd_showcase)
     return parser
 
 
