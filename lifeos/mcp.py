@@ -7,6 +7,7 @@ import json
 
 from . import __version__, ask, delegate
 from .context import build_pack, explain_pack, render_explanation, task_file
+from .store import new_run_id, validate_run_id
 from .tasks import list_tasks, new_task
 
 STR = {"type": "string"}
@@ -25,19 +26,19 @@ TOOLS = [
      _schema({"task": STR, "budget": {"type": "integer"}, "full": {"type": "boolean"}, "explain": {"type": "boolean"}}, ["task"])),
     ("lifeos_result_write", "Append your result to a task file under '## Result'. Class C data is refused.",
      _schema({"task": STR, "model": STR, "text": STR}, ["task", "model", "text"])),
-    ("lifeos_ask", "Send a task to another model (codex, claude, gemini, ollama, qwen) and write its answer into the task file.",
-     _schema({"task": STR, "model": STR, "budget": {"type": "integer"}, "full": {"type": "boolean"}}, ["task", "model"])),
+    ("lifeos_ask", "Send a task to another model (codex, claude, gemini, ollama, qwen) and write its answer into the task file. Pass run_id for idempotent retries.",
+     _schema({"task": STR, "model": STR, "budget": {"type": "integer"}, "full": {"type": "boolean"}, "run_id": STR}, ["task", "model"])),
     ("lifeos_delegate", "Let LifeOS pick the best-fitting model for a task (or pass model to choose), run it, "
      "and return its answer here. The answer is also appended to the task file.",
      _schema({"task": STR, "model": STR, "budget": {"type": "integer"}, "full": {"type": "boolean"}}, ["task"])),
-    ("lifeos_review", "Run an independent blind review (rule 7) across multiple models on the task's facts-only pack (and optional git repo/commit).",
-     _schema({"task": STR, "reviewers": STR, "repo": STR, "commit": STR, "budget": {"type": "integer"}}, ["task"])),
+    ("lifeos_review", "Run an independent blind review (rule 7) across multiple models on the task's facts-only pack (and optional git repo/commit). Pass run_id for idempotent retries.",
+     _schema({"task": STR, "reviewers": STR, "repo": STR, "commit": STR, "budget": {"type": "integer"}, "run_id": STR}, ["task"])),
 ]
 
 INSTRUCTIONS = ("You are the lead. Work happens in task files. For work that fits another model (code, long reading, "
                 "private sorting), call lifeos_delegate with the task id; read the answer it returns, check it against "
                 "rules.md (proof, sources, how it could be wrong), then say plainly if the CHECK line flags anything or you see nonsense, and write your decision or next step with "
-                "lifeos_result_write. For blind multi-model verification (rule 7), call lifeos_review. Never delegate class C data (IDs, bank, passwords, health, tenant data). "
+                "lifeos_result_write. For blind multi-model verification (rule 7), call lifeos_review. For reliable retries of lifeos_ask or lifeos_review across lost responses, generate and retain a run_id before the first call and reuse that run_id on retry. Never delegate class C data (IDs, bank, passwords, health, tenant data). "
                 "Private files such as a bank CSV never go into this chat or to any cloud model: tell the owner to run "
                 "`lifeos sort-csv <file>` in PowerShell (local, offline). "
                 "The owner makes the final call; sending, buying, deleting and publishing need his yes.")
@@ -63,13 +64,18 @@ def _run_tool(home, name, a):
         warn = f"\n\nCHECK (free, no model): {'; '.join(out['flags'])}" if out["flags"] else ""
         return f"{out['model']} answered ({out['reason']}).\n\n{out['text']}{warn}"
     if name == "lifeos_ask":
-        path = ask.run_ask(home, a["model"], a["task"], a.get("budget", 6000), full=bool(a.get("full")))
-        return f"{a['model']} answered; result appended to {path.relative_to(home)}"
+        rid = validate_run_id(a["run_id"]) if a.get("run_id") is not None else new_run_id()
+        path = ask.run_ask(
+            home, a["model"], a["task"], a.get("budget", 6000), full=bool(a.get("full")), run_id=rid,
+        )
+        return f"{a['model']} answered ({rid}); result appended to {path.relative_to(home)}"
     if name == "lifeos_review":
+        rid = validate_run_id(a["run_id"]) if a.get("run_id") is not None else None
         revs = [r.strip() for r in (a.get("reviewers") or "codex,claude").split(",") if r.strip()]
         out = ask.run_review(
             home, a["task"], reviewers=revs, budget=a.get("budget", 6000),
             repo=a.get("repo"), commit=a.get("commit", "HEAD") if "commit" in a else "HEAD",
+            run_id=rid,
         )
         parts = [f"Blind review ({out['group_run_id']}, pack {out['sha256']}) appended to {out['path'].relative_to(home)}:"]
         for r in out["results"]:

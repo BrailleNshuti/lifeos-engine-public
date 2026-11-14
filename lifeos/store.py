@@ -33,6 +33,7 @@ FLAGS_LABEL = "flags"
 LOCK_STALE_SECONDS = 30.0
 ALLOWED_JOURNAL_LOGS = {"logs/ledger.csv", "logs/proofs.csv", "logs/runs.jsonl"}
 TASK_REL_RE = re.compile(r"^(?:tasks/)?T-[A-Za-z0-9-]+\.md$")
+RUN_ID_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$")
 RUN_SCHEMA_VERSION = 2
 TERMINAL_RUN_STATUSES = ("ok", "blocked", "failed", "timeout", "tool_missing", "partial")
 
@@ -323,6 +324,15 @@ def commit_transaction(home, operations):
     if jpath is not None and jpath.exists():
         jpath.unlink(missing_ok=True)
         _fsync_parent_dir(jpath)
+
+
+def validate_run_id(run_id):
+    """Validate an explicit run_id string (1..128 safe ASCII characters, no path separators or whitespace)."""
+    if not isinstance(run_id, str) or not RUN_ID_RE.fullmatch(run_id):
+        raise ValueError(
+            "run_id must be a 1-128 character string using only ASCII letters, digits, '.', '_', or '-'."
+        )
+    return run_id
 
 
 def new_run_id(today=None):
