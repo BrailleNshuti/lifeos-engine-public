@@ -4,7 +4,7 @@ import json
 import sys
 
 from . import __version__
-from . import kaizen, lab, log, mcp, runs, sortcsv
+from . import cockpit, kaizen, lab, log, mcp, router, runs, sortcsv
 from .delegate import run_delegate
 from .ask import ADAPTERS, AskError, Blocked, ToolMissing, provider_status, run_ask, run_review
 from .context import build_pack, explain_pack, render_explanation
@@ -75,6 +75,27 @@ def cmd_kaizen(args):
         return 0
     report = kaizen.system_health(home, month=args.month)
     print(json.dumps(report, indent=2) if args.json else kaizen.render_system_health(report), end="" if not args.json else "\n")
+    return 0
+
+
+def cmd_route(args):
+    home = find_home(args.home)
+    decision = router.evaluate_route(home, " ".join(args.target), tier=args.tier, full=args.full)
+    print(json.dumps(decision, indent=2) if args.json else router.render_route(decision))
+    return 1 if decision["blocked"] else 0
+
+
+def cmd_cockpit(args):
+    home = find_home(args.home)
+    if getattr(args, "serve", False):
+        print(f"LifeOS Cockpit serving on http://127.0.0.1:{args.port}/#today", file=sys.stderr)
+        cockpit.serve_cockpit(home, port=args.port)
+        return 0
+    target = cockpit.export_cockpit(home, out_path=args.export)
+    try:
+        print(target.relative_to(home))
+    except ValueError:
+        print(target)
     return 0
 
 
@@ -423,6 +444,19 @@ def build_parser():
     kzn_p.add_argument("--draft", action="store_true", help="write reviews/<YYYY-MM>.md without overwriting")
     kzn_p.add_argument("--json", action="store_true", help="output structured JSON health report")
     kzn_p.set_defaults(func=cmd_kaizen)
+
+    rte_p = sub.add_parser("route", help="evaluate the 6-question Section 8.2 routing decision for a task or prompt")
+    rte_p.add_argument("target", nargs="+", help="task id (e.g. T-261116) or free-text task description")
+    rte_p.add_argument("--tier", help="override 5-tier data classification (PUBLIC, INTERNAL, PERSONAL, SENSITIVE, SECRET)")
+    rte_p.add_argument("--full", action="store_true", help="evaluate with me.md and now.md included")
+    rte_p.add_argument("--json", action="store_true", help="output structured JSON routing decision")
+    rte_p.set_defaults(func=cmd_route)
+
+    ckp_p = sub.add_parser("cockpit", help="export or serve the visual Braille × LifeOS Cockpit (#today, #tasks, #study, #agents, #loops)")
+    ckp_p.add_argument("--export", help="output HTML file path (default: <home>/cockpit/index.html)")
+    ckp_p.add_argument("--serve", action="store_true", help="run a local HTTP server bound strictly to 127.0.0.1")
+    ckp_p.add_argument("--port", type=int, default=8765, help="localhost port for --serve (default: 8765)")
+    ckp_p.set_defaults(func=cmd_cockpit)
     return parser
 
 
