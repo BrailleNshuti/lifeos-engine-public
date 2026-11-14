@@ -40,6 +40,10 @@ def test_warns_but_does_not_block():
 def test_clean_text_and_ordinary_numbers_pass():
     text = "Gate 1 on 2026-12-06; 154 to 172 hours; version 2.3; 1,129 skills; ISO week 2026-W47"
     assert kinds(text) == set()
+    # Hexadecimal Git/SHA-256 digests containing a Luhn-valid digit run adjacent to hex letters must not trip Card number
+    luhn_digits = CARD.replace(" ", "")
+    hex_digest_line = f"commit deadbeef{luhn_digits}cafebabe01234567\nparents 0123456789abcdef0123456789abcdef{luhn_digits[:8]} {luhn_digits[8:]}abcdef0123456789abcdef0123456789"
+    assert kinds(hex_digest_line) == set()
 
 
 def test_allow_mark_and_private_patterns():
