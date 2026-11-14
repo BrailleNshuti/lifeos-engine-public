@@ -385,8 +385,25 @@ def _stamp_v2_run_record(record):
             )
         if isinstance(rec["budget"], bool) or not isinstance(rec["budget"], int) or not (1 <= rec["budget"] <= 50000):
             raise ValueError(f"v2 {cmd} run record requires integer budget (1..50000).")
-        if rec.get("repo") and not rec.get("requested_commit"):
-            raise ValueError(f"v2 {cmd} run record with repo requires requested_commit.")
+        rec_repo = rec["repo"]
+        rec_req = rec["requested_commit"]
+        rec_sha = rec["commit_sha"]
+        if rec_repo is None:
+            if rec_req is not None or rec_sha is not None:
+                raise ValueError(
+                    f"v2 {cmd} run record without repo requires repo=None, requested_commit=None, and commit_sha=None."
+                )
+        else:
+            if not isinstance(rec_repo, str) or not rec_repo.strip():
+                raise ValueError(f"v2 {cmd} run record requires non-empty string repo or None.")
+            if not isinstance(rec_req, str) or not rec_req.strip():
+                raise ValueError(f"v2 {cmd} run record with repo requires non-empty string requested_commit.")
+            allow_null_sha = cmd == "review_group" and status == "failed"
+            if rec_sha is None:
+                if not allow_null_sha:
+                    raise ValueError(f"v2 {cmd} run record with repo requires non-empty string commit_sha.")
+            elif not isinstance(rec_sha, str) or not rec_sha.strip():
+                raise ValueError(f"v2 {cmd} run record requires non-empty string commit_sha.")
         if cmd == "review" and any(k not in rec for k in ("parent_run_id", "context_sha256", "repo", "commit_sha")):
             raise ValueError("v2 review child record is missing mandatory child identity fields.")
     now_iso = utc_now_iso()
