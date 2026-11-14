@@ -370,13 +370,21 @@ def _stamp_v2_run_record(record):
     if cmd == "ask":
         if any(k not in rec for k in ("budget", "full", "parent_run_id")):
             raise ValueError("v2 ask run record is missing mandatory identity fields (budget, full, parent_run_id).")
-        if isinstance(rec["budget"], bool) or not isinstance(rec["budget"], int) or not isinstance(rec["full"], bool):
-            raise ValueError("v2 ask run record requires integer budget and boolean full.")
+        if (
+            isinstance(rec["budget"], bool)
+            or not isinstance(rec["budget"], int)
+            or not (1 <= rec["budget"] <= 50000)
+            or not isinstance(rec["full"], bool)
+        ):
+            raise ValueError("v2 ask run record requires integer budget (1..50000) and boolean full.")
     elif cmd in ("review", "review_group"):
-        if any(k not in rec for k in ("budget", "diff_sha256")):
-            raise ValueError(f"v2 {cmd} run record is missing mandatory identity fields (budget, diff_sha256).")
-        if isinstance(rec["budget"], bool) or not isinstance(rec["budget"], int):
-            raise ValueError(f"v2 {cmd} run record requires integer budget.")
+        req_keys = ("budget", "diff_sha256", "requested_commit", "repo", "commit_sha")
+        if any(k not in rec for k in req_keys):
+            raise ValueError(
+                f"v2 {cmd} run record is missing mandatory identity fields ({', '.join(req_keys)})."
+            )
+        if isinstance(rec["budget"], bool) or not isinstance(rec["budget"], int) or not (1 <= rec["budget"] <= 50000):
+            raise ValueError(f"v2 {cmd} run record requires integer budget (1..50000).")
         if rec.get("repo") and not rec.get("requested_commit"):
             raise ValueError(f"v2 {cmd} run record with repo requires requested_commit.")
         if cmd == "review" and any(k not in rec for k in ("parent_run_id", "context_sha256", "repo", "commit_sha")):

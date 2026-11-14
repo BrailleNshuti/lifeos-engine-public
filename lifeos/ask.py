@@ -367,6 +367,10 @@ def _reconstruct_persisted_error(home, rec):
     return AskError(msg)
 
 
+def _valid_persisted_budget(val):
+    return not isinstance(val, bool) and isinstance(val, int) and 1 <= val <= 50000
+
+
 def _verify_ask_identity(rec, task_stem, expected_model, budget=6000, full=False, parent_run_id=None):
     """Ensure a reused run_id matches the original ask command, task_id, model, budget, full flag, and parent_run_id.
     Schema v2 records require all identity fields to be present; legacy v1 records default conservatively to (6000, False, None)."""
@@ -385,9 +389,9 @@ def _verify_ask_identity(rec, task_stem, expected_model, budget=6000, full=False
             f"run_id '{rec.get('run_id')}' is missing mandatory v2 ask identity fields."
         )
     rec_budget = rec.get("budget") if is_v2 else rec.get("budget", 6000)
-    if rec_budget != budget:
+    if not _valid_persisted_budget(rec_budget) or rec_budget != budget:
         raise ValueError(
-            f"run_id '{rec.get('run_id')}' already belongs to budget {rec_budget} (got {budget})."
+            f"run_id '{rec.get('run_id')}' already belongs to budget {rec_budget!r} (got {budget})."
         )
     rec_full = rec.get("full") if is_v2 else rec.get("full", False)
     if not isinstance(rec_full, bool) or rec_full != bool(full):
@@ -419,14 +423,14 @@ def _verify_review_identity(rec, task_stem, expected_model, repo, commit, budget
             f"({rec.get('command')}:{rec.get('task_id')}:{rec.get('model')})."
         )
     is_v2 = int(rec.get("schema_version", 1)) >= 2
-    if is_v2 and any(k not in rec for k in ("budget", "diff_sha256")):
+    if is_v2 and any(k not in rec for k in ("budget", "diff_sha256", "requested_commit", "repo", "commit_sha")):
         raise ValueError(
             f"run_id '{rec.get('run_id')}' is missing mandatory v2 review identity fields."
         )
     rec_budget = rec.get("budget") if is_v2 else rec.get("budget", 6000)
-    if rec_budget != budget:
+    if not _valid_persisted_budget(rec_budget) or rec_budget != budget:
         raise ValueError(
-            f"run_id '{rec.get('run_id')}' already belongs to budget {rec_budget} (got {budget})."
+            f"run_id '{rec.get('run_id')}' already belongs to budget {rec_budget!r} (got {budget})."
         )
     expected_diff_sha = _diff_digest(diff_text)
     rec_diff_sha = rec.get("diff_sha256") if is_v2 else rec.get("diff_sha256", None)
@@ -450,6 +454,10 @@ def _verify_review_identity(rec, task_stem, expected_model, repo, commit, budget
                 )
         elif rec_sha and req_arg not in ("HEAD", rec_sha):
             raise ValueError(f"run_id '{rec.get('run_id')}' already belongs to commit '{rec_sha}'.")
+    elif is_v2 and rec.get("requested_commit") is not None:
+        raise ValueError(
+            f"run_id '{rec.get('run_id')}' already belongs to commit '{rec.get('requested_commit')}'."
+        )
 
 
 def _verify_review_child_identity(
@@ -458,7 +466,10 @@ def _verify_review_child_identity(
     """Ensure a persisted child review record from an interrupted run matches the parent, task, model, context digest,
     budget, diff_sha256, repo, and commit."""
     is_v2 = int(child_rec.get("schema_version", 1)) >= 2
-    if is_v2 and any(k not in child_rec for k in ("budget", "diff_sha256")):
+    req_child_keys = (
+        "budget", "diff_sha256", "requested_commit", "parent_run_id", "context_sha256", "repo", "commit_sha"
+    )
+    if is_v2 and any(k not in child_rec for k in req_child_keys):
         raise ValueError(
             f"child run_id '{child_rec.get('run_id')}' is missing mandatory v2 review identity fields."
         )
@@ -473,6 +484,7 @@ def _verify_review_child_identity(
         or child_rec.get("repo") != repo_label
         or child_rec.get("commit_sha") != commit_sha
         or child_rec.get("requested_commit") != req_commit
+        or not _valid_persisted_budget(rec_budget)
         or rec_budget != budget
         or rec_diff_sha != diff_sha
     ):
