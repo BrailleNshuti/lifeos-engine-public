@@ -1,10 +1,11 @@
 """lifeos: command line for the LifeOS Engine."""
 import argparse
 import json
+from pathlib import Path
 import sys
 
 from . import __version__
-from . import bakeoff, cockpit, exam, kaizen, lab, log, mcp, router, runs, showcase, sortcsv
+from . import bakeoff, cockpit, exam, kaizen, lab, log, mcp, router, runs, showcase, sortcsv, study
 from .delegate import run_delegate
 from .ask import ADAPTERS, AskError, Blocked, ToolMissing, provider_status, run_ask, run_review
 from .context import build_pack, explain_pack, render_explanation
@@ -88,7 +89,7 @@ def cmd_route(args):
 def cmd_cockpit(args):
     home = find_home(args.home)
     if getattr(args, "serve", False):
-        print(f"LifeOS Cockpit serving on http://127.0.0.1:{args.port}/#today", file=sys.stderr)
+        print(f"LifeOS Cockpit serving on http://127.0.0.1:{args.port}/#learning", file=sys.stderr)
         cockpit.serve_cockpit(home, port=args.port)
         return 0
     target = cockpit.export_cockpit(home, out_path=args.export)
@@ -111,6 +112,45 @@ def cmd_exam(args):
         return 0
     print(exam.generate_monthly_exam(home, month=args.month, module=args.module))
     return 0
+
+
+def cmd_study(args):
+    home = find_home(args.home)
+    if args.study_action == "sources":
+        rows = study.list_sources(home)
+        if args.json:
+            print(json.dumps(rows, ensure_ascii=False, indent=2))
+        else:
+            for row in rows:
+                print(f"{row['subject']:<18} {row['words']:>6} words  {row['path']}  ({row['sha256'][:10]})")
+        return 0
+    if args.study_action == "import":
+        source_path = Path(args.file)
+        source = source_path.read_text(encoding="utf-8")
+        title = args.title or source_path.stem
+        target = study.save_note(home, title, args.subject, source, source_url=args.source_url)
+        print(target.relative_to(home).as_posix())
+        return 0
+    if args.study_action == "bank":
+        target = study.write_question_bank(home, args.source, overwrite=args.overwrite)
+        print(target.relative_to(home).as_posix())
+        return 0
+    if args.study_action == "verify":
+        result = study.set_question_trust(home, args.bank, args.question, args.trust)
+        print(json.dumps(result))
+        return 0
+    if args.study_action == "attempt":
+        result = study.record_attempt(home, args.question, args.rating, elapsed_seconds=args.seconds)
+        print(json.dumps(result))
+        return 0
+    if args.study_action == "exam":
+        result = study.compose_exam(
+            home, title=args.title, subject=args.subject or "", count=args.count, minutes=args.minutes,
+        )
+        print(json.dumps({**result, "exam_path": result["exam_path"].relative_to(home).as_posix(),
+                          "key_path": result["key_path"].relative_to(home).as_posix()}))
+        return 0
+    return 2
 
 
 def cmd_bakeoff(args):
@@ -495,6 +535,33 @@ def build_parser():
     ckp_p.add_argument("--serve", action="store_true", help="run a local HTTP server bound strictly to 127.0.0.1")
     ckp_p.add_argument("--port", type=int, default=8765, help="localhost port for --serve (default: 8765)")
     ckp_p.set_defaults(func=cmd_cockpit)
+
+    std_p = sub.add_parser("study", help="local-first notes, grounded question banks, retrieval practice and exams")
+    std_sub = std_p.add_subparsers(dest="study_action", required=True)
+    std_src = std_sub.add_parser("sources", help="list indexed Markdown/text learning sources")
+    std_src.add_argument("--json", action="store_true")
+    std_imp = std_sub.add_parser("import", help="copy a UTF-8 Markdown/text file into the guarded source library")
+    std_imp.add_argument("file")
+    std_imp.add_argument("--title")
+    std_imp.add_argument("--subject", default="general")
+    std_imp.add_argument("--source-url", default="")
+    std_bnk = std_sub.add_parser("bank", help="create a grounded draft question bank from one learning source")
+    std_bnk.add_argument("source", help="LifeOS-relative source path, for example learning/sources/python.md")
+    std_bnk.add_argument("--overwrite", action="store_true")
+    std_ver = std_sub.add_parser("verify", help="record human trust state for one grounded question")
+    std_ver.add_argument("bank")
+    std_ver.add_argument("question")
+    std_ver.add_argument("--trust", choices=study.TRUST_STATES, default="verified")
+    std_att = std_sub.add_parser("attempt", help="record a verified retrieval attempt and next-review interval")
+    std_att.add_argument("question")
+    std_att.add_argument("--rating", choices=study.RATINGS, required=True)
+    std_att.add_argument("--seconds", type=int, default=0)
+    std_exm = std_sub.add_parser("exam", help="compose a printable exam plus separate key from verified questions")
+    std_exm.add_argument("--title", default="Practice Exam")
+    std_exm.add_argument("--subject")
+    std_exm.add_argument("--count", type=int, default=10)
+    std_exm.add_argument("--minutes", type=int, default=60)
+    std_p.set_defaults(func=cmd_study)
 
     exm_p = sub.add_parser("exam", help="generate or score a 60-90 min Monthly No-AI Exam (Section 13.4 & Appendix B8)")
     exm_p.add_argument("--month", help="YYYY-MM (default: current month)")

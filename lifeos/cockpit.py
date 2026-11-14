@@ -16,6 +16,7 @@ from .kaizen import system_health
 from .log import log_health, log_hours, log_ledger, log_proof
 from .runs import summarize_runs
 from .store import atomic_write_bytes
+from . import study
 from .tasks import list_tasks, new_task
 from .week import week_numbers
 
@@ -264,6 +265,7 @@ def build_cockpit_data(home, week=None, month=None):
         "prompt_cards": _list_prompt_cards(home),
         "skills": skills,
         "learning": _learning_profile(home, detailed_tasks, packs, skills, week_data),
+        "study_engine": study.study_snapshot(home, include_content=True),
         "project_chamber": _load_project_chamber(home),
     }
 
@@ -273,98 +275,73 @@ COCKPIT_HTML_TEMPLATE = """<!doctype html>
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<meta name="theme-color" content="#0A0A0A">
-<meta name="color-scheme" content="dark">
+<meta name="theme-color" content="#1B2821">
+<meta name="color-scheme" content="light dark">
 <title>Braille × LifeOS · cockpit</title>
 <style>
 :root{
-  --ink:#0A0A0A;--surface:#111;--surface-2:#161513;--surface-3:#1D1B18;
-  --line:rgba(255,255,255,.18);--line-strong:rgba(255,255,255,.30);--hair:rgba(255,255,255,.10);
-  --text:rgba(255,255,255,.96);--mute:rgba(255,255,255,.70);--dim:rgba(255,255,255,.55);
-  --copper:#D39A5E;--copper-ink:#7A4A1E;--mint:#7FB8A8;--steel:#8B9EB8;--clay:#B0746A;
-  --paper:#EDEAE4;--on-paper:#1A1815;--on-paper-dim:#67604D;
-  --font-display:Georgia,'Times New Roman',serif;--font-serif:Georgia,'Times New Roman',serif;
-  --font-sans:-apple-system,BlinkMacSystemFont,'Segoe UI',Arial,sans-serif;
-  --font-mono:ui-monospace,'Cascadia Mono',Consolas,monospace;
-  --r:14px;--r-s:8px;--gutter:clamp(16px,4vw,36px);
+  --desk:#D7D0C2;--paper:#F4F0E6;--paper-2:#ECE6D8;--ink:#1C1A17;--muted:#665F54;--faint:#918979;
+  --rail:#19251F;--rail-2:#233329;--rail-text:#EEE8DA;--line:#C8BEAC;--line-strong:#9E927F;
+  --blue:#224E86;--red:#A84931;--moss:#476A50;--ochre:#A66B21;--shadow:0 20px 55px rgba(45,36,25,.13);
+  --text:var(--ink);--mute:var(--muted);--dim:var(--faint);--surface:var(--paper);--surface-2:var(--paper-2);--surface-3:#232A25;
+  --hair:rgba(28,26,23,.13);--copper:var(--ochre);--copper-ink:#704512;--mint:var(--moss);--steel:var(--blue);--clay:var(--red);
+  --on-paper:var(--ink);--on-paper-dim:var(--muted);--font-display:Georgia,'Times New Roman',serif;
+  --font-serif:Georgia,'Times New Roman',serif;--font-sans:'Segoe UI',Arial,sans-serif;--font-mono:'Cascadia Mono',Consolas,monospace;
+  --r:4px;--r-s:3px;--gutter:clamp(18px,3.2vw,48px);
 }
+body.night{--desk:#0D100E;--paper:#151A16;--paper-2:#1D231E;--ink:#ECE7DA;--muted:#B7B09F;--faint:#827D71;--line:#394139;--line-strong:#596359;--blue:#79A9DE;--red:#DF8067;--moss:#83B18B;--ochre:#D8A258;--shadow:0 22px 65px rgba(0,0,0,.34);--hair:rgba(236,231,218,.12)}
 *,*::before,*::after{box-sizing:border-box}
-body{margin:0;background:var(--ink);color:var(--text);font-family:var(--font-sans);line-height:1.55;min-height:100dvh}
-h1,h2,h3{margin:0;font-weight:400;line-height:1.15}
-h1{font-family:var(--font-display);font-size:clamp(1.85rem,4vw,2.75rem);font-weight:300}
-h2{font-family:var(--font-display);font-size:clamp(1.3rem,2.3vw,1.75rem);font-weight:300}
-h3{font-size:1.05rem;font-weight:600}
-.eyebrow{font-family:var(--font-mono);font-size:.73rem;letter-spacing:.14em;text-transform:uppercase;color:var(--copper)}
-.mono{font-family:var(--font-mono);font-size:.75rem;color:var(--mute)}
-.shell{display:grid;min-height:100dvh}
-@media (min-width:900px){.shell{grid-template-columns:240px minmax(0,1fr)}}
-.rail{border-right:1px solid var(--hair);padding:20px 14px;background:var(--ink);position:sticky;top:0;height:100dvh;overflow:auto}
-.brand{padding:6px 10px 18px;border-bottom:1px solid var(--hair);margin-bottom:12px}
-.brand b{font-family:var(--font-display);font-size:1.25rem;font-weight:400;display:block}
-.grp{padding:14px 10px 6px;font-family:var(--font-mono);font-size:.68rem;letter-spacing:.14em;text-transform:uppercase;color:var(--dim)}
-.nav{display:flex;align-items:center;justify-content:space-between;padding:9px 12px;border-radius:10px;text-decoration:none;color:var(--mute);font-size:.88rem;cursor:pointer;border:0;background:transparent;width:100%;text-align:left}
-.nav:hover{background:var(--surface);color:var(--text)}
-.nav.on{background:var(--surface-2);color:var(--text);border-left:2px solid var(--copper)}
-.main{padding:var(--gutter);max-width:1220px;width:100%}
-.hero{padding:10px 0 24px;border-bottom:1px solid var(--hair);margin-bottom:22px}
-.hero h1{margin:8px 0 10px}
-.grid{display:grid;gap:14px}
-@media (min-width:680px){.grid.c2{grid-template-columns:1fr 1fr}.grid.c3{grid-template-columns:repeat(3,1fr)}.grid.c4{grid-template-columns:repeat(4,1fr)}}
-.card{background:var(--surface);border:1px solid var(--hair);border-radius:var(--r);padding:18px;display:grid;gap:10px;align-content:start}
-.stat .n{font-family:var(--font-display);font-size:2.1rem;font-weight:300;line-height:1}
-.stat .l{color:var(--mute);font-size:.86rem}
-.pill{display:inline-flex;align-items:center;gap:6px;padding:3px 10px;border-radius:999px;font-family:var(--font-mono);font-size:.68rem;letter-spacing:.06em;text-transform:uppercase;border:1px solid var(--line);color:var(--mute)}
-.pill.copper{color:var(--copper);border-color:rgba(211,154,94,.45)}
-.pill.mint{color:var(--mint);border-color:rgba(127,184,168,.45)}
-.pill.steel{color:var(--steel);border-color:rgba(139,158,184,.45)}
-.pill.clay{color:var(--clay);border-color:rgba(176,116,106,.45)}
-.chips{display:flex;flex-wrap:wrap;gap:8px;margin:10px 0}
-.chip{padding:7px 13px;border:1px solid var(--line);border-radius:999px;font-size:.82rem;cursor:pointer;background:transparent;color:var(--mute)}
-.chip.on{border-color:var(--copper);background:rgba(211,154,94,.14);color:var(--text)}
-.btn{padding:9px 15px;border-radius:10px;border:1px solid var(--line-strong);background:var(--surface-2);color:var(--text);cursor:pointer;font-size:.86rem;font-weight:500}
-.btn.primary{background:var(--copper);color:#0A0A0A;border-color:var(--copper);font-weight:600}
-.input{width:100%;padding:9px 12px;border-radius:8px;border:1px solid var(--line);background:var(--surface-2);color:var(--text);font-size:.88rem}
-.bar{height:4px;background:var(--hair);border-radius:2px;overflow:hidden}
-.bar b{display:block;height:100%;background:var(--copper)}
-.bar.mint b{background:var(--mint)}
-.list{list-style:none;margin:0;padding:0}
-.list li{display:flex;justify-content:space-between;align-items:center;gap:12px;padding:10px 0;border-top:1px solid var(--hair);font-size:.88rem}
-.list li:first-child{border-top:0}
-.paper{background:var(--paper);color:var(--on-paper);border-radius:var(--r);padding:clamp(20px,4vw,36px);font-family:var(--font-serif);font-size:1.04rem}
-.paper h2{font-family:var(--font-display);color:var(--on-paper);margin-bottom:10px}
-.notice{border-left:2px solid var(--copper);padding:10px 14px;background:rgba(211,154,94,.07);border-radius:0 8px 8px 0;font-size:.86rem}
-.learning-loop{display:grid;grid-template-columns:repeat(5,1fr);gap:8px;margin-top:12px}
-.learning-step{padding:12px 8px;border:1px solid var(--hair);border-radius:10px;text-align:center;font-size:.78rem;color:var(--mute)}
-.learning-step b{display:block;color:var(--text);font-family:var(--font-mono);font-size:.7rem;margin-bottom:4px}
-.focus-card{background:linear-gradient(145deg,rgba(211,154,94,.16),rgba(127,184,168,.06));border-color:rgba(211,154,94,.42)}
-.session-clock{font-family:var(--font-display);font-size:clamp(3.2rem,8vw,5.5rem);line-height:1;color:var(--copper)}
-.soft{background:var(--surface-2)}
-.project-card summary{cursor:pointer;list-style:none}
-.project-card summary::-webkit-details-marker{display:none}
-.project-meta{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}
-.steps{counter-reset:build-step;list-style:none;margin:0;padding:0;display:grid;gap:8px}
-.steps li{counter-increment:build-step;padding:10px 12px 10px 42px;border:1px solid var(--hair);border-radius:9px;position:relative;font-size:.86rem}
-.steps li::before{content:counter(build-step);position:absolute;left:12px;top:10px;color:var(--copper);font-family:var(--font-mono)}
-.interview{background:linear-gradient(145deg,rgba(139,158,184,.13),rgba(211,154,94,.08));border-color:rgba(139,158,184,.38)}
-.rubric{display:grid;gap:7px}
-.rubric label{display:flex;gap:8px;align-items:flex-start;font-size:.84rem;color:var(--mute)}
-@media (max-width:679px){.learning-loop{grid-template-columns:1fr}.rail{position:relative;height:auto}.shell{display:block}}
-.toast{position:fixed;right:24px;bottom:24px;background:var(--surface-3);border:1px solid var(--copper);padding:10px 16px;border-radius:999px;font-size:.85rem;display:none;z-index:99}
+html{scroll-behavior:smooth} body{margin:0;background:var(--desk);color:var(--text);font-family:var(--font-sans);line-height:1.58;min-height:100dvh}
+button,input,select,textarea{font:inherit} button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-visible{outline:3px solid color-mix(in srgb,var(--blue) 55%,transparent);outline-offset:2px}
+h1,h2,h3{margin:0;font-weight:400;line-height:1.12} h1{font:400 clamp(2.25rem,5vw,4.8rem)/.98 var(--font-display);letter-spacing:-.035em} h2{font:400 clamp(1.45rem,2.6vw,2.2rem)/1.08 var(--font-display)} h3{font-size:1rem;font-weight:650}
+.eyebrow{font:600 .68rem/1.4 var(--font-mono);letter-spacing:.13em;text-transform:uppercase;color:var(--ochre)} .mono{font:400 .72rem/1.55 var(--font-mono);color:var(--mute)}
+.shell{display:grid;min-height:100dvh}.rail{padding:24px 15px;background:linear-gradient(180deg,var(--rail),#121B16);color:var(--rail-text);position:sticky;top:0;height:100dvh;overflow:auto;z-index:5;border-right:1px solid rgba(255,255,255,.08)}
+@media (min-width:920px){.shell{grid-template-columns:248px minmax(0,1fr)}}
+.brand{padding:4px 10px 22px;border-bottom:1px solid rgba(255,255,255,.12);margin-bottom:11px}.brand b{font:400 1.35rem/1.2 var(--font-display);display:block;margin:3px 0}.brand .mono{color:rgba(238,232,218,.63)}
+.rail-tools{display:flex;gap:6px;margin-top:13px}.rail-tool{border:1px solid rgba(255,255,255,.17);background:transparent;color:var(--rail-text);padding:6px 9px;border-radius:3px;cursor:pointer;font-size:.72rem}
+.grp{padding:17px 11px 6px;font:600 .62rem/1 var(--font-mono);letter-spacing:.14em;text-transform:uppercase;color:rgba(238,232,218,.43)}
+.nav{display:flex;align-items:center;justify-content:space-between;padding:10px 11px;text-decoration:none;color:rgba(238,232,218,.68);font-size:.84rem;cursor:pointer;border:0;border-left:2px solid transparent;background:transparent;width:100%;text-align:left;border-radius:0}
+.nav:hover{background:rgba(255,255,255,.055);color:var(--rail-text)}.nav.on{background:rgba(255,255,255,.075);color:#fff;border-left-color:#D6A156}.nav .mono{color:rgba(238,232,218,.42)}
+.main{padding:var(--gutter);max-width:1540px;width:100%;min-width:0}.hero{padding:14px 0 26px;border-bottom:1px solid var(--line);margin-bottom:24px}.hero h1{max-width:900px;margin:10px 0 13px}.hero p{max-width:78ch}
+.grid{display:grid;gap:15px}@media (min-width:700px){.grid.c2{grid-template-columns:repeat(2,minmax(0,1fr))}.grid.c3{grid-template-columns:repeat(3,minmax(0,1fr))}.grid.c4{grid-template-columns:repeat(4,minmax(0,1fr))}}
+.card{background:var(--paper);border:1px solid var(--line);border-radius:var(--r);padding:20px;display:grid;gap:11px;align-content:start;box-shadow:0 2px 0 rgba(78,65,47,.05)}.card:hover{border-color:var(--line-strong)}
+.stat{box-shadow:none;border-width:0 0 1px;background:transparent;padding:14px 2px}.stat .n{font:400 2.4rem/1 var(--font-display)}.stat .l{color:var(--mute);font-size:.8rem}
+.pill{display:inline-flex;align-items:center;gap:6px;padding:3px 8px;border-radius:2px;font:600 .62rem/1.4 var(--font-mono);letter-spacing:.055em;text-transform:uppercase;border:1px solid var(--line);color:var(--mute)}.pill.copper{color:var(--ochre);border-color:color-mix(in srgb,var(--ochre) 45%,var(--line))}.pill.mint{color:var(--moss);border-color:color-mix(in srgb,var(--moss) 45%,var(--line))}.pill.steel{color:var(--blue);border-color:color-mix(in srgb,var(--blue) 45%,var(--line))}.pill.clay{color:var(--red);border-color:color-mix(in srgb,var(--red) 45%,var(--line))}
+.chips{display:flex;flex-wrap:wrap;gap:7px;margin:9px 0}.chip{padding:7px 11px;border:1px solid var(--line);border-radius:2px;font-size:.78rem;cursor:pointer;background:transparent;color:var(--mute)}.chip:hover,.chip.on{border-color:var(--blue);color:var(--blue);background:color-mix(in srgb,var(--blue) 7%,transparent)}
+.btn{padding:9px 14px;border-radius:2px;border:1px solid var(--line-strong);background:transparent;color:var(--text);cursor:pointer;font-size:.82rem;font-weight:650}.btn:hover{transform:translateY(-1px);box-shadow:0 4px 12px rgba(40,33,24,.09)}.btn.primary{background:var(--blue);color:#fff;border-color:var(--blue)}.btn.danger{color:var(--red);border-color:var(--red)}
+.input{width:100%;padding:10px 11px;border-radius:2px;border:1px solid var(--line);background:color-mix(in srgb,var(--paper) 90%,transparent);color:var(--text);font-size:.86rem}textarea.input{resize:vertical;line-height:1.55}
+.bar{height:5px;background:var(--line);overflow:hidden}.bar b{display:block;height:100%;background:var(--ochre)}.bar.mint b{background:var(--moss)}
+.list{list-style:none;margin:0;padding:0}.list li{display:flex;justify-content:space-between;align-items:flex-start;gap:12px;padding:11px 0;border-top:1px solid var(--hair);font-size:.86rem}.list li:first-child{border-top:0}
+.paper,.desk-paper{background:var(--paper);color:var(--on-paper);border:1px solid var(--line);padding:clamp(25px,4vw,54px);font:400 1.03rem/1.75 var(--font-serif);box-shadow:var(--shadow)}.paper h2,.desk-paper h2{font-family:var(--font-display);color:var(--on-paper);margin-bottom:10px}
+.notice{border-left:3px solid var(--ochre);padding:10px 14px;background:color-mix(in srgb,var(--ochre) 8%,transparent);font-size:.84rem}.learning-loop{display:grid;grid-template-columns:repeat(5,1fr);border:1px solid var(--line);margin-top:18px}.learning-step{padding:11px;border-right:1px solid var(--line);font-size:.73rem;color:var(--mute)}.learning-step:last-child{border-right:0}.learning-step b{display:block;color:var(--text);font:650 .65rem var(--font-mono);margin-bottom:4px}
+.focus-card{background:var(--paper);border-top:4px solid var(--blue);box-shadow:var(--shadow)}.session-clock{font:400 clamp(3.6rem,8vw,6.8rem)/.9 var(--font-display);letter-spacing:-.06em;color:var(--blue)}.soft{background:var(--paper-2)}
+.atelier{display:grid;gap:18px;align-items:start}.syllabus{background:transparent;border:0;border-right:1px solid var(--line);padding-right:15px}.work-surface{min-width:0}.evidence-margin{border-left:1px solid var(--line);padding-left:16px;position:sticky;top:20px}.book-spine{display:block;width:100%;text-align:left;padding:10px 9px;border:0;border-bottom:1px solid var(--line);background:transparent;color:var(--mute);cursor:pointer}.book-spine:hover,.book-spine.on{color:var(--text);border-left:3px solid var(--blue);padding-left:12px;background:color-mix(in srgb,var(--blue) 5%,transparent)}
+.note-body{white-space:pre-wrap;word-wrap:break-word;font:400 1rem/1.72 var(--font-serif);max-width:78ch;margin:0}.margin-note{padding:12px 0;border-bottom:1px solid var(--line);font-size:.8rem}.margin-note b{display:block;color:var(--blue)}
+.trust-pipeline{display:grid;grid-template-columns:repeat(4,1fr);border:1px solid var(--line);margin:12px 0}.trust-step{padding:12px;border-right:1px solid var(--line);font-size:.75rem}.trust-step:last-child{border:0}.trust-step strong{display:block;font-family:var(--font-mono);font-size:.66rem;text-transform:uppercase;color:var(--blue)}
+.review-prompt{font:400 clamp(1.55rem,3.2vw,2.55rem)/1.2 var(--font-display);max-width:26ch}.answer-sheet{border-left:4px solid var(--moss);background:color-mix(in srgb,var(--moss) 8%,var(--paper));padding:20px;font-family:var(--font-serif);line-height:1.7}.exam-seal{border:1px dashed var(--red);padding:14px;color:var(--red);font-family:var(--font-mono)}
+.project-card summary{cursor:pointer;list-style:none}.project-card summary::-webkit-details-marker{display:none}.project-meta{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}.steps{counter-reset:build-step;list-style:none;margin:0;padding:0;display:grid;gap:8px}.steps li{counter-increment:build-step;padding:10px 12px 10px 40px;border-top:1px solid var(--line);position:relative;font-size:.84rem}.steps li::before{content:counter(build-step);position:absolute;left:10px;color:var(--ochre);font-family:var(--font-mono)}.interview{border-top:4px solid var(--blue)}.rubric{display:grid;gap:7px}.rubric label{display:flex;gap:8px;align-items:flex-start;font-size:.82rem;color:var(--mute)}
+.focus-mode .rail{display:none}.focus-mode .shell{display:block}.focus-mode .main{max-width:1100px;margin:auto}.focus-mode .evidence-margin,.focus-mode .syllabus{display:none}.focus-mode .atelier{display:block}.theme-toggle{margin-left:auto}
+.toast{position:fixed;right:22px;bottom:22px;background:var(--rail);color:var(--rail-text);border-left:4px solid var(--ochre);padding:11px 16px;font-size:.82rem;display:none;z-index:99;box-shadow:var(--shadow)}
+@media (min-width:1120px){.atelier{grid-template-columns:220px minmax(0,1fr) 290px}}@media (min-width:760px) and (max-width:1119px){.atelier{grid-template-columns:190px minmax(0,1fr)}.evidence-margin{grid-column:2;position:static;border-left:0;padding-left:0}}
+@media (max-width:759px){.shell{display:block;width:100%;max-width:100vw}.rail{position:relative;height:auto;width:100vw;max-width:100vw;padding:14px 12px 10px;white-space:nowrap;overflow-x:auto}.brand{white-space:normal;padding:0 2px 12px;margin-bottom:9px}.brand b{font-size:1.2rem}.grp{display:none}.nav{display:inline-flex;width:auto;min-width:max-content;padding:9px 10px;border-left:0;border-bottom:2px solid transparent}.nav.on{border-left:0;border-bottom-color:#D6A156}.nav .mono{display:none}.main{padding:22px 16px;overflow:hidden;width:100vw;max-width:100vw}.hero,.atelier,.work-surface{width:100%;max-width:100%;min-width:0}.hero{padding-top:6px}.hero h1,.hero p{max-width:100%;overflow-wrap:anywhere}.atelier{display:block}.syllabus{border-right:0;padding:0;margin-bottom:14px;min-width:0}.book-spine{white-space:normal;overflow-wrap:anywhere}.evidence-margin{position:static;border-left:0;padding:0;margin-top:14px}.learning-loop,.trust-pipeline{grid-template-columns:1fr}.learning-step,.trust-step{border-right:0;border-bottom:1px solid var(--line)}h1{font-size:2.45rem;overflow-wrap:anywhere}.paper,.desk-paper{padding:24px 18px;max-width:100%}}
+@media (prefers-reduced-motion:reduce){*,*::before,*::after{scroll-behavior:auto!important;transition:none!important;animation:none!important}.btn:hover{transform:none}}
 </style>
 </head>
 <body>
 <div class="shell">
   <aside class="rail">
     <div class="brand">
-      <span class="eyebrow">Personal AI OS · v2.4</span>
+      <span class="eyebrow">Private Study Atelier</span>
       <b>Braille · LifeOS</b>
       <span class="mono" id="week-badge"></span>
+      <div class="rail-tools"><button class="rail-tool" onclick="toggleFocus()">Focus</button><button class="rail-tool" onclick="toggleTheme()">Day / night</button></div>
     </div>
-    <div class="grp">Learning Studio</div>
-    <button class="nav on" data-tab="learning"><span>#focus · Learn Today</span><span class="mono">01</span></button>
-    <button class="nav" data-tab="study"><span>#library · IU & German</span><span class="mono">packs</span></button>
-    <button class="nav" data-tab="recall"><span>#recall · Exams & Review</span><span class="mono" id="nav-recall-count"></span></button>
-    <button class="nav" data-tab="mastery"><span>#mastery · Skill Map</span><span class="mono" id="nav-mastery"></span></button>
+    <div class="grp">Study Atelier</div>
+    <button class="nav on" data-tab="learning"><span>01 · Study Desk</span><span class="mono">today</span></button>
+    <button class="nav" data-tab="study"><span>02 · Source Library</span><span class="mono" id="nav-source-count"></span></button>
+    <button class="nav" data-tab="practice"><span>03 · Recall Studio</span><span class="mono" id="nav-recall-count"></span></button>
+    <button class="nav" data-tab="exam"><span>04 · Exam Forge</span><span class="mono" id="nav-exam-count"></span></button>
+    <button class="nav" data-tab="mastery"><span>05 · Knowledge Map</span><span class="mono" id="nav-mastery"></span></button>
     <button class="nav" data-tab="build"><span>#build · Project Chamber</span><span class="mono" id="nav-project-count"></span></button>
     <div class="grp">Plan & Reflect</div>
     <button class="nav" data-tab="projects"><span>#projects · Tasks</span><span class="mono" id="nav-tasks-count"></span></button>
@@ -378,7 +355,8 @@ h3{font-size:1.05rem;font-weight:600}
 <script>
 const DATA = __LIFEOS_DATA_JSON__;
 const WRITE_NONCE = "__LIFEOS_WRITE_NONCE__";
-let state = { tab: (location.hash.replace('#','') || 'learning'), lane: 'study', status: 'all', projectTrack: 'all', projectStage: 'all', interviewProject: 0, interviewQuestion: 0, checkin: localStorage.getItem('lifeos_checkin_'+new Date().toISOString().slice(0,10)) || '', timerSec: 35*60, plannedMin: 35, timerRunning: false };
+let state = { tab: (location.hash.replace('#','') || 'learning'), lane: 'study', status: 'all', projectTrack: 'all', projectStage: 'all', interviewProject: 0, interviewQuestion: 0, sourceQuery: '', selectedSource: 0, practiceIndex: 0, revealedAnswer: null, practiceStartedAt: Date.now(), checkin: localStorage.getItem('lifeos_checkin_'+new Date().toISOString().slice(0,10)) || '', timerSec: 35*60, plannedMin: 35, timerRunning: false };
+if(localStorage.getItem('lifeos_theme') === 'night') document.body.classList.add('night');
 
 function esc(value){
   return String(value ?? '').replace(/[&<>"']/g, ch => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch]));
@@ -408,112 +386,107 @@ function setTab(tab){
   render();
 }
 
+function toggleFocus(){
+  document.body.classList.toggle('focus-mode');
+  toast(document.body.classList.contains('focus-mode') ? 'Focus mode · the desk is now quiet' : 'Atelier navigation restored');
+}
+
+function toggleTheme(){
+  document.body.classList.toggle('night');
+  localStorage.setItem('lifeos_theme', document.body.classList.contains('night') ? 'night' : 'day');
+}
+
 document.querySelectorAll('.nav').forEach(b => b.addEventListener('click', () => setTab(b.dataset.tab)));
+document.addEventListener('keydown', event => {
+  if(event.key === 'Escape' && document.body.classList.contains('focus-mode')) toggleFocus();
+  if((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'k'){
+    event.preventDefault(); setTab('study'); setTimeout(()=>document.getElementById('source-search')?.focus(), 0);
+  }
+});
 document.getElementById('week-badge').textContent = DATA.week.week + ' · ' + DATA.week.from + ' → ' + DATA.week.to;
 document.getElementById('nav-tasks-count').textContent = DATA.tasks.length;
 document.getElementById('nav-runs-count').textContent = DATA.runs.total_matching;
-document.getElementById('nav-recall-count').textContent = DATA.learning.due_count;
+document.getElementById('nav-source-count').textContent = DATA.study_engine.source_count;
+document.getElementById('nav-recall-count').textContent = DATA.study_engine.due_count;
+document.getElementById('nav-exam-count').textContent = DATA.study_engine.exams.length;
 document.getElementById('nav-mastery').textContent = DATA.learning.mastery_pct + '%';
 document.getElementById('nav-project-count').textContent = (DATA.project_chamber.projects || []).length;
 
 function renderLearning(){
   const l = DATA.learning;
-  const w = DATA.week;
+  const s = DATA.study_engine;
   const focus = (l.focus_tasks || []).map((t, i) => `
     <li><span><b>${i+1}. ${esc(t.goal)}</b><br><span class="mono">${esc(t.id)}${t.due ? ' · due '+esc(t.due) : ''}</span></span><span class="pill copper">${esc(t.status)}</span></li>
-  `).join('') || '<li><span>No open study task. Create one in #projects.</span></li>';
-  const due = (l.due_skills || []).slice(0,5).map(s => `
-    <li><span><b>${esc(s.skill)}</b><br><span class="mono">Level ${s.level} → ${s.target} · ${s.days_since_practice == null ? 'never practiced' : s.days_since_practice+' days ago'}</span></span><button class="chip" onclick="setTab('recall')">Retrieve</button></li>
-  `).join('') || '<li><span>Nothing overdue. Use the exam draft for mixed retrieval.</span></li>';
+  `).join('') || '<li><span>No open study task. Choose one source and define a proof.</span></li>';
   const mins = String(Math.floor(state.timerSec/60)).padStart(2,'0');
   const secs = String(state.timerSec%60).padStart(2,'0');
+  const verified = (s.trust_counts.verified || 0) + (s.trust_counts.trusted || 0);
+  const weather = verified >= 10 && s.due_count <= 8 ? 'Clear for a timed mock' : verified ? 'Building — verify more coverage' : 'No trusted questions yet';
   return `
     <section class="hero">
-      <div class="eyebrow">Learning Studio · Attempt → Retrieve → Explain → Test → Reflect</div>
-      <h1>Learn something you can reproduce without AI.</h1>
-      <p class="mono">The Cockpit now starts with study. Projects and system machinery stay secondary.</p>
+      <div class="eyebrow">Study Atelier · Capture → Learn → Recall → Exam → Reflect</div>
+      <h1>Make one idea yours today.</h1>
+      <p>You do not need a perfect day. Choose one meaningful proof, attempt it without help, then leave the desk knowing exactly what changed.</p>
       <div class="learning-loop">
-        <div class="learning-step"><b>01 · ATTEMPT</b>Closed-book first</div>
-        <div class="learning-step"><b>02 · RETRIEVE</b>Recall from memory</div>
-        <div class="learning-step"><b>03 · EXPLAIN</b>Teach it aloud</div>
-        <div class="learning-step"><b>04 · TEST</b>Solve or build</div>
-        <div class="learning-step"><b>05 · REFLECT</b>Log the weak point</div>
+        <div class="learning-step"><b>01 · CAPTURE</b>Keep the source and its origin</div>
+        <div class="learning-step"><b>02 · LEARN</b>Read for one clear outcome</div>
+        <div class="learning-step"><b>03 · RECALL</b>Commit before revealing</div>
+        <div class="learning-step"><b>04 · EXAM</b>Reproduce under constraints</div>
+        <div class="learning-step"><b>05 · REFLECT</b>Name the misconception</div>
       </div>
     </section>
-    <div class="grid c4">
-      <div class="card stat"><span class="eyebrow">Study This Week</span><div class="n">${l.study_hours} h</div><div class="l">IU / technical study</div></div>
-      <div class="card stat"><span class="eyebrow">German This Week</span><div class="n">${l.german_hours} h</div><div class="l">Attempt-first practice</div></div>
-      <div class="card stat"><span class="eyebrow">Recall Queue</span><div class="n">${l.due_count}</div><div class="l">Skills due for retrieval</div></div>
-      <div class="card stat"><span class="eyebrow">Mastery</span><div class="n">${l.mastery_pct}%</div><div class="l">Verified level / target</div></div>
-    </div>
-    <div class="grid c2" style="margin-top:16px">
-      <div class="card focus-card">
-        <span class="eyebrow">Deep Study Session · AI stays closed until the attempt ends</span>
-        <div class="session-clock" id="session-clock">${mins}:${secs}</div>
-        <select id="session-topic" class="input">
-          ${(l.focus_tasks||[]).map(t=>`<option value="${esc(t.goal)}">${esc(t.goal)}</option>`).join('')}
-          <option value="Independent recall practice">Independent recall practice</option>
-        </select>
-        <input id="session-proof" class="input" placeholder="Proof goal: what will you solve, explain, or reproduce?">
-        <div class="chips">
-          ${[25,35,45].map(n=>`<button class="chip ${state.plannedMin===n?'on':''}" onclick="setSessionLength(${n})">${n} min</button>`).join('')}
-        </div>
-        <div class="chips">
-          <button class="btn primary" id="timer-toggle" onclick="toggleTimer()">${state.timerRunning?'Pause':'Start closed-book block'}</button>
-          <button class="btn" onclick="finishStudySession()">Finish & log learning</button>
-        </div>
-      </div>
-      <div class="card">
-        <span class="eyebrow">Hard Thing First · Study Queue</span>
-        <h3>Your next three learning outcomes</h3>
+    <div class="atelier">
+      <aside class="syllabus">
+        <span class="eyebrow">Today’s choices</span>
         <ul class="list">${focus}</ul>
-        <span class="eyebrow" style="margin-top:10px">Due for active recall</span>
-        <ul class="list">${due}</ul>
-      </div>
+        <button class="book-spine" onclick="setTab('practice')"><b>Retrieve what is due</b><br><span class="mono">${s.due_count} question${s.due_count===1?'':'s'}</span></button>
+        <button class="book-spine" onclick="setTab('study')"><b>Open the library</b><br><span class="mono">${s.source_count} grounded sources</span></button>
+        <button class="book-spine" onclick="recoveryMode()"><b>Recovery mode</b><br><span class="mono">10 quiet minutes · no debt</span></button>
+      </aside>
+      <section class="work-surface desk-paper focus-card">
+        <span class="eyebrow">Focus contract · AI stays closed until the attempt ends</span>
+        <div class="session-clock" id="session-clock">${mins}:${secs}</div>
+        <h2>What will exist when this block ends?</h2>
+        <select id="session-topic" class="input">${(l.focus_tasks||[]).map(t=>`<option value="${esc(t.goal)}">${esc(t.goal)}</option>`).join('')}<option value="Independent recall practice">Independent recall practice</option></select>
+        <input id="session-proof" class="input" placeholder="One proof: solved query, derivation, explanation, code or corrected error">
+        <div class="chips">${[10,25,35,45].map(n=>`<button class="chip ${state.plannedMin===n?'on':''}" onclick="setSessionLength(${n})">${n} min</button>`).join('')}</div>
+        <div class="chips"><button class="btn primary" id="timer-toggle" onclick="toggleTimer()">${state.timerRunning?'Pause':'Begin the contract'}</button><button class="btn" onclick="finishStudySession()">Finish with proof</button><button class="btn" onclick="toggleFocus()">Quiet the room</button></div>
+      </section>
+      <aside class="evidence-margin">
+        <span class="eyebrow">Evidence margin</span>
+        <div class="margin-note"><b>Exam weather</b>${esc(weather)}</div>
+        <div class="margin-note"><b>Question trust</b>${verified} verified · ${s.trust_counts.grounded || 0} waiting for review</div>
+        <div class="margin-note"><b>Learning rhythm</b>${l.study_hours} h technical · ${l.german_hours} h German this week</div>
+        <div class="margin-note"><b>Proof shelf</b>${l.mastery_pct}% re-proved after the reset</div>
+        <p class="mono">Ctrl+K opens the source library. Escape leaves focus mode.</p>
+      </aside>
     </div>
-    <div class="grid c2" style="margin-top:16px">
-      <div class="card soft">
-        <span class="eyebrow">Quick Learning Log</span>
-        <select id="q-area" class="input"><option value="study">IU / technical study</option><option value="german">German</option><option value="lab">learning project</option></select>
-        <input id="q-hours" class="input" type="number" step="0.25" placeholder="Focused hours">
-        <input id="q-note" class="input" placeholder="What can you now do without help?">
-        <button class="btn primary" onclick="submitHours()">Log deliberate practice</button>
-      </div>
-      <div class="card">
-        <span class="eyebrow">Evidence, not activity</span>
-        <h3>A strong study session ends with one proof</h3>
-        <ul class="list">
-          <li><span>Closed-book answer or derivation</span><span class="pill mint">Recall</span></li>
-          <li><span>Passing test or working query</span><span class="pill mint">Apply</span></li>
-          <li><span>Five-minute explanation aloud</span><span class="pill mint">Explain</span></li>
-          <li><span>One error written for the next review</span><span class="pill copper">Reflect</span></li>
-        </ul>
-      </div>
+    <div class="grid c2" style="margin-top:22px">
+      <section class="card soft"><span class="eyebrow">Quick evidence log</span><select id="q-area" class="input"><option value="study">IU / technical study</option><option value="german">German</option><option value="lab">learning project</option></select><input id="q-hours" class="input" type="number" step="0.25" placeholder="Focused hours"><input id="q-note" class="input" placeholder="What can you now reproduce without help?"><button class="btn primary" onclick="submitHours()">Place proof on the shelf</button></section>
+      <section class="card"><span class="eyebrow">A useful ending</span><ul class="list"><li><span>Retrieve before rereading</span><span class="pill mint">Memory</span></li><li><span>Check against an exact source</span><span class="pill steel">Truth</span></li><li><span>Name the error, not your mood</span><span class="pill clay">Reflect</span></li><li><span>Choose the next smallest proof</span><span class="pill copper">Return</span></li></ul></section>
     </div>
   `;
 }
 
-function renderRecall(){
-  const l = DATA.learning;
-  const due = (l.due_skills || []).map((s, idx) => `
-    <div class="card">
-      <div style="display:flex;justify-content:space-between;gap:8px"><h3>${esc(s.skill)}</h3><span class="pill copper">gap ${s.gap}</span></div>
-      <div class="mono">Last practice: ${s.days_since_practice == null ? 'not recorded' : s.days_since_practice+' days ago'} · Current ${s.level}, target ${s.target}</div>
-      <div class="notice"><b>Next proof:</b> ${esc(s.next_proof || 'Explain it, then solve one unseen problem.')}</div>
-      <div class="chips"><button class="chip" onclick="markRecall(${idx},'again')">Again</button><button class="chip" onclick="markRecall(${idx},'hard')">Hard</button><button class="chip" onclick="markRecall(${idx},'good')">Good</button></div>
-    </div>`).join('') || '<div class="card">No overdue skill. Run a mixed no-AI exam.</div>';
-  const exams = (l.exam_drafts || []).map(e=>`<li><span><b>${esc(e.title)}</b><br><span class="mono">${esc(e.path)}</span></span><span class="pill mint">Ready</span></li>`).join('');
+function renderPractice(){
+  const s = DATA.study_engine;
+  const due = s.due || [];
+  const q = due[Math.min(state.practiceIndex, Math.max(0,due.length-1))];
+  const grounded = [];
+  (s.banks||[]).forEach(bank=>(bank.questions||[]).forEach(question=>{ if(question.trust==='grounded') grounded.push({...question,bank_path:bank.path}); }));
+  if(!q){
+    return `<section class="hero"><div class="eyebrow">Recall Studio · commitment before feedback</div><h1>Your memory desk is clear.</h1><p>No verified question is due. Review grounded drafts below or open a source and create a bank.</p></section><div class="atelier"><aside class="syllabus"><span class="eyebrow">Trust queue</span>${grounded.slice(0,20).map((x,i)=>`<button class="book-spine" onclick="reviewGrounded('${esc(x.bank_path)}','${esc(x.id)}',${i})">${esc(x.prompt)}</button>`).join('')||'<p class="mono">No grounded drafts yet.</p>'}</aside><section class="desk-paper work-surface" id="grounded-review"><h2>Verification is part of learning.</h2><p>Select a grounded draft. Check its prompt, exact source answer and citation before promoting it to verified.</p></section><aside class="evidence-margin"><div class="margin-note"><b>Draft</b>Unusable for scoring</div><div class="margin-note"><b>Grounded</b>Exact source span exists</div><div class="margin-note"><b>Verified</b>You checked prompt and answer</div><div class="margin-note"><b>Trusted</b>Clean practice history</div></aside></div>`;
+  }
   return `
-    <section class="hero"><div class="eyebrow">Active Recall · Spaced Review · No-AI Exams</div><h1>Prove what stayed in memory.</h1><p class="mono">Rate retrieval honestly. “Good” means you produced the answer before checking notes.</p></section>
-    <div class="grid c3">
-      <div class="card stat"><span class="eyebrow">Due Now</span><div class="n">${l.due_count}</div><div class="l">skill reviews</div></div>
-      <div class="card stat"><span class="eyebrow">Exam Drafts</span><div class="n">${(l.exam_drafts||[]).length}</div><div class="l">offline, timed</div></div>
-      <div class="card stat"><span class="eyebrow">Rule</span><div class="n">70%</div><div class="l">below this returns next month</div></div>
-    </div>
-    <h2 style="margin:22px 0 12px">Retrieval queue</h2><div class="grid c2">${due}</div>
-    <div class="card" style="margin-top:16px"><span class="eyebrow">Monthly No-AI Exam</span><ul class="list">${exams || '<li>No exam draft found yet.</li>'}</ul><p class="mono">Open the file locally, disconnect AI help, use 60–90 minutes, then record the score with lifeos exam --score-skill.</p></div>
-  `;
+    <section class="hero"><div class="eyebrow">Recall Studio · ${state.practiceIndex+1} of ${due.length}</div><h1>Answer before you look.</h1><p class="mono">Source and answer remain sealed until you commit. “Good” means substantially correct without notes.</p></section>
+    <div class="atelier">
+      <aside class="syllabus"><span class="eyebrow">Due queue</span>${due.map((x,i)=>`<button class="book-spine ${i===state.practiceIndex?'on':''}" onclick="selectPractice(${i})"><b>${esc(x.prompt)}</b><br><span class="mono">${esc(x.trust)} · ${esc(x.due)}</span></button>`).join('')}</aside>
+      <section class="desk-paper work-surface"><span class="eyebrow">Closed source · ${esc(q.type)} · difficulty ${Number(q.difficulty)||2}</span><div class="review-prompt">${esc(q.prompt)}</div><textarea id="recall-draft" class="input" rows="8" placeholder="Commit your explanation, code outline or derivation here before revealing..."></textarea>${state.revealedAnswer ? `<div class="answer-sheet"><span class="eyebrow">Corrective feedback</span><p>${esc(state.revealedAnswer.answer)}</p><span class="mono">${esc(state.revealedAnswer.citation)}</span></div><div class="chips"><button class="chip" onclick="ratePractice('again')">Again · missed</button><button class="chip" onclick="ratePractice('hard')">Hard · partial</button><button class="chip" onclick="ratePractice('good')">Good · correct</button><button class="chip" onclick="ratePractice('easy')">Easy · fluent</button></div>` : `<button class="btn primary" onclick="revealPractice('${esc(q.id)}')">Commit answer & reveal source</button>`}</section>
+      <aside class="evidence-margin"><div class="margin-note"><b>Source seal</b>${esc(q.source_path)}</div><div class="margin-note"><b>Trust</b>${esc(q.trust)} · SHA ${esc((q.source_sha256||'').slice(0,10))}</div><div class="margin-note"><b>Last result</b>${esc(q.last_rating || 'first retrieval')}</div><p class="mono">Answers are fetched only from the nonce-protected localhost server. Static exports never contain them.</p></aside>
+    </div>`;
 }
+
+function renderRecall(){ return renderPractice(); }
 
 function renderToday(){
   const w = DATA.week;
@@ -620,41 +593,53 @@ function renderTasks(){
 }
 
 function renderStudy(){
-  const mins = String(Math.floor(state.timerSec/60)).padStart(2,'0');
-  const secs = String(state.timerSec%60).padStart(2,'0');
-  const packs = (DATA.study_packs||[]).map(p => `<li><span><b>${esc(p.title)}</b><br><span class="mono">${esc(p.path)}</span></span><span class="pill mint">Pack Ready</span></li>`).join('');
+  const s = DATA.study_engine;
+  const sources = s.sources || [];
+  const selected = sources[state.selectedSource] || sources[0];
+  const bank = selected ? (s.banks||[]).find(b=>b.source && b.source.path===selected.path) : null;
   return `
     <section class="hero">
-      <div class="eyebrow">Law 3 · Attempt First (25 to 45 min without AI) · IU 6 Modules & German B2</div>
-      <h1>Curriculum Library & Technical German</h1>
-      <p class="mono">Choose a pack only after defining the question you want to answer from memory.</p>
+      <div class="eyebrow">Source Library · local Markdown and text · exact provenance</div>
+      <h1>Your notes should teach back.</h1>
+      <p>Read on a quiet paper surface, keep the source visible, then turn only the useful parts into grounded questions. Answer keys stay outside this library.</p>
     </section>
-    <div class="grid c2">
-      <div class="card">
-        <span class="eyebrow">Law 3 · Attempt-First Gate</span>
-        <h2 id="session-clock">${mins}:${secs}</h2>
-        <p class="mono">Work 35 minutes closed-book before asking ChatGPT, Codex or Claude for feedback.</p>
-        <div class="chips">
-          <button class="btn primary" id="timer-toggle" onclick="toggleTimer()">${state.timerRunning?'Pause Timer':'Start 35-min Attempt Block'}</button>
-          <button class="btn" onclick="state.timerSec=35*60;state.timerRunning=false;render()">Reset</button>
-        </div>
-      </div>
-      <div class="card">
-        <span class="eyebrow">6 Semester Modules (Exam Window: 1–12 Mar 2027)</span>
-        <ul class="list">
-          <li><span><b>CSEBDSDSSE01 · Data Science Software Engineering</b><br><span class="mono">90-min written (90 pts: Terminology 20, Processes 25, Testing 20, CI/CD 25) + 48 terms</span></span><span class="pill copper">Pack Complete</span></li>
-          <li><span><b>DLBDSNNDL · Neural Nets & Deep Learning</b><br><span class="mono">Oral assignment · backprop & attention</span></span><span class="pill mint">Units Ready</span></li>
-          <li><span><b>DLBAIICV + DLBAIPCV · Computer Vision & Project</b><br><span class="mono">90-min written + project report</span></span><span class="pill mint">Units Ready</span></li>
-          <li><span><b>DLBDSCC01 · Cloud Computing</b><br><span class="mono">90-min written · IaaS/PaaS/SaaS, containers, serverless</span></span><span class="pill mint">Units Ready</span></li>
-          <li><span><b>DLBROIR01 · Introduction to Robotics</b><br><span class="mono">90-min written · kinematics, sensors, SLAM</span></span><span class="pill mint">Units Ready</span></li>
-        </ul>
-      </div>
-    </div>
-    <div class="card" style="margin-top:16px">
-      <span class="eyebrow">Repository Learning Packs & Answer Keys (${(DATA.study_packs||[]).length} files in learning/)</span>
-      <ul class="list">${packs}</ul>
+    <div class="atelier">
+      <aside class="syllabus">
+        <input id="source-search" class="input" placeholder="Search the shelf…" oninput="filterSourceList(this.value)">
+        <div style="margin-top:10px">${sources.map((source,index)=>`<button class="book-spine ${index===state.selectedSource?'on':''}" data-search="${esc((source.title+' '+source.subject+' '+source.path).toLowerCase())}" onclick="state.selectedSource=${index};render()"><b>${esc(source.title)}</b><br><span class="mono">${esc(source.subject)} · ${source.words} words</span></button>`).join('')||'<p class="mono">No learning sources yet. Capture your first note.</p>'}</div>
+      </aside>
+      <section class="work-surface desk-paper">
+        ${selected ? `<span class="eyebrow">${esc(selected.subject)} · source SHA ${esc(selected.sha256.slice(0,10))}</span><h2>${esc(selected.title)}</h2><pre class="note-body">${esc(selected.content || selected.excerpt)}</pre>` : '<h2>The desk is waiting.</h2><p>Paste a note in the capture margin, or add Markdown under learning/sources.</p>'}
+      </section>
+      <aside class="evidence-margin">
+        <span class="eyebrow">Source confidence</span>
+        ${selected ? `<div class="margin-note"><b>Path</b>${esc(selected.path)}</div><div class="margin-note"><b>Outline</b>${(selected.headings||[]).slice(0,8).map(h=>esc(h)).join('<br>') || 'No headings found'}</div><div class="margin-note"><b>Question bank</b>${bank ? bank.question_count+' questions · '+(bank.counts.verified||0)+' verified' : 'Not created yet'}</div><button class="btn primary" onclick="createQuestionBank('${esc(selected.path)}')">${bank?'Regenerate grounded bank':'Create grounded questions'}</button>` : ''}
+        <hr style="border:0;border-top:1px solid var(--line);margin:18px 0">
+        <span class="eyebrow">Capture a note</span>
+        <input id="note-title" class="input" placeholder="Title">
+        <input id="note-subject" class="input" placeholder="Subject, e.g. Cloud Computing">
+        <input id="note-url" class="input" placeholder="Optional source URL">
+        <textarea id="note-content" class="input" rows="8" placeholder="Paste trusted notes here. Markdown headings become grounded recall prompts."></textarea>
+        <button class="btn" onclick="saveStudyNote()">Save to the local library</button>
+      </aside>
     </div>
   `;
+}
+
+function renderExam(){
+  const s = DATA.study_engine;
+  const verified = (s.trust_counts.verified||0) + (s.trust_counts.trusted||0);
+  const subjects = [...new Set((s.sources||[]).map(x=>x.subject).filter(Boolean))];
+  const exams = (s.exams||[]).map(e=>`<li><span><b>${esc(e.title)}</b><br><span class="mono">${esc(e.path)}</span></span><button class="chip" onclick="copyText('${esc(e.path)}')">Copy path</button></li>`).join('');
+  return `
+    <section class="hero"><div class="eyebrow">Exam Forge · blueprint before questions · separate sealed key</div><h1>Practise the exam you will actually face.</h1><p>Only human-verified, source-grounded questions can enter a mock. The printable paper contains no answers; its key is written separately under learning/exam-keys.</p></section>
+    <div class="trust-pipeline"><div class="trust-step"><strong>Draft · ${s.trust_counts.draft||0}</strong>Not eligible</div><div class="trust-step"><strong>Grounded · ${s.trust_counts.grounded||0}</strong>Exact source span</div><div class="trust-step"><strong>Verified · ${s.trust_counts.verified||0}</strong>Human checked</div><div class="trust-step"><strong>Trusted · ${s.trust_counts.trusted||0}</strong>Clean practice history</div></div>
+    <div class="atelier">
+      <aside class="syllabus"><span class="eyebrow">Blueprint coverage</span>${subjects.map(subject=>`<div class="margin-note"><b>${esc(subject)}</b>${(s.sources||[]).filter(x=>x.subject===subject).length} source(s)</div>`).join('')||'<p class="mono">Capture sources first.</p>'}</aside>
+      <section class="desk-paper work-surface"><span class="eyebrow">Freeze a mock exam</span><h2>Exam Blueprint</h2><label class="mono">Name</label><input id="exam-title" class="input" value="Practice Exam"><label class="mono">Subject or module</label><select id="exam-subject" class="input"><option value="">Mixed verified questions</option>${subjects.map(x=>`<option value="${esc(x)}">${esc(x)}</option>`).join('')}</select><div class="grid c2"><div><label class="mono">Questions</label><input id="exam-count" class="input" type="number" min="1" max="50" value="10"></div><div><label class="mono">Minutes</label><input id="exam-minutes" class="input" type="number" min="5" max="240" value="60"></div></div><div class="exam-seal">${verified} verified questions currently available. The engine refuses an exam larger than verified coverage.</div><button class="btn primary" onclick="forgeExam()">Create paper & sealed key</button></section>
+      <aside class="evidence-margin"><span class="eyebrow">Exam weather</span><div class="margin-note"><b>${verified>=10?'Ready for a mixed mock':'Coverage still building'}</b>${verified>=10?'You have enough verified items for a ten-question paper.':'Verify grounded questions in Recall Studio first.'}</div><div class="margin-note"><b>Realism rule</b>Match the IU format, points, allowed aids and time before treating a score as evidence.</div><button class="btn" onclick="setTab('practice')">Review question trust</button></aside>
+    </div>
+    <section class="card" style="margin-top:20px"><span class="eyebrow">Frozen exam papers</span><ul class="list">${exams||'<li>No frozen source-grounded exam yet.</li>'}</ul></section>`;
 }
 
 function renderCareer(){
@@ -792,6 +777,94 @@ function saveInterviewAnswer(){
   rows.push({project:(projects[state.interviewProject]||{}).id || '', question:state.interviewQuestion, score:checks, answer, at:new Date().toISOString()});
   localStorage.setItem(key, JSON.stringify(rows.slice(-50)));
   toast('Interview answer saved locally · self-score '+checks+'/'+document.querySelectorAll('.interview-check').length);
+}
+
+function recoveryMode(){
+  state.plannedMin = 10;
+  state.timerSec = 10 * 60;
+  state.timerRunning = false;
+  setTab(DATA.study_engine.due_count ? 'practice' : 'learning');
+  toast('Recovery mode · one small proof, no backlog debt');
+}
+
+function filterSourceList(value){
+  const query = String(value || '').trim().toLowerCase();
+  document.querySelectorAll('[data-search]').forEach(node => {
+    node.hidden = query && !String(node.dataset.search || '').includes(query);
+  });
+}
+
+async function saveStudyNote(){
+  const title = (document.getElementById('note-title') || {}).value || '';
+  const subject = (document.getElementById('note-subject') || {}).value || '';
+  const source_url = (document.getElementById('note-url') || {}).value || '';
+  const content = (document.getElementById('note-content') || {}).value || '';
+  if(!title.trim() || !content.trim()){ toast('Give the note a title and useful content first.'); return; }
+  const result = await apiPost('/api/study/note', {title, subject, source_url, content});
+  if(result){ toast('Source saved · '+result.path); setTimeout(()=>location.reload(), 450); }
+}
+
+async function createQuestionBank(source){
+  const existing = (DATA.study_engine.banks || []).find(bank => bank.source && bank.source.path === source);
+  let overwrite = false;
+  if(existing){
+    overwrite = confirm('Regenerating replaces this bank, including its verification states. Continue only if the source changed.');
+    if(!overwrite) return;
+  }
+  const result = await apiPost('/api/study/bank', {source, overwrite});
+  if(result){ toast('Grounded question bank created · verify it in Recall Studio'); setTimeout(()=>{ location.hash='#practice'; location.reload(); }, 350); }
+}
+
+function selectPractice(index){
+  state.practiceIndex = index;
+  state.revealedAnswer = null;
+  state.practiceStartedAt = Date.now();
+  render();
+}
+
+async function revealPractice(questionId){
+  const draft = ((document.getElementById('recall-draft') || {}).value || '').trim();
+  if(draft.length < 12){ toast('Commit a real answer before opening the source.'); return; }
+  const result = await apiPost('/api/study/answer', {question_id:questionId});
+  if(result){ state.revealedAnswer = result; render(); }
+}
+
+async function ratePractice(rating){
+  const due = DATA.study_engine.due || [];
+  const question = due[Math.min(state.practiceIndex, Math.max(0,due.length-1))];
+  if(!question) return;
+  const elapsed_seconds = Math.max(0, Math.round((Date.now() - state.practiceStartedAt) / 1000));
+  const result = await apiPost('/api/study/attempt', {question_id:question.id, rating, elapsed_seconds});
+  if(result){ toast('Review recorded · next due '+result.due); setTimeout(()=>location.reload(), 450); }
+}
+
+async function reviewGrounded(bankPath, questionId){
+  const result = await apiPost('/api/study/review-answer', {question_id:questionId});
+  if(!result) return;
+  const desk = document.getElementById('grounded-review');
+  if(!desk) return;
+  desk.innerHTML = `<span class="eyebrow">Human verification · compare every word</span><h2>${esc(result.prompt)}</h2><div class="answer-sheet"><p>${esc(result.answer)}</p><span class="mono">${esc(result.citation)} · SHA ${esc((result.source_sha256||'').slice(0,12))}</span></div><p>Promote only when the prompt is clear, the answer is correct, and the citation really supports it.</p><div class="chips"><button class="btn primary" id="verify-question">Mark verified</button><button class="btn" id="reject-question">Return to draft</button></div>`;
+  document.getElementById('verify-question').onclick = () => verifyGrounded(bankPath, questionId, 'verified');
+  document.getElementById('reject-question').onclick = () => verifyGrounded(bankPath, questionId, 'draft');
+}
+
+async function verifyGrounded(bankPath, questionId, trust){
+  const result = await apiPost('/api/study/trust', {bank:bankPath, question_id:questionId, trust});
+  if(result){ toast('Question trust changed to '+trust); setTimeout(()=>location.reload(), 450); }
+}
+
+async function forgeExam(){
+  const title = (document.getElementById('exam-title') || {}).value || 'Practice Exam';
+  const subject = (document.getElementById('exam-subject') || {}).value || '';
+  const count = Number((document.getElementById('exam-count') || {}).value || 10);
+  const minutes = Number((document.getElementById('exam-minutes') || {}).value || 60);
+  const result = await apiPost('/api/study/exam', {title, subject, count, minutes});
+  if(result){ toast('Exam frozen · paper '+result.exam_path); setTimeout(()=>location.reload(), 600); }
+}
+
+async function copyText(value){
+  try { await navigator.clipboard.writeText(value); toast('Path copied'); }
+  catch(_error){ toast(value); }
 }
 
 function renderAgents(){
@@ -952,7 +1025,8 @@ function render(){
   const el = document.getElementById('view');
   if(state.tab === 'projects' || state.tab === 'tasks') el.innerHTML = renderTasks();
   else if(state.tab === 'study') el.innerHTML = renderStudy();
-  else if(state.tab === 'recall') el.innerHTML = renderRecall();
+  else if(state.tab === 'recall' || state.tab === 'practice') el.innerHTML = renderPractice();
+  else if(state.tab === 'exam') el.innerHTML = renderExam();
   else if(state.tab === 'mastery' || state.tab === 'career') el.innerHTML = renderCareer();
   else if(state.tab === 'build') el.innerHTML = renderProjectChamber();
   else if(state.tab === 'system' || state.tab === 'agents') el.innerHTML = renderAgents();
@@ -1054,7 +1128,8 @@ def make_cockpit_handler(home):
                 length = int(self.headers.get("Content-Length") or 0)
             except ValueError:
                 length = -1
-            if length < 0 or length > 16_384:
+            max_length = 262_144 if parsed.path == "/api/study/note" else 16_384
+            if length < 0 or length > max_length:
                 self._send_json(413, {"error": "Request too large."})
                 return
             raw = self.rfile.read(length).decode("utf-8") if length > 0 else "{}"
@@ -1079,6 +1154,47 @@ def make_cockpit_handler(home):
                 if parsed.path == "/api/task":
                     path = new_task(home, body.get("sentence", ""), level=body.get("level", "L2"))
                     self._send_json(200, {"ok": True, "path": path.relative_to(home).as_posix()})
+                    return
+                if parsed.path == "/api/study/note":
+                    path = study.save_note(
+                        home, body.get("title", ""), body.get("subject", "general"),
+                        body.get("content", ""), source_url=body.get("source_url", ""),
+                    )
+                    self._send_json(200, {"ok": True, "path": path.relative_to(home).as_posix()})
+                    return
+                if parsed.path == "/api/study/bank":
+                    path = study.write_question_bank(home, body.get("source", ""), overwrite=bool(body.get("overwrite")))
+                    self._send_json(200, {"ok": True, "path": path.relative_to(home).as_posix()})
+                    return
+                if parsed.path == "/api/study/trust":
+                    result = study.set_question_trust(
+                        home, body.get("bank", ""), body.get("question_id", ""), body.get("trust", "verified"),
+                    )
+                    self._send_json(200, {"ok": True, **result})
+                    return
+                if parsed.path == "/api/study/answer":
+                    self._send_json(200, {"ok": True, **study.get_question_answer(home, body.get("question_id", ""))})
+                    return
+                if parsed.path == "/api/study/review-answer":
+                    self._send_json(200, {"ok": True, **study.get_question_for_review(home, body.get("question_id", ""))})
+                    return
+                if parsed.path == "/api/study/attempt":
+                    result = study.record_attempt(
+                        home, body.get("question_id", ""), body.get("rating", ""),
+                        elapsed_seconds=body.get("elapsed_seconds", 0), exam_id=body.get("exam_id", ""),
+                    )
+                    self._send_json(200, {"ok": True, **result})
+                    return
+                if parsed.path == "/api/study/exam":
+                    result = study.compose_exam(
+                        home, title=body.get("title", "Practice Exam"), subject=body.get("subject", ""),
+                        count=body.get("count", 10), minutes=body.get("minutes", 60),
+                    )
+                    self._send_json(200, {
+                        "ok": True, "exam_id": result["exam_id"],
+                        "exam_path": result["exam_path"].relative_to(home).as_posix(),
+                        "key_path": result["key_path"].relative_to(home).as_posix(),
+                    })
                     return
                 self._send_json(404, {"error": "Not found"})
             except Exception:

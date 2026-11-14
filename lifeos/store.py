@@ -33,6 +33,9 @@ FLAGS_LABEL = "flags"
 LOCK_STALE_SECONDS = 30.0
 ALLOWED_JOURNAL_LOGS = {"logs/ledger.csv", "logs/proofs.csv", "logs/health.csv", "logs/hours.csv", "logs/runs.jsonl"}
 TASK_REL_RE = re.compile(r"^(?:tasks/)?T-[A-Za-z0-9-]+\.md$")
+STUDY_ARTIFACT_RE = re.compile(
+    r"^(?:reviews/exam-[a-z0-9-]+\.md|learning/exam-keys/exam-[a-z0-9-]+-key\.md)$"
+)
 RUN_ID_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$")
 RUN_SCHEMA_VERSION = 2
 TERMINAL_RUN_STATUSES = ("ok", "blocked", "failed", "timeout", "tool_missing", "partial")
@@ -264,7 +267,7 @@ def _validate_journal_target(home, rel_or_abs_path):
         rel = target.relative_to(home_root).as_posix()
     except ValueError as err:
         raise ValueError(f"Refused journal target outside LifeOS home: {rel_or_abs_path}") from err
-    if rel not in ALLOWED_JOURNAL_LOGS and not TASK_REL_RE.fullmatch(rel):
+    if rel not in ALLOWED_JOURNAL_LOGS and not TASK_REL_RE.fullmatch(rel) and not STUDY_ARTIFACT_RE.fullmatch(rel):
         raise ValueError(f"Refused journal target outside store allowlist: {rel}")
     return target, rel
 

@@ -44,17 +44,19 @@ def test_cockpit_export_creates_self_contained_html_and_passes_guard(home, capsy
     assert html_path.exists()
     html = html_path.read_text(encoding="utf-8")
     assert "Braille × LifeOS · cockpit" in html
-    assert "Learning Studio" in html
-    assert "#focus" in html and "#library" in html and "#recall" in html and "#mastery" in html
+    assert "Private Study Atelier" in html
+    assert 'data-tab="learning"' in html and 'data-tab="study"' in html
+    assert 'data-tab="practice"' in html and 'data-tab="exam"' in html and 'data-tab="mastery"' in html
     assert "#projects" in html and "#reflect" in html and "#system" in html
     assert "#build" in html and "Project Building Chamber" in html
-    assert "Attempt → Retrieve → Explain → Test → Reflect" in html
+    assert "Capture → Learn → Recall → Exam → Reflect" in html
     assert "fonts.googleapis.com" not in html and "fonts.gstatic.com" not in html
     assert "T-261116-demo-cli" in html
     assert "AWS Certified Solutions Architect" in html
     data = cockpit.build_cockpit_data(home)
     assert "learning" in data
     assert {"focus_tasks", "due_skills", "mastery_pct", "pack_groups"} <= set(data["learning"])
+    assert {"sources", "banks", "trust_counts", "due"} <= set(data["study_engine"])
     assert data["project_chamber"]["projects"][0]["id"] == "F01"
 
 
@@ -92,6 +94,57 @@ def test_cockpit_localhost_http_handler_reads_and_logs(home):
         )
         res_task = json.loads(urllib.request.urlopen(req_task).read().decode("utf-8"))
         assert res_task["ok"] is True and "review-cockpit-study-tab" in res_task["path"]
+
+        # Source-grounded study pipeline: note -> bank -> verify -> answer -> attempt -> exam.
+        req_note = urllib.request.Request(
+            f"http://127.0.0.1:{port}/api/study/note",
+            data=json.dumps({
+                "title": "Python Functions", "subject": "Python",
+                "content": "## Return values\nA return statement sends a value back to the caller.",
+            }).encode("utf-8"),
+            headers={"Content-Type": "application/json", "X-LifeOS-Nonce": handler.lifeos_write_nonce}, method="POST",
+        )
+        note = json.loads(urllib.request.urlopen(req_note).read().decode("utf-8"))
+        assert note["path"].startswith("learning/sources/")
+        req_bank = urllib.request.Request(
+            f"http://127.0.0.1:{port}/api/study/bank",
+            data=json.dumps({"source": note["path"]}).encode("utf-8"),
+            headers={"Content-Type": "application/json", "X-LifeOS-Nonce": handler.lifeos_write_nonce}, method="POST",
+        )
+        bank_result = json.loads(urllib.request.urlopen(req_bank).read().decode("utf-8"))
+        state = json.loads(urllib.request.urlopen(f"http://127.0.0.1:{port}/api/state").read().decode("utf-8"))
+        question = next(b for b in state["study_engine"]["banks"] if b["path"] == bank_result["path"])["questions"][0]
+        assert "answer" not in question
+        req_review = urllib.request.Request(
+            f"http://127.0.0.1:{port}/api/study/review-answer",
+            data=json.dumps({"question_id": question["id"]}).encode("utf-8"),
+            headers={"Content-Type": "application/json", "X-LifeOS-Nonce": handler.lifeos_write_nonce}, method="POST",
+        )
+        assert "sends a value" in json.loads(urllib.request.urlopen(req_review).read().decode("utf-8"))["answer"]
+        req_verify = urllib.request.Request(
+            f"http://127.0.0.1:{port}/api/study/trust",
+            data=json.dumps({"bank": bank_result["path"], "question_id": question["id"], "trust": "verified"}).encode("utf-8"),
+            headers={"Content-Type": "application/json", "X-LifeOS-Nonce": handler.lifeos_write_nonce}, method="POST",
+        )
+        assert json.loads(urllib.request.urlopen(req_verify).read().decode("utf-8"))["trust"] == "verified"
+        req_answer = urllib.request.Request(
+            f"http://127.0.0.1:{port}/api/study/answer",
+            data=json.dumps({"question_id": question["id"]}).encode("utf-8"),
+            headers={"Content-Type": "application/json", "X-LifeOS-Nonce": handler.lifeos_write_nonce}, method="POST",
+        )
+        assert "sends a value" in json.loads(urllib.request.urlopen(req_answer).read().decode("utf-8"))["answer"]
+        req_attempt = urllib.request.Request(
+            f"http://127.0.0.1:{port}/api/study/attempt",
+            data=json.dumps({"question_id": question["id"], "rating": "good", "elapsed_seconds": 25}).encode("utf-8"),
+            headers={"Content-Type": "application/json", "X-LifeOS-Nonce": handler.lifeos_write_nonce}, method="POST",
+        )
+        assert json.loads(urllib.request.urlopen(req_attempt).read().decode("utf-8"))["interval_days"] == 4
+        req_exam = urllib.request.Request(
+            f"http://127.0.0.1:{port}/api/study/exam",
+            data=json.dumps({"title": "Python Check", "subject": "python", "count": 1, "minutes": 10}).encode("utf-8"),
+            headers={"Content-Type": "application/json", "X-LifeOS-Nonce": handler.lifeos_write_nonce}, method="POST",
+        )
+        assert json.loads(urllib.request.urlopen(req_exam).read().decode("utf-8"))["exam_path"].startswith("reviews/exam-")
 
         unauth = urllib.request.Request(
             f"http://127.0.0.1:{port}/api/log",
