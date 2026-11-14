@@ -359,6 +359,14 @@ def normalize_run_record(record):
     return out
 
 
+_HEX_CHARS = frozenset("0123456789abcdefABCDEF")
+
+
+def is_valid_git_oid(val):
+    """Return True if val is a full 40-char (SHA-1) or 64-char (SHA-256) hexadecimal Git object ID."""
+    return isinstance(val, str) and len(val) in (40, 64) and all(c in _HEX_CHARS for c in val)
+
+
 def _stamp_v2_run_record(record):
     """Ensure a newly written run record carries v2 schema fields (forced schema_version=2), mandatory identity fields,
     and a valid terminal status."""
@@ -401,9 +409,9 @@ def _stamp_v2_run_record(record):
             allow_null_sha = cmd == "review_group" and status == "failed"
             if rec_sha is None:
                 if not allow_null_sha:
-                    raise ValueError(f"v2 {cmd} run record with repo requires non-empty string commit_sha.")
-            elif not isinstance(rec_sha, str) or not rec_sha.strip():
-                raise ValueError(f"v2 {cmd} run record requires non-empty string commit_sha.")
+                    raise ValueError(f"v2 {cmd} run record with repo requires a 40- or 64-hex commit_sha.")
+            elif not is_valid_git_oid(rec_sha):
+                raise ValueError(f"v2 {cmd} run record requires a 40- or 64-hex commit_sha (got {rec_sha!r}).")
         if cmd == "review" and any(k not in rec for k in ("parent_run_id", "context_sha256", "repo", "commit_sha")):
             raise ValueError("v2 review child record is missing mandatory child identity fields.")
     now_iso = utc_now_iso()

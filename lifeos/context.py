@@ -122,8 +122,15 @@ def render_explanation(info):
     return "\n".join(lines)
 
 
+COMMIT_META_FORMAT = "commit %H%nparents %P%nauthor_date %aI%ncommit_date %cI%n%n    %s%n"
+
+
 def inspect_repo_commit(repo_path, commit="HEAD"):
-    """Resolve exact repository commit SHA, branch, tracked file list, and unified diff for blind review."""
+    """Resolve exact repository commit SHA, branch, tracked file list, and unified diff for blind review
+    using an explicit identity-free format (no author/committer names or emails)."""
+    if not isinstance(commit, str) or not commit.strip():
+        raise ValueError("commit must be a non-empty string.")
+    commit = commit.strip()
     repo = Path(repo_path).resolve()
     if not repo.is_dir():
         raise FileNotFoundError(f"Repository path not found: {repo_path}")
@@ -144,10 +151,10 @@ def inspect_repo_commit(repo_path, commit="HEAD"):
         capture_output=True, text=True, encoding="utf-8", errors="replace", check=False,
     ).returncode == 0
     if has_parent:
-        stat = _git("show", "--first-parent", "-m", "--stat", "--format=fuller", commit_sha)
+        stat = _git("show", "--first-parent", "-m", "--stat", f"--format={COMMIT_META_FORMAT}", commit_sha)
         patch = _git("diff", f"{commit_sha}^1", commit_sha)
     else:
-        stat = _git("show", "--root", "--stat", "--format=fuller", commit_sha)
+        stat = _git("show", "--root", "--stat", f"--format={COMMIT_META_FORMAT}", commit_sha)
         patch = _git("show", "--root", "--format=", commit_sha)
     files = _git("ls-tree", "--name-only", "-r", commit_sha)
     meta = (

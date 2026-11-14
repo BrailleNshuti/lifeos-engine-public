@@ -661,16 +661,30 @@ def test_full_64_char_sha256_and_per_reviewer_isolated_worktree_review(home, tmp
 
     repo = tmp_path / "sample-repo"
     repo.mkdir()
+    synth_author_name = "Jane SecretAuthor"
+    synth_author_email = "jane.secret" + "@" + "example.org"
+    synth_committer_name = "John SecretCommitter"
+    synth_committer_email = "john.secret" + "@" + "example.org"
     subprocess.run(["git", "init"], cwd=repo, check=True, capture_output=True)
-    subprocess.run(["git", "config", "user.email", "test@example.org"], cwd=repo, check=True, capture_output=True)
-    subprocess.run(["git", "config", "user.name", "Test"], cwd=repo, check=True, capture_output=True)
+    subprocess.run(["git", "config", "user.email", synth_author_email], cwd=repo, check=True, capture_output=True)
+    subprocess.run(["git", "config", "user.name", synth_author_name], cwd=repo, check=True, capture_output=True)
     orig_code = "def add(a, b):\n    return a + b\n"
     (repo / "module.py").write_text(orig_code, encoding="utf-8")
     subprocess.run(["git", "add", "module.py"], cwd=repo, check=True, capture_output=True)
-    subprocess.run(["git", "commit", "-m", "Add module.py"], cwd=repo, check=True, capture_output=True)
+    commit_env = {
+        **os.environ,
+        "GIT_COMMITTER_NAME": synth_committer_name,
+        "GIT_COMMITTER_EMAIL": synth_committer_email,
+    }
+    subprocess.run(["git", "commit", "-m", "Add module.py"], cwd=repo, check=True, capture_output=True, env=commit_env)
     head_sha = subprocess.run(
         ["git", "rev-parse", "HEAD"], cwd=repo, check=True, capture_output=True, text=True
     ).stdout.strip()
+    root_info = context.inspect_repo_commit(repo, "HEAD")
+    root_pack, _ = context.build_review_pack(home, "T-261116", budget=6000, repo_info=root_info)
+    for forbidden_identity in (synth_author_name, synth_author_email, synth_committer_name, synth_committer_email):
+        assert forbidden_identity not in root_info["meta_text"]
+        assert forbidden_identity not in root_pack
 
     observed = {"cwds": [], "r2_module_text": None}
 
@@ -721,6 +735,26 @@ def test_full_64_char_sha256_and_per_reviewer_isolated_worktree_review(home, tmp
             adapters={"r1": lambda p: (_ for _ in ()).throw(RuntimeError("worktree reviewer boom"))},
             today=TODAY, repo=repo, commit="HEAD", run_id="R-261120-wtfail01",
         )
+
+    # Boundary tests for invalid commit arguments when repo is set: commit="", whitespace, None, and non-string
+    for bad_commit in ("", "   ", "\t\n", None, 123):
+        with pytest.raises(ValueError, match="commit must be a non-empty string"):
+            ask.run_review(
+                home, "T-261116", reviewers=("r1",),
+                adapters={"r1": verifying_reviewer_2},
+                today=TODAY, repo=repo, commit=bad_commit, run_id="R-261120-badcommitarg",
+            )
+        with pytest.raises(ValueError, match="commit must be a non-empty string"):
+            context.inspect_repo_commit(repo, bad_commit)
+    assert store.get_run_record(home, "R-261120-badcommitarg") is None
+
+    # Surrounding whitespace in commit ("  HEAD  ") is normalized once before identity verification and inspection
+    replay_trimmed = ask.run_review(
+        home, "T-261116", reviewers=("r1", "r2"),
+        adapters={"r1": mutating_reviewer_1, "r2": verifying_reviewer_2},
+        today=TODAY, repo=repo, commit="  HEAD  ", run_id="R-261120-wtgroup1",
+    )
+    assert replay_trimmed["commit_sha"] == head_sha
 
     # Record an initial repository inspection failure (invalid commit ref -> commit_sha is None, requested_commit="bad-ref"):
     # retrying with the SAME requested_commit replays AskError, while reusing the run_id with a different commit raises ValueError!
@@ -788,12 +822,32 @@ def test_full_64_char_sha256_and_per_reviewer_isolated_worktree_review(home, tmp
     # each must raise ValueError with zero provider calls and no new run records!
     runs_file = home / "logs" / "runs.jsonl"
     base_persisted_child = dict(store.get_run_record(home, "R-261120-wtcrashsha-c1"))
+    base_persisted_parent = dict(store.get_run_record(home, "R-261120-wtgroup1"))
+    for bad_parent_sha in ("deadbeef", "g" * 40, "", None):
+        p_copy = dict(base_persisted_parent)
+        p_copy["run_id"] = f"R-261120-wtparentbadsha-{bad_parent_sha or 'none'}"
+        p_copy["commit_sha"] = bad_parent_sha
+        with open(runs_file, "a", encoding="utf-8") as rf:
+            rf.write(json.dumps(p_copy) + "\n")
+        before_p_runs = _read_runs(home)
+        called_in_p = []
+        with pytest.raises(ValueError, match="commit_sha"):
+            ask.run_review(
+                home, "T-261116", reviewers=("r1", "r2"),
+                adapters={"r1": lambda p: called_in_p.append(p) or CLEAN, "r2": lambda p: called_in_p.append(p) or CLEAN},
+                today=TODAY, repo=repo, commit="HEAD", run_id=p_copy["run_id"],
+            )
+        assert called_in_p == []
+        assert _read_runs(home) == before_p_runs
+
     bad_child_cases = [
         ("R-261120-wtcrashnoreq", lambda c: c.pop("requested_commit", None)),
         ("R-261120-wtcrashnobudget", lambda c: c.pop("budget", None)),
         ("R-261120-wtcrashbadbudget", lambda c: c.__setitem__("budget", 1234)),
         ("R-261120-wtcrashnodiff", lambda c: c.pop("diff_sha256", None)),
         ("R-261120-wtcrashbaddiff", lambda c: c.__setitem__("diff_sha256", "f" * 64)),
+        ("R-261120-wtcrashshortsha", lambda c: c.__setitem__("commit_sha", "deadbeef")),
+        ("R-261120-wtcrashnonhexsha", lambda c: c.__setitem__("commit_sha", "g" * 40)),
     ]
     for bad_grp_id, mutator in bad_child_cases:
         c_copy = dict(base_persisted_child)
@@ -813,18 +867,23 @@ def test_full_64_char_sha256_and_per_reviewer_isolated_worktree_review(home, tmp
         assert called_in_bad == []
         assert _read_runs(home) == before_bad_runs
 
-    # Create a feature branch and merge commit (--no-ff): inspect_repo_commit must produce a non-empty first-parent diff!
+    # Create a feature branch and merge commit (--no-ff): inspect_repo_commit must produce a non-empty first-parent diff
+    # and never include author or committer personal names/emails!
     default_branch = subprocess.run(
         ["git", "rev-parse", "--abbrev-ref", "HEAD"], cwd=repo, check=True, capture_output=True, text=True
     ).stdout.strip()
     subprocess.run(["git", "checkout", "-b", "feat-merge-diff"], cwd=repo, check=True, capture_output=True)
     (repo / "module.py").write_text(orig_code + "\ndef sub(a, b):\n    return a - b\n", encoding="utf-8")
     subprocess.run(["git", "add", "module.py"], cwd=repo, check=True, capture_output=True)
-    subprocess.run(["git", "commit", "-m", "Add sub helper"], cwd=repo, check=True, capture_output=True)
+    subprocess.run(["git", "commit", "-m", "Add sub helper"], cwd=repo, check=True, capture_output=True, env=commit_env)
     subprocess.run(["git", "checkout", default_branch], cwd=repo, check=True, capture_output=True)
-    subprocess.run(["git", "merge", "--no-ff", "feat-merge-diff", "-m", "Merge feat-merge-diff"], cwd=repo, check=True, capture_output=True)
+    subprocess.run(["git", "merge", "--no-ff", "feat-merge-diff", "-m", "Merge feat-merge-diff"], cwd=repo, check=True, capture_output=True, env=commit_env)
     merge_info = context.inspect_repo_commit(repo, "HEAD")
+    merge_pack, _ = context.build_review_pack(home, "T-261116", budget=6000, repo_info=merge_info)
     assert "def sub(a, b):" in merge_info["diff_text"]
+    for forbidden_identity in (synth_author_name, synth_author_email, synth_committer_name, synth_committer_email):
+        assert forbidden_identity not in merge_info["meta_text"]
+        assert forbidden_identity not in merge_pack
 
     with pytest.raises(ValueError, match="already belongs to a different context or commit"):
         ask.run_review(
@@ -987,15 +1046,17 @@ def test_schema_versioning_v1_normalization_and_locked_proof_logging(home):
             "model": "review:fake",
             "status": "ok",
         })
-    # _stamp_v2_run_record enforces consistent (repo, requested_commit, commit_sha) triples
+    # _stamp_v2_run_record enforces consistent (repo, requested_commit, commit_sha) triples and 40/64-hex OIDs
     for bad_triple in (
         {"repo": "", "requested_commit": None, "commit_sha": None},
-        {"repo": None, "requested_commit": None, "commit_sha": "deadbeef"},
+        {"repo": None, "requested_commit": None, "commit_sha": "a" * 40},
         {"repo": None, "requested_commit": None, "commit_sha": ""},
         {"repo": None, "requested_commit": "HEAD", "commit_sha": None},
         {"repo": "/some/repo", "requested_commit": "HEAD", "commit_sha": None},
         {"repo": "/some/repo", "requested_commit": "HEAD", "commit_sha": ""},
-        {"repo": "/some/repo", "requested_commit": "", "commit_sha": "deadbeef"},
+        {"repo": "/some/repo", "requested_commit": "HEAD", "commit_sha": "deadbeef"},
+        {"repo": "/some/repo", "requested_commit": "HEAD", "commit_sha": "g" * 40},
+        {"repo": "/some/repo", "requested_commit": "", "commit_sha": "a" * 40},
     ):
         with pytest.raises(ValueError, match="v2 review_group run record"):
             store.append_run_record(home, {

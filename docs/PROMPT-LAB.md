@@ -90,7 +90,7 @@ Results are self-reported: the hashes prove the card did not change, not that th
 2. `lab` (check, pack, score; layer 1) and the `cli` wiring, with the README row (and, if decision 2 is yes, the roadmap wording) in the same PR; logging once the shared CSV writer is on main.
 3. Later: a console import file (`--csv`, if the console has one), the request-export check.
 
-## Decisions for Braille
+## Open decisions for the owner
 1. Console outputs on made-up inputs: class B, kept in the data repo under logs/lab/ (rec), or class D, kept in employer tools? Ask the employer if unsure.
 2. Replace the README v0.3 roadmap wording (cards run through `claude -p` and `codex exec`) with this paste-and-score flow? (rec: yes, one line)
 3. Allow a later opt-in `lab run` through `lifeos ask`, only for cards marked `Venue: personal`? (rec: not before the first real scores)
