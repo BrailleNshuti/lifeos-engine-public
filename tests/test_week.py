@@ -114,3 +114,23 @@ def test_week_includes_logged_hours_and_health_when_present(home):
     md = render_markdown(n)
     assert "- Logged hours: 4.0 h (german 1.5 h, study 2.5 h)" in md
     assert "- Health (2 d): sleep avg 8.0 h, gym 1 d, energy avg 4.5/5" in md
+
+
+def test_week_draft_and_redteam_pack(home, capsys):
+    assert main(["--home", str(home), "week", "--week", "2026-W47", "--redteam"]) == 0
+    rt = capsys.readouterr().out
+    assert "# Red-Team Pack · 2026-W47" in rt
+    assert "Weakest point" in rt
+    assert "Proofs: 3 (career 2, german 1)" in rt
+
+    assert main(["--home", str(home), "week", "--week", "2026-W47", "--draft"]) == 0
+    rel = capsys.readouterr().out.strip().replace("\\", "/")
+    assert rel == "reviews/2026-W47.md"
+    draft_text = (home / "reviews" / "2026-W47.md").read_text(encoding="utf-8")
+    assert "# Weekly review · 2026-W47" in draft_text
+    assert "proofs 3 (career 2, german 1)" in draft_text
+    assert "Brake check:" in draft_text
+
+    # Refuses to overwrite an existing weekly review file
+    assert main(["--home", str(home), "week", "--week", "2026-W47", "--draft"]) == 2
+    assert "already exists" in capsys.readouterr().err

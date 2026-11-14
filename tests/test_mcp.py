@@ -29,8 +29,11 @@ def test_initialize_and_tool_list(home):
     assert reply["result"]["protocolVersion"] == "2025-06-18"
     assert "tools" in reply["result"]["capabilities"] and reply["result"]["serverInfo"]["name"] == "lifeos"
     names = {t["name"] for t in call(home, "tools/list")["result"]["tools"]}
-    assert names == {"lifeos_task_list", "lifeos_task_new", "lifeos_context", "lifeos_result_write",
-                     "lifeos_ask", "lifeos_delegate", "lifeos_review"}
+    assert names == {
+        "lifeos_task_list", "lifeos_task_new", "lifeos_context", "lifeos_result_write",
+        "lifeos_ask", "lifeos_delegate", "lifeos_review",
+        "lifeos_week", "lifeos_log", "lifeos_runs", "lifeos_kaizen",
+    }
 
 
 
@@ -307,6 +310,30 @@ def test_mcp_ask_and_review_run_id_idempotency_retry_mismatch_and_concurrency(ho
         if line.strip()
     ]
     assert sum(1 for r in runs if r["run_id"] == rid_conc) == 1
+
+
+def test_mcp_week_log_runs_and_kaizen_tools(home):
+    # lifeos_log
+    line, err = tool(home, "lifeos_log", action="hours", area="study", hours=2, note="Unit 2 review", date="2026-11-18")
+    assert not err and "2026-11-18,study,2,Unit 2 review" in line
+
+    # lifeos_week (markdown, redteam, draft)
+    wk_md, err = tool(home, "lifeos_week", week="2026-W47")
+    assert not err and "Logged hours: 2.0 h" in wk_md
+    rt_md, err = tool(home, "lifeos_week", week="2026-W47", redteam=True)
+    assert not err and "# Red-Team Pack · 2026-W47" in rt_md
+    dr_msg, err = tool(home, "lifeos_week", week="2026-W47", draft=True)
+    assert not err and "2026-W47.md" in dr_msg
+
+    # lifeos_runs
+    runs_txt, err = tool(home, "lifeos_runs", limit=5)
+    assert not err and "Runs:" in runs_txt
+
+    # lifeos_kaizen
+    kzn_txt, err = tool(home, "lifeos_kaizen", month="2026-11")
+    assert not err and "# System Health · 2026-11" in kzn_txt
+    kzn_dr, err = tool(home, "lifeos_kaizen", month="2026-11", draft=True)
+    assert not err and "2026-11.md" in kzn_dr
 
 
 
