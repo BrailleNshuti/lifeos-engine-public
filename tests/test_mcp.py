@@ -193,5 +193,122 @@ def test_mcp_entrypoint_prevents_home_lifeos_folder_shadowing(tmp_path, demo):
     assert json.loads(proc.stdout.strip()) == {"jsonrpc": "2.0", "id": 1, "result": {}}
 
 
+def test_mcp_ask_and_review_run_id_idempotency_retry_mismatch_and_concurrency(home, monkeypatch):
+    import threading
+    import time
+
+    tools_by_name = {t["name"]: t["inputSchema"] for t in call(home, "tools/list")["result"]["tools"]}
+    assert "run_id" in tools_by_name["lifeos_ask"]["properties"]
+    assert "run_id" in tools_by_name["lifeos_review"]["properties"]
+    assert "run_id" not in tools_by_name["lifeos_delegate"]["properties"]
+
+    # 1. Invalid run_id shapes rejected with isError=True
+    for bad_rid in ("", "../escape", "bad space", 123):
+        txt, is_err = tool(home, "lifeos_ask", model="codex", task="T-261116", run_id=bad_rid)
+        assert is_err and "run_id" in txt
+
+    # 2. Successful ask + lost-response retry -> 1 provider invocation, 1 terminal record, run_id in output
+    ask_calls = []
+
+    def codex_ok(prompt):
+        ask_calls.append(prompt)
+        return "Checked ask idempotency in lifeos/mcp.py. Next step: verify retry."
+
+    monkeypatch.setitem(ask.ADAPTERS, "codex", codex_ok)
+    rid_ok = "R-261120-mcpask01"
+    out1, err1 = tool(home, "lifeos_ask", model="codex", task="T-261116", run_id=rid_ok)
+    out2, err2 = tool(home, "lifeos_ask", model="codex", task="T-261116", run_id=rid_ok)
+    assert not err1 and not err2
+    assert rid_ok in out1 and rid_ok in out2
+    assert len(ask_calls) == 1
+    task_body = (home / "tasks" / "T-261116-demo-cli.md").read_text(encoding="utf-8")
+    assert task_body.count("Checked ask idempotency in lifeos/mcp.py.") == 1
+
+    # 3. Mismatched request identity on same run_id -> isError=True, no extra provider call
+    for mismatch_kwargs in (
+        {"model": "claude", "task": "T-261116", "run_id": rid_ok},
+        {"model": "codex", "task": "T-261116", "budget": 4000, "run_id": rid_ok},
+        {"model": "codex", "task": "T-261116", "full": True, "run_id": rid_ok},
+    ):
+        m_txt, m_err = tool(home, "lifeos_ask", **mismatch_kwargs)
+        assert m_err and rid_ok in m_txt
+    assert len(ask_calls) == 1
+
+    # 4. Persisted failed execution replay -> isError=True without calling provider again
+    fail_calls = []
+
+    def codex_fail(prompt):
+        fail_calls.append(prompt)
+        raise ask.AskError("codex failed: upstream error")
+
+    monkeypatch.setitem(ask.ADAPTERS, "codex", codex_fail)
+    rid_fail = "R-261120-mcpfail1"
+    f1, ferr1 = tool(home, "lifeos_ask", model="codex", task="T-261116", run_id=rid_fail)
+    f2, ferr2 = tool(home, "lifeos_ask", model="codex", task="T-261116", run_id=rid_fail)
+    assert ferr1 and ferr2
+    assert "upstream error" in f1 and "upstream error" in f2
+    assert len(fail_calls) == 1
+
+    # 5. Successful review + lost-response retry + mismatched identity
+    rev_calls = []
+
+    def rev_codex(prompt):
+        rev_calls.append(("codex", prompt))
+        return "Reviewed lifeos/mcp.py. Next step: none."
+
+    def rev_claude(prompt):
+        rev_calls.append(("claude", prompt))
+        return "Reviewed tests/test_mcp.py. Next step: none."
+
+    monkeypatch.setitem(ask.ADAPTERS, "codex", rev_codex)
+    monkeypatch.setitem(ask.ADAPTERS, "claude", rev_claude)
+    rid_rev = "R-261120-mcprev01"
+    r1, rerr1 = tool(home, "lifeos_review", task="T-261116", reviewers="codex,claude", run_id=rid_rev)
+    r2, rerr2 = tool(home, "lifeos_review", task="T-261116", reviewers="codex,claude", run_id=rid_rev)
+    assert not rerr1 and not rerr2
+    assert rid_rev in r1 and rid_rev in r2
+    assert len(rev_calls) == 2  # once per reviewer on first call, zero on retry
+    rm_txt, rm_err = tool(home, "lifeos_review", task="T-261116", reviewers="codex", run_id=rid_rev)
+    assert rm_err and rid_rev in rm_txt
+    assert len(rev_calls) == 2
+
+    # 6. Concurrent duplicate MCP calls with the same run_id -> 1 provider invocation, 1 terminal record
+    conc_calls = []
+    barrier = threading.Barrier(4)
+
+    def slow_codex(prompt):
+        conc_calls.append(prompt)
+        time.sleep(0.05)
+        return "Concurrent MCP answer in lifeos/mcp.py. Next step: done."
+
+    monkeypatch.setitem(ask.ADAPTERS, "codex", slow_codex)
+    rid_conc = "R-261120-mcpconc1"
+    replies = []
+    lock = threading.Lock()
+
+    def worker():
+        barrier.wait()
+        res = tool(home, "lifeos_ask", model="codex", task="T-261116", run_id=rid_conc)
+        with lock:
+            replies.append(res)
+
+    threads = [threading.Thread(target=worker) for _ in range(4)]
+    for t in threads:
+        t.start()
+    for t in threads:
+        t.join()
+
+    assert len(replies) == 4
+    assert all(not is_err and rid_conc in text for text, is_err in replies)
+    assert len(conc_calls) == 1
+    runs = [
+        json.loads(line)
+        for line in (home / "logs" / "runs.jsonl").read_text(encoding="utf-8").splitlines()
+        if line.strip()
+    ]
+    assert sum(1 for r in runs if r["run_id"] == rid_conc) == 1
+
+
+
 
 

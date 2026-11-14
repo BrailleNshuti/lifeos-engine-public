@@ -27,7 +27,7 @@ from .guard import (
 )
 from .store import (
     RUN_SCHEMA_VERSION, append_run_record, get_run_record, has_run_id, is_valid_git_oid,
-    model_call_note, new_run_id, record_result, run_lock, utc_now_iso,
+    model_call_note, new_run_id, record_result, run_lock, utc_now_iso, validate_run_id,
 )
 
 TIMEOUT = 600
@@ -560,7 +560,7 @@ def run_ask(home, model, task_id, budget=6000, dry_run=False, adapters=None, tod
         raise ValueError(f"Unknown model '{model}'. Choose one of: {', '.join(sorted(adapters))}.")
     path = task_file(home, task_id)
     day = today or dt.date.today()
-    rid = run_id or new_run_id(day)
+    rid = validate_run_id(run_id) if run_id is not None else new_run_id(day)
     expected_model = label(model)
 
     with run_lock(home if not dry_run else None, rid):
@@ -665,7 +665,7 @@ def run_review(home, task_id, reviewers=("codex", "claude"), budget=6000, dry_ru
 
     path = task_file(home, task_id)
     day = today or dt.date.today()
-    group_id = run_id or new_run_id(day)
+    group_id = validate_run_id(run_id) if run_id is not None else new_run_id(day)
     expected_model = ",".join(f"review:{label(r)}" for r in cleaned)
 
     with run_lock(home if not dry_run else None, group_id):
