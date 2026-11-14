@@ -5,7 +5,7 @@ Everything stays inside the data repo: tasks/ and logs/ledger.csv. Every write g
 """
 import json
 
-from . import __version__, ask, cockpit, delegate, kaizen, log, router, runs
+from . import __version__, ask, bakeoff, cockpit, delegate, exam, kaizen, log, router, runs, showcase
 from .context import build_pack, explain_pack, render_explanation, task_file
 from .store import new_run_id, validate_run_id
 from .tasks import list_tasks, new_task
@@ -51,6 +51,12 @@ TOOLS = [
      _schema({"target": STR, "tier": STR, "full": {"type": "boolean"}}, ["target"])),
     ("lifeos_cockpit", "Export the self-contained visual Braille × LifeOS Cockpit HTML file (<home>/cockpit/index.html).",
      _schema({"export": STR}, [])),
+    ("lifeos_exam", "Generate a 60-90 min Monthly No-AI Exam (Section 13.4 & Appendix B8) or record a graded exam score into logs/skills.md.",
+     _schema({"month": STR, "module": STR, "draft": {"type": "boolean"}, "score_skill": STR, "score_pct": {"type": "integer"}}, [])),
+    ("lifeos_bakeoff", "Generate or score a blind Role Bake-Off scorecard (Section 10.4 & Appendix A8) with SHA-256 X/Y anonymization.",
+     _schema({"quarter": STR, "task_type": STR, "model_a": STR, "model_b": STR, "scores": STR, "draft": {"type": "boolean"}}, [])),
+    ("lifeos_showcase", "Generate a Build-in-Public weekly proof post and monthly case study outline (Section 14.4 / D12).",
+     _schema({"week": STR, "draft": {"type": "boolean"}}, [])),
 ]
 
 INSTRUCTIONS = ("You are the lead. Work happens in task files. For work that fits another model (code, long reading, "
@@ -134,6 +140,32 @@ def _run_tool(home, name, a):
             return f"exported {out.relative_to(home)}"
         except ValueError:
             return f"exported {out}"
+    if name == "lifeos_exam":
+        if a.get("score_skill"):
+            res = exam.record_exam_score(home, a["score_skill"], a.get("score_pct", 0))
+            return json.dumps(res)
+        if a.get("draft"):
+            out = exam.write_exam_draft(home, month=a.get("month"), module=a.get("module") or "CSEBDSDSSE01", overwrite=True)
+            return f"drafted {out.relative_to(home)}"
+        return exam.generate_monthly_exam(home, month=a.get("month"), module=a.get("module") or "CSEBDSDSSE01")
+    if name == "lifeos_bakeoff":
+        if a.get("draft"):
+            out = bakeoff.write_bakeoff(
+                home, quarter=a.get("quarter"), task_type=a.get("task_type") or "Decision Memo",
+                model_a=a.get("model_a") or "claude", model_b=a.get("model_b") or "chatgpt",
+                scores_json=a.get("scores"), overwrite=True,
+            )
+            return f"drafted {out.relative_to(home)}"
+        scores = json.loads(a["scores"]) if a.get("scores") else None
+        return bakeoff.render_bakeoff_card(
+            a.get("quarter") or "2026-Q4", a.get("task_type") or "Decision Memo",
+            model_a=a.get("model_a") or "claude", model_b=a.get("model_b") or "chatgpt", scores=scores,
+        )
+    if name == "lifeos_showcase":
+        if a.get("draft"):
+            out = showcase.write_weekly_post(home, week=a.get("week"), overwrite=True)
+            return f"drafted {out.relative_to(home)}"
+        return showcase.generate_weekly_post(home, week=a.get("week"))
     raise KeyError(name)
 
 

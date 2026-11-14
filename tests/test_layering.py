@@ -9,8 +9,8 @@ PKG = Path(__file__).resolve().parent.parent / "lifeos"
 LAYER = {
     "store": -1,
     "home": 0, "guard": 0, "check": 0, "tasks": 0, "week": 0, "labcard": 0, "labscore": 0, "policy": 0,
-    "context": 1, "lab": 1, "log": 1, "runs": 1, "kaizen": 1,
-    "ask": 2,
+    "context": 1, "lab": 1, "log": 1, "runs": 1, "kaizen": 1, "bakeoff": 1,
+    "ask": 2, "exam": 2, "showcase": 2,
     "delegate": 3, "sortcsv": 3, "router": 3, "cockpit": 3,
     "mcp": 4,
     "cli": 5,

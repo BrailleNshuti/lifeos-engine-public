@@ -34,6 +34,7 @@ def test_initialize_and_tool_list(home):
         "lifeos_ask", "lifeos_delegate", "lifeos_review",
         "lifeos_week", "lifeos_log", "lifeos_runs", "lifeos_kaizen",
         "lifeos_route", "lifeos_cockpit",
+        "lifeos_exam", "lifeos_bakeoff", "lifeos_showcase",
     }
 
 
