@@ -12,7 +12,7 @@ import threading
 import time
 import pytest
 
-from lifeos import ask, cli, context, store
+from lifeos import ask, cli, context, mcp, store
 
 TODAY = dt.date(2026, 11, 20)
 CLEAN = "Verified lifeos/store.py and tests/test_durable_kernel.py. Next step: merge."
@@ -530,7 +530,7 @@ def test_concurrent_writers_do_not_lose_or_corrupt_updates(home):
     assert {r["run_id"] for r in runs} == {f"R-261120-conc{i:04d}" for i in range(8)}
 
 
-def test_blocked_failed_timeout_tool_missing_partial_and_full_fail_runs_recorded_with_redaction(home, monkeypatch):
+def test_blocked_failed_timeout_tool_missing_partial_and_full_fail_runs_recorded_with_redaction(home, monkeypatch, capsys):
     leaked_secret = "ghp_" + "a1" * 18
 
     # 0. Outbound context blocked by guard -> status="blocked", phase="outbound_context"
@@ -556,19 +556,23 @@ def test_blocked_failed_timeout_tool_missing_partial_and_full_fail_runs_recorded
     with pytest.raises(ask.AskError):
         ask.run_ask(home, "codex", "T-261116", adapters={"codex": timeout_adapter}, today=TODAY, run_id="R-261120-time0001")
 
-    # 2. Provider failure containing a secret in stderr -> status="failed", secret redacted
+    # 2. Provider failure containing a secret in stderr -> status="failed", secret redacted in exception AND runs.jsonl
     def failing_secret_adapter(prompt):
         raise ask.AskError(f"fatal: auth failed for {leaked_secret}")
 
-    with pytest.raises(ask.AskError):
+    with pytest.raises(ask.AskError) as fail_exc:
         ask.run_ask(home, "codex", "T-261116", adapters={"codex": failing_secret_adapter}, today=TODAY, run_id="R-261120-fail0001")
+    assert leaked_secret not in str(fail_exc.value)
+    assert "[REDACTED]" in str(fail_exc.value)
 
     # 2b. Unexpected RuntimeError / CalledProcessError inside adapter -> status="failed", wrapped as AskError
     def unexpected_crash_adapter(prompt):
         raise RuntimeError(f"unexpected adapter crash with {leaked_secret}")
 
-    with pytest.raises(ask.AskError):
+    with pytest.raises(ask.AskError) as unex_exc:
         ask.run_ask(home, "codex", "T-261116", adapters={"codex": unexpected_crash_adapter}, today=TODAY, run_id="R-261120-unex0001")
+    assert leaked_secret not in str(unex_exc.value)
+    assert "[REDACTED]" in str(unex_exc.value)
 
     # 3. Missing tool -> status="tool_missing"
     def missing_adapter(prompt):
@@ -585,20 +589,24 @@ def test_blocked_failed_timeout_tool_missing_partial_and_full_fail_runs_recorded
         ask.run_ask(home, "codex", "T-261116", adapters={"codex": leaky_answer_adapter}, today=TODAY, run_id="R-261120-blka0001")
 
     # 5. Partial multi-model review (one succeeds, one raises unexpected RuntimeError) -> parent status="partial"
-    with pytest.raises(ask.AskError):
+    with pytest.raises(ask.AskError) as part_exc:
         ask.run_review(
             home, "T-261116", reviewers=("codex", "claude"),
             adapters={"codex": lambda p: CLEAN, "claude": unexpected_crash_adapter},
             today=TODAY, run_id="R-261120-partgrp1",
         )
+    assert leaked_secret not in str(part_exc.value)
+    assert "[REDACTED]" in str(part_exc.value)
 
     # 6. Fully failed multi-model review (all reviewers fail) -> parent status="failed"
-    with pytest.raises(ask.AskError):
+    with pytest.raises(ask.AskError) as full_exc:
         ask.run_review(
             home, "T-261116", reviewers=("codex", "claude"),
             adapters={"codex": failing_secret_adapter, "claude": timeout_adapter},
             today=TODAY, run_id="R-261120-failgrp1",
         )
+    assert leaked_secret not in str(full_exc.value)
+    assert "[REDACTED]" in str(full_exc.value)
 
     raw_runs = (home / "logs" / "runs.jsonl").read_text(encoding="utf-8")
     assert leaked_secret not in raw_runs  # Secret never enters runs.jsonl!
@@ -652,8 +660,25 @@ def test_blocked_failed_timeout_tool_missing_partial_and_full_fail_runs_recorded
             ask.run_review(home, "T-261116", reviewers=("codex", "claude"), adapters={"codex": never_called_adapter, "claude": never_called_adapter}, today=TODAY, run_id=grpid)
         assert cli.main(["--home", str(home), "review", "T-261116", "--reviewers", "codex,claude", "--run-id", grpid]) == 3
 
+    cli_captured = capsys.readouterr()
+    assert leaked_secret not in cli_captured.out and leaked_secret not in cli_captured.err
     assert not retry_calls
     assert len(_read_runs(home)) == run_count_before
+
+    # 8. Live CLI and MCP provider failure also redact stderr/errors before printing or returning
+    monkeypatch.setitem(ask.ADAPTERS, "codex", failing_secret_adapter)
+    assert cli.main(["--home", str(home), "ask", "codex", "T-261116", "--run-id", "R-261120-clifail1"]) == 3
+    live_cli_err = capsys.readouterr().err
+    assert leaked_secret not in live_cli_err and "[REDACTED]" in live_cli_err
+
+    mcp_reply = mcp.handle(
+        home,
+        {"jsonrpc": "2.0", "id": 77, "method": "tools/call",
+         "params": {"name": "lifeos_ask", "arguments": {"task": "T-261116", "model": "codex"}}},
+    )
+    mcp_text = mcp_reply["result"]["content"][0]["text"]
+    assert mcp_reply["result"]["isError"] is True
+    assert leaked_secret not in mcp_text and "[REDACTED]" in mcp_text
 
 
 def test_full_64_char_sha256_and_per_reviewer_isolated_worktree_review(home, tmp_path):

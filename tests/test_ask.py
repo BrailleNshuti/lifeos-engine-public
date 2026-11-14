@@ -109,14 +109,20 @@ def test_cli_adapters_use_stdin_and_current_flags(monkeypatch):
     assert calls[0][1]["input"] == "P" and calls[2][1]["input"] == "P"
 
 
-def test_cli_adapter_failure_is_reported(monkeypatch):
+def test_cli_adapter_failure_is_reported_and_redacted(monkeypatch):
+    sentinel = "ghp_" + "b2" * 18
+    synth_email = "jane" + "@" + "example.org"
+
     class Bad:
-        returncode, stdout, stderr = 1, "", "boom"
+        returncode, stdout, stderr = 1, "", f"boom {sentinel} email {synth_email}"
 
     monkeypatch.setattr(ask.subprocess, "run", lambda *a, **k: Bad())
     monkeypatch.setattr(ask.shutil, "which", lambda name: name)
-    with pytest.raises(ask.AskError):
+    with pytest.raises(ask.AskError) as exc_info:
         ask.ask_codex("P")
+    assert sentinel not in str(exc_info.value)
+    assert synth_email not in str(exc_info.value)
+    assert "[REDACTED]" in str(exc_info.value)
 
 
 def test_ollama_adapter_uses_local_address(monkeypatch):

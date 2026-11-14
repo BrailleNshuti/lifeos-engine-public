@@ -130,13 +130,17 @@ def test_cli_tools_never_inherit_the_mcp_input_stream(monkeypatch):
 
 
 def test_an_unexpected_error_in_a_tool_does_not_kill_the_server(home, monkeypatch):
+    sentinel = "ghp_" + "c3" * 18
+
     def boom(*a, **k):
-        raise RuntimeError("unexpected")
+        raise RuntimeError(f"unexpected {sentinel}")
 
     monkeypatch.setattr(ask, "run_ask", boom)
     reply = mcp.handle(home, {"jsonrpc": "2.0", "id": 9, "method": "tools/call",
                               "params": {"name": "lifeos_ask", "arguments": {"task": "T-261116", "model": "codex"}}})
-    assert reply["result"]["isError"] and "unexpected" in reply["result"]["content"][0]["text"]
+    msg = reply["result"]["content"][0]["text"]
+    assert reply["result"]["isError"] and "unexpected" in msg
+    assert sentinel not in msg and "[REDACTED]" in msg
 
 
 def test_task_new_refuses_class_c_text_and_creates_no_file(home):
