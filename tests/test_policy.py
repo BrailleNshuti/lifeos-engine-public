@@ -33,6 +33,14 @@ def test_classify_path_across_five_tiers():
     assert policy.classify_path("~/.lifeos/private-patterns.txt") == "SECRET"
 
 
+def test_classify_content_promotes_natural_language_sensitive_data():
+    assert policy.classify_content("Study Python iterators", "tasks/T-demo.md") == "PERSONAL"
+    assert policy.classify_content("Review my health condition notes", "tasks/T-demo.md") == "SENSITIVE"
+    assert policy.classify_content("Sort a bank CSV locally", "tasks/T-demo.md") == "SENSITIVE"
+    assert policy.classify_content("Check a residence permit document", "tasks/T-demo.md") == "SENSITIVE"
+    assert policy.classify_content("anything", ".env") == "SECRET"
+
+
 def test_check_provider_allowed_enforces_local_only_for_sensitive_and_blocks_secret():
     ok, _ = policy.check_provider_allowed("PUBLIC", "codex")
     assert ok is True
