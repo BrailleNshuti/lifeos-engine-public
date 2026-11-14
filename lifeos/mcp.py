@@ -5,10 +5,11 @@ Everything stays inside the data repo: tasks/ and logs/ledger.csv. Every write g
 """
 import json
 
-from . import __version__, ask, delegate
+from . import __version__, ask, delegate, kaizen, log, runs
 from .context import build_pack, explain_pack, render_explanation, task_file
 from .store import new_run_id, validate_run_id
 from .tasks import list_tasks, new_task
+from .week import build_redteam_pack, draft_weekly_review, render_markdown, week_numbers
 
 STR = {"type": "string"}
 
@@ -33,6 +34,19 @@ TOOLS = [
      _schema({"task": STR, "model": STR, "budget": {"type": "integer"}, "full": {"type": "boolean"}}, ["task"])),
     ("lifeos_review", "Run an independent blind review (rule 7) across multiple models on the task's facts-only pack (and optional git repo/commit). Pass run_id for idempotent retries.",
      _schema({"task": STR, "reviewers": STR, "repo": STR, "commit": STR, "budget": {"type": "integer"}, "run_id": STR}, ["task"])),
+    ("lifeos_week", "Read weekly scoreboard numbers from the logs, draft reviews/<week>.md (draft=true), or generate the facts-only Red-Team pack (redteam=true).",
+     _schema({"week": STR, "draft": {"type": "boolean"}, "redteam": {"type": "boolean"}}, [])),
+    ("lifeos_log", "Append a validated, guard-checked row to proofs.csv, ledger.csv, health.csv, or hours.csv.",
+     _schema({
+         "action": {"type": "string", "enum": ["proof", "ledger", "health", "hours"]},
+         "area": STR, "proof": STR, "link": STR, "task": STR, "model": STR,
+         "minutes": {"type": "number"}, "sleep": {"type": "number"}, "gym": STR,
+         "energy": {"type": "integer"}, "hours": {"type": "number"}, "note": STR, "date": STR,
+     }, ["action"])),
+    ("lifeos_runs", "Inspect execution audit records and summary counts from logs/runs.jsonl.",
+     _schema({"status": STR, "model": STR, "task": STR, "limit": {"type": "integer"}}, [])),
+    ("lifeos_kaizen", "Run the monthly System Health check (Section 10.3) and optionally draft reviews/<YYYY-MM>.md.",
+     _schema({"month": STR, "draft": {"type": "boolean"}}, [])),
 ]
 
 INSTRUCTIONS = ("You are the lead. Work happens in task files. For work that fits another model (code, long reading, "
@@ -81,6 +95,33 @@ def _run_tool(home, name, a):
         for r in out["results"]:
             parts.append(f"\n--- {r['label']} ({r['run_id']}) ---\n{r['text']}")
         return "\n".join(parts)
+    if name == "lifeos_week":
+        wk = a.get("week")
+        if a.get("draft"):
+            return f"drafted {draft_weekly_review(home, wk).relative_to(home)}"
+        if a.get("redteam"):
+            return build_redteam_pack(home, wk)
+        return render_markdown(week_numbers(home, wk))
+    if name == "lifeos_log":
+        act = a.get("action")
+        dt_val = a.get("date")
+        if act == "proof":
+            return log.log_proof(home, a.get("area", ""), a.get("proof", ""), a.get("link", ""), date=dt_val)
+        if act == "ledger":
+            return log.log_ledger(home, a.get("task", ""), a.get("model", ""), a.get("minutes", ""), a.get("note", ""), date=dt_val)
+        if act == "health":
+            return log.log_health(home, a.get("sleep", ""), a.get("gym", ""), a.get("energy", ""), note=a.get("note", ""), date=dt_val)
+        if act == "hours":
+            return log.log_hours(home, a.get("area", ""), a.get("hours", ""), note=a.get("note", ""), date=dt_val)
+        raise ValueError(f"Unknown log action '{act}'.")
+    if name == "lifeos_runs":
+        return runs.render_runs(runs.summarize_runs(
+            home, status=a.get("status"), model=a.get("model"), task=a.get("task"), limit=a.get("limit", 20),
+        ))
+    if name == "lifeos_kaizen":
+        if a.get("draft"):
+            return f"drafted {kaizen.draft_system_health(home, month=a.get('month')).relative_to(home)}"
+        return kaizen.render_system_health(kaizen.system_health(home, month=a.get("month")))
     raise KeyError(name)
 
 

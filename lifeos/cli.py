@@ -4,7 +4,7 @@ import json
 import sys
 
 from . import __version__
-from . import lab, log, mcp, runs, sortcsv
+from . import kaizen, lab, log, mcp, runs, sortcsv
 from .delegate import run_delegate
 from .ask import ADAPTERS, AskError, Blocked, ToolMissing, provider_status, run_ask, run_review
 from .context import build_pack, explain_pack, render_explanation
@@ -12,7 +12,7 @@ from .guard import scan_paths, scan_staged, staged_files
 from .home import CORE_FILES, HomeError, estimate_tokens, find_home
 from .labcard import LabRefused
 from .tasks import list_tasks, new_task
-from .week import render_markdown, week_numbers
+from .week import build_redteam_pack, draft_weekly_review, render_markdown, week_numbers
 
 CORE_TOKEN_CAP = 2000
 LINE_LIMITS = {"rules.md": 60, "me.md": 15, "now.md": 60, "CLAUDE.md": 60, "AGENTS.md": 40}
@@ -31,7 +31,15 @@ def cmd_task(args):
 
 
 def cmd_week(args):
-    numbers = week_numbers(find_home(args.home), args.week)
+    home = find_home(args.home)
+    if getattr(args, "draft", False):
+        target = draft_weekly_review(home, args.week)
+        print(target.relative_to(home))
+        return 0
+    if getattr(args, "redteam", False):
+        print(build_redteam_pack(home, args.week), end="")
+        return 0
+    numbers = week_numbers(home, args.week)
     print(json.dumps(numbers, indent=2) if args.json else render_markdown(numbers))
     return 0
 
@@ -56,6 +64,17 @@ def cmd_runs(args):
     home = find_home(args.home)
     summary = runs.summarize_runs(home, status=args.status, model=args.model, task=args.task, limit=args.limit)
     print(json.dumps(summary, indent=2) if args.json else runs.render_runs(summary))
+    return 0
+
+
+def cmd_kaizen(args):
+    home = find_home(args.home)
+    if getattr(args, "draft", False):
+        target = kaizen.draft_system_health(home, month=args.month)
+        print(target.relative_to(home))
+        return 0
+    report = kaizen.system_health(home, month=args.month)
+    print(json.dumps(report, indent=2) if args.json else kaizen.render_system_health(report), end="" if not args.json else "\n")
     return 0
 
 
@@ -293,6 +312,8 @@ def build_parser():
     week = sub.add_parser("week", help="numbers for the weekly review, from the logs")
     week.add_argument("--week", help="ISO week such as 2026-W47 (default: this week)")
     week.add_argument("--json", action="store_true")
+    week.add_argument("--draft", action="store_true", help="write reviews/<week>.md pre-filled with log numbers (never overwrites)")
+    week.add_argument("--redteam", action="store_true", help="print a facts-only Red-Team pack for item 6 of the weekly review")
     week.set_defaults(func=cmd_week)
 
     ctx = sub.add_parser("context", help="print a context pack for another model, within a token budget")
@@ -396,6 +417,12 @@ def build_parser():
     runs_p.add_argument("--limit", type=int, default=20, help="max recent records to display (default: 20)")
     runs_p.add_argument("--json", action="store_true", help="output structured JSON summary and records")
     runs_p.set_defaults(func=cmd_runs)
+
+    kzn_p = sub.add_parser("kaizen", help="monthly System Health check (Section 10.3) and 4-week trial audit")
+    kzn_p.add_argument("--month", help="YYYY-MM (default: current month)")
+    kzn_p.add_argument("--draft", action="store_true", help="write reviews/<YYYY-MM>.md without overwriting")
+    kzn_p.add_argument("--json", action="store_true", help="output structured JSON health report")
+    kzn_p.set_defaults(func=cmd_kaizen)
     return parser
 
 
