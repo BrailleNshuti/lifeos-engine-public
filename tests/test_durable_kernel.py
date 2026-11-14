@@ -659,8 +659,9 @@ def test_blocked_failed_timeout_tool_missing_partial_and_full_fail_runs_recorded
 def test_full_64_char_sha256_and_per_reviewer_isolated_worktree_review(home, tmp_path):
     assert len(context.pack_hash("hello world")) == 64
 
-    repo = tmp_path / "sample-repo"
-    repo.mkdir()
+    synthetic_private_dir = "Synthetic_Private_User"
+    repo = tmp_path / synthetic_private_dir / "sample-repo"
+    repo.mkdir(parents=True)
     synth_author_name = "Jane SecretAuthor"
     synth_author_email = "jane.secret" + "@" + "example.org"
     synth_committer_name = "John SecretCommitter"
@@ -682,6 +683,11 @@ def test_full_64_char_sha256_and_per_reviewer_isolated_worktree_review(home, tmp
     ).stdout.strip()
     root_info = context.inspect_repo_commit(repo, "HEAD")
     root_pack, _ = context.build_review_pack(home, "T-261116", budget=6000, repo_info=root_info)
+    assert root_info["repo"] == repo.resolve()
+    assert repo.as_posix() not in root_info["meta_text"]
+    assert repo.as_posix() not in root_pack
+    assert synthetic_private_dir not in root_info["meta_text"]
+    assert synthetic_private_dir not in root_pack
     for forbidden_identity in (synth_author_name, synth_author_email, synth_committer_name, synth_committer_email):
         assert forbidden_identity not in root_info["meta_text"]
         assert forbidden_identity not in root_pack
