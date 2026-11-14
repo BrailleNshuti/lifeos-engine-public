@@ -52,11 +52,48 @@ def _delegation(ledger):
     return {"calls": sum(by_model.values()), "by_model": by_model, "flagged": flagged}
 
 
+def _hours_summary(hours_rows):
+    by_area = {}
+    for row in hours_rows:
+        area = (row.get("area") or "?").strip()
+        try:
+            h = float(row.get("hours") or 0)
+        except ValueError:
+            continue
+        by_area[area] = round(by_area.get(area, 0.0) + h, 2)
+    ordered = {k: (int(v) if v.is_integer() else round(v, 1)) for k, v in sorted(by_area.items())}
+    total = round(sum(by_area.values()), 1)
+    return ordered, total
+
+
+def _health_summary(health_rows):
+    sleeps, energies, gym_days = [], [], 0
+    for row in health_rows:
+        try:
+            sleeps.append(float(row.get("sleep_h") or 0))
+        except ValueError:
+            pass
+        if (row.get("gym") or "").strip().lower() == "yes":
+            gym_days += 1
+        try:
+            energies.append(float(row.get("energy_1_5") or 0))
+        except ValueError:
+            pass
+    return {
+        "days": len(health_rows),
+        "sleep_avg": round(sum(sleeps) / len(sleeps), 1) if sleeps else None,
+        "gym_days": gym_days,
+        "energy_avg": round(sum(energies) / len(energies), 1) if energies else None,
+    }
+
+
 def week_numbers(home, week=None, today=None):
     start, end = week_bounds(week, today)
     logs = Path(home) / "logs"
     ledger = [r for r in _rows(logs / "ledger.csv") if _in_range(r, start, end)]
     proofs = [r for r in _rows(logs / "proofs.csv") if _in_range(r, start, end)]
+    hours_rows = [r for r in _rows(logs / "hours.csv") if _in_range(r, start, end)]
+    health_rows = [r for r in _rows(logs / "health.csv") if _in_range(r, start, end)]
     minutes = 0
     for row in ledger:
         try:
@@ -67,6 +104,7 @@ def week_numbers(home, week=None, today=None):
     for row in proofs:
         area = (row.get("area") or "?").strip()
         by_area[area] = by_area.get(area, 0) + 1
+    hours_by_area, total_hours = _hours_summary(hours_rows)
     iso = start.isocalendar()
     return {
         "week": f"{iso[0]}-W{iso[1]:02d}", "from": start.isoformat(), "to": end.isoformat(),
@@ -74,6 +112,9 @@ def week_numbers(home, week=None, today=None):
         "proofs": len(proofs), "proofs_by_area": dict(sorted(by_area.items())),
         "proof_links": [((r.get("proof") or "").strip(), (r.get("link") or "").strip()) for r in proofs],
         "delegation": _delegation(ledger),
+        "hours_by_area": hours_by_area,
+        "total_hours": total_hours,
+        "health": _health_summary(health_rows),
     }
 
 
@@ -91,6 +132,17 @@ def render_markdown(n):
         "",
         f"- Proofs: {n['proofs']}" + (f" ({areas})" if areas else ""),
         f"- Net time saved by AI: {n['net_hours_saved']} h from {n['ledger_lines']} ledger lines",
+    ]
+    if n.get("hours_by_area"):
+        h_areas = ", ".join(f"{k} {v} h" for k, v in n["hours_by_area"].items())
+        lines.append(f"- Logged hours: {n['total_hours']} h ({h_areas})")
+    health = n.get("health") or {}
+    if health.get("days"):
+        lines.append(
+            f"- Health ({health['days']} d): sleep avg {health['sleep_avg']} h, "
+            f"gym {health['gym_days']} d, energy avg {health['energy_avg']}/5"
+        )
+    lines += [
         "",
         _delegation_line(n["delegation"]),
         "",

@@ -94,3 +94,23 @@ def test_a_week_in_the_wrong_format_gives_a_usage_hint(home, capsys):
     assert main(["--home", str(home), "week", "--week", "2026-47"]) != 0
     err = capsys.readouterr().err
     assert "2026-W47" in err and "Traceback" not in err
+
+
+def test_week_includes_logged_hours_and_health_when_present(home):
+    assert main(["--home", str(home), "log", "hours", "--area", "study", "--hours", "2.5", "--date", "2026-11-18"]) == 0
+    assert main(["--home", str(home), "log", "hours", "--area", "german", "--hours", "1.5", "--date", "2026-11-19"]) == 0
+    assert main([
+        "--home", str(home), "log", "health",
+        "--sleep", "7.5", "--gym", "yes", "--energy", "4", "--date", "2026-11-18",
+    ]) == 0
+    assert main([
+        "--home", str(home), "log", "health",
+        "--sleep", "8.5", "--gym", "no", "--energy", "5", "--date", "2026-11-19",
+    ]) == 0
+    n = week_numbers(home, "2026-W47")
+    assert n["hours_by_area"] == {"german": 1.5, "study": 2.5}
+    assert n["total_hours"] == 4.0
+    assert n["health"] == {"days": 2, "sleep_avg": 8.0, "gym_days": 1, "energy_avg": 4.5}
+    md = render_markdown(n)
+    assert "- Logged hours: 4.0 h (german 1.5 h, study 2.5 h)" in md
+    assert "- Health (2 d): sleep avg 8.0 h, gym 1 d, energy avg 4.5/5" in md
