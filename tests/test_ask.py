@@ -81,22 +81,45 @@ def test_missing_tool_exits_2(home, monkeypatch, capsys):
 
 
 def test_cli_adapters_use_stdin_and_current_flags(monkeypatch):
+    import json as _json
+
     calls = []
 
     class Done:
-        returncode, stdout, stderr = 0, "OUT\n", ""
+        def __init__(self, stdout):
+            self.returncode, self.stdout, self.stderr = 0, stdout, ""
 
     def fake_run(cmd, **kw):
         calls.append((cmd, kw))
-        return Done()
+        if cmd[0] == "agy":
+            return Done(
+                '{"event":"init","conversation_id":"c1"}\n'
+                '{"event":"result","result":{"status":"SUCCESS","response":"OUT\\n"}}\n'
+            )
+        return Done("OUT\n")
 
     monkeypatch.setattr(ask.subprocess, "run", fake_run)
     monkeypatch.setattr(ask.shutil, "which", lambda name: name)
-    assert ask.ask_codex("P") == "OUT"
-    assert ask.ask_gemini("P") == "OUT"
-    assert ask.ask_claude("P") == "OUT"
+    sentinel_prompt = "SENTINEL_PROMPT_TEXT_998877"
+    assert ask.ask_codex(sentinel_prompt) == "OUT"
+    assert ask.ask_gemini(sentinel_prompt) == "OUT"
+    assert ask.ask_claude(sentinel_prompt) == "OUT"
     assert calls[0][0] == ["codex", "exec", "--skip-git-repo-check", "-s", "read-only", "-"]
-    assert calls[1][0] == ["agy", "--sandbox", "-p", "P"] and calls[1][1]["input"] is None
+    assert calls[1][0] == [
+        "agy", "--sandbox", "--disable-slash-commands",
+        "--input-format", "stream-json",
+        "--output-format", "stream-json",
+        "--print=",
+    ]
+    assert all(sentinel_prompt not in arg for arg in calls[1][0])
+    agy_stdin = _json.loads(calls[1][1]["input"])
+    assert agy_stdin == {
+        "event": "user",
+        "message": {
+            "role": "user",
+            "content": [{"type": "text", "text": sentinel_prompt}],
+        },
+    }
     claude_cmd = calls[2][0]
     assert claude_cmd == [
         "claude", "-p", "--model", "sonnet",
@@ -106,7 +129,7 @@ def test_cli_adapters_use_stdin_and_current_flags(monkeypatch):
     ]
     assert not any(tool in claude_cmd for tool in ("Bash", "PowerShell", "Edit", "Write", "WebFetch"))
     assert all(kw["cwd"] for _, kw in calls)  # runs in an empty temp folder
-    assert calls[0][1]["input"] == "P" and calls[2][1]["input"] == "P"
+    assert calls[0][1]["input"] == sentinel_prompt and calls[2][1]["input"] == sentinel_prompt
 
 
 def test_cli_adapter_failure_is_reported_and_redacted(monkeypatch):
@@ -188,9 +211,71 @@ def test_personal_files_only_go_out_with_full(home):
     assert "=== now.md" in fake.prompts[1] and "=== me.md" in fake.prompts[1]
 
 
-def test_agy_refuses_a_prompt_too_long_for_a_command_line():
-    with pytest.raises(ask.AskError):
-        ask.ask_gemini("x" * 40000)
+def test_agy_stream_json_stdin_unicode_multiline_isolation_and_error_handling(monkeypatch, tmp_path):
+    import json as _json
+
+    seen = []
+
+    class Done:
+        def __init__(self, stdout, stderr="", returncode=0):
+            self.returncode, self.stdout, self.stderr = returncode, stdout, stderr
+
+    monkeypatch.setattr(ask.shutil, "which", lambda name: name)
+
+    # 1. Large (>40k chars), multiline, Unicode prompt via stdin AND isolated empty cwd even during worktree review
+    fake_worktree = tmp_path / "untrusted-repo-wt"
+    fake_worktree.mkdir()
+    prompt = "Line 1: Ümlaut äöüß — 日本語 — 🚀\nLine 2: " + ("x" * 40000)
+
+    def run_ok(cmd, **kw):
+        seen.append((cmd, kw))
+        return Done(
+            '{"event":"init","conversation_id":"c1"}\n'
+            '{"event":"step_update","step_update":{"step_type":"agent_response","text_delta":"Ignored delta"}}\n'
+            '{"event":"result","result":{"status":"SUCCESS","response":"Final Gemini Answer\\n"}}\n'
+        )
+
+    monkeypatch.setattr(ask.subprocess, "run", run_ok)
+    ask._REVIEW_TLS.cwd = fake_worktree
+    try:
+        ans = ask.ask_gemini(prompt)
+    finally:
+        ask._REVIEW_TLS.cwd = None
+
+    assert ans == "Final Gemini Answer"
+    cmd, kw = seen[-1]
+    assert all(prompt not in a and "Ümlaut" not in a for a in cmd)
+    assert kw["cwd"] != str(fake_worktree)  # never runs inside untrusted review worktree (.agents/hooks.json safety)
+    parsed_in = _json.loads(kw["input"])
+    assert parsed_in["message"]["content"][0]["text"] == prompt
+
+    # 2. Empty output, malformed JSON, non-object JSON, missing result event, empty response -> AskError without prompt leak
+    for bad_stdout in (
+        "",
+        "not json at all\n",
+        "[1, 2, 3]\n",
+        '{"no_event": true}\n',
+        '{"event":"init","conversation_id":"c1"}\n',
+        '{"event":"result","result":"not-a-dict"}\n',
+        '{"event":"result","result":{"status":"SUCCESS","response":"   "}}\n',
+    ):
+        monkeypatch.setattr(ask.subprocess, "run", lambda c, _out=bad_stdout, **k: Done(_out))
+        with pytest.raises(ask.AskError) as exc_info:
+            ask.ask_gemini("SECRET_PROMPT_SENTINEL_123")
+        assert "SECRET_PROMPT_SENTINEL_123" not in str(exc_info.value)
+
+    # 3. Error result event with a sentinel secret -> AskError with redacted message
+    leaked_tok = "ghp_" + "d4" * 18
+    err_stdout = _json.dumps({
+        "event": "result",
+        "result": {"status": "ERROR", "response": "", "error": f"auth failed for {leaked_tok}"},
+    }) + "\n"
+    monkeypatch.setattr(ask.subprocess, "run", lambda c, **k: Done(err_stdout))
+    with pytest.raises(ask.AskError) as err_exc:
+        ask.ask_gemini("SECRET_PROMPT_SENTINEL_123")
+    assert leaked_tok not in str(err_exc.value)
+    assert "SECRET_PROMPT_SENTINEL_123" not in str(err_exc.value)
+    assert "[REDACTED]" in str(err_exc.value)
 
 
 def test_ollama_result_names_the_local_model(home, monkeypatch):

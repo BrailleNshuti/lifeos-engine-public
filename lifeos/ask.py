@@ -55,9 +55,6 @@ class ToolMissing(FileNotFoundError):
     """The command-line tool for this model is not installed."""
 
 
-MAX_ARG_CHARS = 30000  # Windows allows about 32,767 characters on a command line
-
-
 def current_review_cwd():
     """Return the active isolated git worktree Path during a repository review, or None."""
     return getattr(_REVIEW_TLS, "cwd", None)
@@ -103,11 +100,11 @@ def _child_env():
     return env
 
 
-def _run_cli(cmd, prompt, timeout=TIMEOUT, via_stdin=True):
+def _run_cli(cmd, prompt, timeout=TIMEOUT, via_stdin=True, use_review_cwd=True):
     exe = shutil.which(cmd[0])  # finds codex.cmd and friends on Windows
     if not exe:
         raise ToolMissing(f"{cmd[0]} is not installed or not on PATH.")
-    active_cwd = current_review_cwd()
+    active_cwd = current_review_cwd() if use_review_cwd else None
     env = _child_env()
     try:
         if active_cwd is not None:
@@ -135,12 +132,58 @@ def ask_codex(prompt):
     return _run_cli(["codex", "exec", "--skip-git-repo-check", "-s", "read-only", "-"], prompt)
 
 
+def _parse_agy_stream_json(raw):
+    """Parse Antigravity stream-json NDJSON output and return the final model response text."""
+    lines = [line.strip() for line in (raw or "").splitlines() if line.strip()]
+    if not lines:
+        raise AskError("agy failed: empty stream-json output.")
+    terminal_response = None
+    for line in lines:
+        try:
+            obj = json.loads(line)
+        except json.JSONDecodeError:
+            raise AskError("agy failed: malformed stream-json output.") from None
+        if not isinstance(obj, dict) or not isinstance(obj.get("event"), str):
+            raise AskError("agy failed: malformed stream-json event.")
+        if obj["event"] == "result":
+            res = obj.get("result")
+            if not isinstance(res, dict):
+                raise AskError("agy failed: malformed stream-json result payload.")
+            status = str(res.get("status") or "").upper()
+            err_msg = res.get("error")
+            if status != "SUCCESS" or err_msg:
+                detail = redact_error(err_msg) if err_msg else f"status {status or 'UNKNOWN'}"
+                raise AskError(f"agy failed: {detail}")
+            text = str(res.get("response") or "").strip()
+            if not text:
+                raise AskError("agy failed: empty response in stream-json result.")
+            terminal_response = text
+    if terminal_response is None:
+        raise AskError("agy failed: missing terminal result event in stream-json output.")
+    return terminal_response
+
+
 def ask_gemini(prompt):
-    """Gemini through Antigravity (agy): Google ended Gemini CLI sign-in for individuals. agy ignores stdin."""
-    if len(prompt) > MAX_ARG_CHARS:
-        raise AskError(f"The pack is {len(prompt)} characters; agy takes the prompt as an argument (limit {MAX_ARG_CHARS}). "
-                       "Use a smaller --budget.")
-    return _run_cli(["agy", "--sandbox", "-p", prompt], prompt, via_stdin=False)
+    """Gemini through Antigravity (agy) stream-json stdin mode in an isolated empty temp directory."""
+    payload = json.dumps({
+        "event": "user",
+        "message": {
+            "role": "user",
+            "content": [{"type": "text", "text": prompt}],
+        },
+    }, ensure_ascii=False) + "\n"
+    raw = _run_cli(
+        [
+            "agy", "--sandbox", "--disable-slash-commands",
+            "--input-format", "stream-json",
+            "--output-format", "stream-json",
+            "--print=",
+        ],
+        payload,
+        via_stdin=True,
+        use_review_cwd=False,
+    )
+    return _parse_agy_stream_json(raw)
 
 
 def ask_claude(prompt):
@@ -225,7 +268,7 @@ PROVIDERS = {
     },
     "gemini": {
         "locality": "remote", "binary": "agy",
-        "capabilities": {"input": "arg", "sandbox": "sandbox-flag", "worktree_review": True},
+        "capabilities": {"input": "stdin", "sandbox": "sandbox-flag", "worktree_review": False},
     },
     "ollama": {
         "locality": "local", "binary": "ollama",
