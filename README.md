@@ -46,6 +46,8 @@ lifeos context T-261116 --budget 4000
 Install the skills for Claude Code, Codex and Antigravity/Gemini: `scripts/install-skills.ps1` (or `scripts/install-skills.sh`).
 Install the privacy guard as a pre-commit hook in the data repo: `scripts/install-hook.ps1 C:\path\to\lifeos` (or `scripts/install-hook.sh C:/path/to/lifeos` in Git Bash).
 
+On this Windows laptop, double-click `scripts/open-learning-cockpit.cmd` to start the live Learning Studio and open `http://127.0.0.1:8765/`. Keep its terminal window open; `Ctrl+C` stops the server.
+
 Private patterns that must never be committed (your street, your phone number) go in `~/.lifeos/private-patterns.txt`, one regular expression per line, outside every repo. Mark a false alarm with `lifeos-guard: allow` on that line.
 
 ## Security boundaries
