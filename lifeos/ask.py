@@ -25,6 +25,7 @@ from .guard import (
     CARD_CANDIDATE, EMAIL, IBAN_CANDIDATE, ID_DOCUMENT, PHONE,
     SECRET_ASSIGNMENT, TOKEN_PATTERNS, iban_valid, luhn_valid, private_patterns, scan_text,
 )
+from .policy import check_provider_allowed, classify_content
 from .store import (
     RUN_SCHEMA_VERSION, append_run_record, get_run_record, has_run_id, is_valid_git_oid,
     model_call_note, new_run_id, record_result, run_lock, utc_now_iso, validate_run_id,
@@ -53,6 +54,24 @@ class AskError(RuntimeError):
 
 class ToolMissing(FileNotFoundError):
     """The command-line tool for this model is not installed."""
+
+
+def task_data_tier(path):
+    """Classify task facts for execution policy without considering prior model answers."""
+    raw = Path(path).read_text(encoding="utf-8")
+    facts = re.split(r"^## Result.*$", raw, maxsplit=1, flags=re.MULTILINE)[0]
+    return classify_content(facts, f"tasks/{Path(path).name}")
+
+
+def enforce_task_policy(path, model, full=False):
+    """Return the task tier or block a provider that is unsafe for that tier."""
+    tier = task_data_tier(path)
+    if model not in PROVIDERS:  # injected test/private adapters have no declared locality contract
+        return tier
+    allowed, reason = check_provider_allowed(tier, model, full=full)
+    if not allowed:
+        raise Blocked(f"Provider policy blocked this task: {reason}")
+    return tier
 
 
 def current_review_cwd():
@@ -634,6 +653,15 @@ def run_ask(home, model, task_id, budget=6000, dry_run=False, adapters=None, tod
                     "phase": "outbound_context", "flags": 0, "error": redact_error(err),
                 })
             raise
+        try:
+            base_rec["data_tier"] = enforce_task_policy(path, model, full=full)
+        except Blocked as err:
+            if not dry_run:
+                append_run_record(home, {
+                    **base_rec, "finished_at": utc_now_iso(), "duration_ms": 0, "status": "blocked",
+                    "phase": "provider_policy", "flags": 0, "error": redact_error(err),
+                })
+            raise
         if dry_run:
             return pack, tokens
 
@@ -750,6 +778,7 @@ def run_review(home, task_id, reviewers=("codex", "claude"), budget=6000, dry_ru
         digest = pack_hash(pack)
         commit_sha = repo_info["commit_sha"] if repo_info else None
         repo_label = str(repo_info["repo"]) if repo_info else None
+        data_tier = task_data_tier(path)
 
         try:
             check_text(pack, "the review pack", "Nothing was sent.")
@@ -765,6 +794,28 @@ def run_review(home, task_id, reviewers=("codex", "claude"), budget=6000, dry_ru
                     "requested_commit": req_commit, "repo": repo_label, "error": redact_error(err),
                 })
             raise
+
+        blocked_reviewers = []
+        for reviewer in cleaned:
+            if reviewer not in PROVIDERS:
+                continue
+            allowed, reason = check_provider_allowed(data_tier, reviewer, full=False)
+            if not allowed:
+                blocked_reviewers.append(f"{reviewer}: {reason}")
+        if blocked_reviewers:
+            err = Blocked("Provider policy blocked review: " + "; ".join(blocked_reviewers))
+            if not dry_run:
+                append_run_record(home, {
+                    "schema_version": RUN_SCHEMA_VERSION, "run_id": group_id, "parent_run_id": None,
+                    "date": day.isoformat(), "started_at": group_started_iso, "finished_at": utc_now_iso(),
+                    "command": "review_group", "task_id": path.stem, "model": expected_model,
+                    "locality": "mixed", "context_sha256": digest, "tokens": tokens, "budget": budget,
+                    "data_tier": data_tier, "diff_sha256": diff_sha, "duration_ms": 0, "status": "blocked",
+                    "terminal": True, "phase": "provider_policy", "flags": 0, "child_run_ids": [],
+                    "commit_sha": commit_sha, "requested_commit": req_commit, "repo": repo_label,
+                    "error": redact_error(err),
+                })
+            raise err
 
         if dry_run:
             return {
@@ -805,7 +856,7 @@ def run_review(home, task_id, reviewers=("codex", "claude"), budget=6000, dry_ru
                 "date": day.isoformat(), "started_at": child_started_iso, "command": "review",
                 "task_id": path.stem, "model": who, "locality": locality, "context_sha256": digest,
                 "tokens": tokens, "budget": budget, "diff_sha256": diff_sha, "commit_sha": commit_sha,
-                "requested_commit": req_commit, "repo": repo_label, "terminal": True,
+                "requested_commit": req_commit, "repo": repo_label, "data_tier": data_tier, "terminal": True,
             }
             started = time.monotonic()
             phase = None
@@ -873,7 +924,7 @@ def run_review(home, task_id, reviewers=("codex", "claude"), budget=6000, dry_ru
             "date": day.isoformat(), "started_at": group_started_iso, "finished_at": utc_now_iso(),
             "command": "review_group", "task_id": path.stem, "model": expected_model,
             "locality": "mixed", "context_sha256": digest, "tokens": tokens, "budget": budget,
-            "diff_sha256": diff_sha, "duration_ms": group_elapsed,
+            "data_tier": data_tier, "diff_sha256": diff_sha, "duration_ms": group_elapsed,
             "status": group_status, "terminal": True, "flags": sum(len(r["flags"]) for r in results),
             "child_run_ids": child_ids, "commit_sha": commit_sha,
             "requested_commit": req_commit, "repo": repo_label,
