@@ -981,7 +981,7 @@ def test_doctor_tools_and_live_cli_exit_codes(home, monkeypatch, capsys):
             return False
 
         def read(self):
-            return b'{"models": [{"name": "qwen2.5:3b"}, {"name": "llama3.2"}]}'
+            return b'{"models": [{"name": "qwen3.5:4b"}, {"name": "llama3.2"}]}'
 
     class VersionOk:
         returncode, stdout, stderr = 0, "1.0.0\n", ""
@@ -1020,7 +1020,7 @@ def test_doctor_tools_and_live_cli_exit_codes(home, monkeypatch, capsys):
             return False
 
         def read(self):
-            return b'{"models": [{"name": "qwen2.5:3b"}]}'
+            return b'{"models": [{"name": "qwen3.5:4b"}]}'
 
     monkeypatch.setattr(ask, "_open_local", lambda req, timeout: PartialTagsResp())
     assert cli.main(["--home", str(home), "doctor", "--tools", "--live"]) == 1
@@ -1042,7 +1042,7 @@ def test_schema_versioning_v1_normalization_and_locked_proof_logging(home):
         "date": "2026-11-13",
         "command": "ask",
         "task_id": "T-261116-demo-cli",
-        "model": "qwen:qwen2.5:3b",
+        "model": "qwen:qwen3.5:4b",
         "context_sha256": "abcdef012345",
         "status": "ok",
     }

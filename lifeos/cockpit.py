@@ -346,6 +346,7 @@ h1,h2,h3{margin:0;line-height:1.12} h1{font:680 clamp(2.15rem,4.8vw,4.5rem)/.98 
 .review-prompt{font:400 clamp(1.55rem,3.2vw,2.55rem)/1.2 var(--font-display);max-width:26ch}.answer-sheet{border-left:4px solid var(--moss);background:color-mix(in srgb,var(--moss) 8%,var(--paper));padding:20px;font-family:var(--font-serif);line-height:1.7}.exam-seal{border:1px dashed var(--red);padding:14px;color:var(--red);font-family:var(--font-mono)}
 .project-card summary{cursor:pointer;list-style:none}.project-card summary::-webkit-details-marker{display:none}.project-meta{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}.steps{counter-reset:build-step;list-style:none;margin:0;padding:0;display:grid;gap:8px}.steps li{counter-increment:build-step;padding:10px 12px 10px 40px;border-top:1px solid var(--line);position:relative;font-size:.84rem}.steps li::before{content:counter(build-step);position:absolute;left:10px;color:var(--ochre);font-family:var(--font-mono)}.interview{border-top:4px solid var(--blue)}.rubric{display:grid;gap:7px}.rubric label{display:flex;gap:8px;align-items:flex-start;font-size:.82rem;color:var(--mute)}
 .channel-grid{display:grid;gap:13px}.channel{display:grid;grid-template-columns:42px minmax(0,1fr) auto;gap:13px;align-items:start}.channel-mark{width:42px;height:42px;border-radius:12px;display:grid;place-items:center;background:color-mix(in srgb,var(--blue) 12%,var(--paper));color:var(--blue);font:750 .78rem var(--font-mono)}.channel p{margin:4px 0 0;color:var(--muted);font-size:.82rem}.permission-ladder{counter-reset:permission;list-style:none;padding:0;margin:0;display:grid;grid-template-columns:repeat(4,1fr);border:1px solid var(--line)}.permission-ladder li{counter-increment:permission;padding:15px;border-right:1px solid var(--line);font-size:.78rem}.permission-ladder li:last-child{border-right:0}.permission-ladder li::before{content:'0' counter(permission);display:block;color:var(--ochre);font:650 .66rem var(--font-mono);margin-bottom:7px}.reply-studio{border-top:5px solid var(--moss)}.reply-actions{display:flex;flex-wrap:wrap;gap:8px}.privacy-note{display:flex;gap:10px;align-items:flex-start;color:var(--muted);font-size:.78rem}.privacy-note b{color:var(--moss)}
+.journey-tabs{display:flex;gap:7px;overflow:auto;padding-bottom:8px}.journey-step{position:relative;padding:14px 14px 14px 48px;border:1px solid var(--line);border-radius:12px;margin:9px 0;background:var(--paper);cursor:pointer;color:var(--text);width:100%;text-align:left}.journey-step::before{content:attr(data-step);position:absolute;left:13px;top:13px;width:24px;height:24px;border-radius:50%;display:grid;place-items:center;background:var(--paper-2);color:var(--muted);font:650 .65rem var(--font-mono)}.journey-step.complete::before{content:'✓';background:var(--moss);color:#07110F}.journey-step.current{border-color:var(--blue);box-shadow:0 0 0 3px color-mix(in srgb,var(--blue) 12%,transparent)}.journey-step.current::before{background:var(--blue);color:#0A0C12}.journey-step small{display:block;color:var(--muted);margin-top:3px}.streak-card{background:linear-gradient(140deg,color-mix(in srgb,var(--ochre) 14%,var(--paper)),var(--paper));border-color:color-mix(in srgb,var(--ochre) 45%,var(--line))}.streak-number{font:750 3.4rem/.9 var(--font-display);color:var(--ochre)}.gap-card{border-left:4px solid var(--red)}.score-badge{font:700 1.1rem var(--font-mono);color:var(--moss)}
 .focus-mode .rail{display:none}.focus-mode .shell{display:block}.focus-mode .main{max-width:1100px;margin:auto}.focus-mode .evidence-margin,.focus-mode .syllabus{display:none}.focus-mode .atelier{display:block}.theme-toggle{margin-left:auto}
 .toast{position:fixed;right:22px;bottom:22px;background:var(--rail);color:var(--rail-text);border-left:4px solid var(--ochre);padding:11px 16px;font-size:.82rem;display:none;z-index:99;box-shadow:var(--shadow)}
 @media (min-width:1120px){.atelier{grid-template-columns:220px minmax(0,1fr) 290px}}@media (min-width:760px) and (max-width:1119px){.atelier{grid-template-columns:190px minmax(0,1fr)}.evidence-margin{grid-column:2;position:static;border-left:0;padding-left:0}}
@@ -382,7 +383,7 @@ h1,h2,h3{margin:0;line-height:1.12} h1{font:680 clamp(2.15rem,4.8vw,4.5rem)/.98 
 <script>
 const DATA = __LIFEOS_DATA_JSON__;
 const WRITE_NONCE = "__LIFEOS_WRITE_NONCE__";
-let state = { tab: (location.hash.replace('#','') || 'learning'), lane: 'study', status: 'all', projectTrack: 'all', projectStage: 'all', interviewProject: 0, interviewQuestion: 0, sourceQuery: '', selectedSource: 0, practiceIndex: 0, revealedAnswer: null, practiceStartedAt: Date.now(), checkin: localStorage.getItem('lifeos_checkin_'+new Date().toISOString().slice(0,10)) || '', timerSec: 35*60, plannedMin: 35, timerRunning: false };
+let state = { tab: (location.hash.replace('#','') || 'learning'), lane: 'study', status: 'all', projectTrack: 'all', projectStage: 'all', interviewProject: 0, interviewQuestion: 0, sourceQuery: '', selectedSource: 0, selectedCurriculum: 0, practiceIndex: 0, revealedAnswer: null, committedResponse: '', practiceStartedAt: Date.now(), examSession: null, examResults: [], checkin: localStorage.getItem('lifeos_checkin_'+new Date().toISOString().slice(0,10)) || '', timerSec: 35*60, plannedMin: 35, timerRunning: false };
 if(localStorage.getItem('lifeos_theme') === 'night') document.body.classList.add('night');
 
 function esc(value){
@@ -459,6 +460,7 @@ function renderLearning(){
   const mins = String(Math.floor(state.timerSec/60)).padStart(2,'0');
   const secs = String(state.timerSec%60).padStart(2,'0');
   const verified = (s.trust_counts.verified || 0) + (s.trust_counts.trusted || 0);
+  const streak = s.streak || {current:0,longest:0,active_days_7:0,nudge:'Complete one recall today.'};
   const weather = verified >= 10 && s.due_count <= 8 ? 'Clear for a timed mock' : verified ? 'Building — verify more coverage' : 'No trusted questions yet';
   return `
     <section class="hero">
@@ -496,10 +498,12 @@ function renderLearning(){
         <div class="margin-note"><b>Question trust</b>${verified} verified · ${s.trust_counts.grounded || 0} waiting for review</div>
         <div class="margin-note"><b>Learning rhythm</b>${l.study_hours} h technical · ${l.german_hours} h German this week</div>
         <div class="margin-note"><b>Proof shelf</b>${l.mastery_pct}% re-proved after the reset</div>
+        <div class="margin-note"><b>Study streak</b>${streak.current} day${streak.current===1?'':'s'} · best ${streak.longest}</div>
         <p class="mono">Ctrl+K opens the source library. Escape leaves focus mode.</p>
       </aside>
     </div>
-    <div class="grid c2" style="margin-top:22px">
+    <div class="grid c3" style="margin-top:22px">
+      <section class="card streak-card"><span class="eyebrow">Evidence streak</span><div class="streak-number">${streak.current}</div><h3>${streak.active_days_7}/7 active days this week</h3><p>${esc(streak.nudge)}</p><button class="btn" onclick="setTab('practice')">Protect the chain</button></section>
       <section class="card soft"><span class="eyebrow">Quick evidence log</span><select id="q-area" class="input"><option value="study">IU / technical study</option><option value="german">German</option><option value="lab">learning project</option></select><input id="q-hours" class="input" type="number" step="0.25" placeholder="Focused hours"><input id="q-note" class="input" placeholder="What can you now reproduce without help?"><button class="btn primary" onclick="submitHours()">Place proof on the shelf</button></section>
       <section class="card"><span class="eyebrow">A useful ending</span><ul class="list"><li><span>Retrieve before rereading</span><span class="pill mint">Memory</span></li><li><span>Check against an exact source</span><span class="pill steel">Truth</span></li><li><span>Name the error, not your mood</span><span class="pill clay">Reflect</span></li><li><span>Choose the next smallest proof</span><span class="pill copper">Return</span></li></ul></section>
     </div>
@@ -515,11 +519,13 @@ function renderPractice(){
   if(!q){
     return `<section class="hero"><div class="eyebrow">Recall Studio · commitment before feedback</div><h1>Your memory desk is clear.</h1><p>No verified question is due. Review grounded drafts below or open a source and create a bank.</p></section><div class="atelier"><aside class="syllabus"><span class="eyebrow">Trust queue</span>${grounded.slice(0,20).map((x,i)=>`<button class="book-spine" onclick="reviewGrounded('${esc(x.bank_path)}','${esc(x.id)}',${i})">${esc(x.prompt)}</button>`).join('')||'<p class="mono">No grounded drafts yet.</p>'}</aside><section class="desk-paper work-surface" id="grounded-review"><h2>Verification is part of learning.</h2><p>Select a grounded draft. Check its prompt, exact source answer and citation before promoting it to verified.</p></section><aside class="evidence-margin"><div class="margin-note"><b>Draft</b>Unusable for scoring</div><div class="margin-note"><b>Grounded</b>Exact source span exists</div><div class="margin-note"><b>Verified</b>You checked prompt and answer</div><div class="margin-note"><b>Trusted</b>Clean practice history</div></aside></div>`;
   }
+  const evaluation = state.revealedAnswer?.evaluation;
+  const feedback = state.revealedAnswer ? `<div class="answer-sheet"><span class="eyebrow">Corrective feedback</span>${evaluation?.graded?`<div class="score-badge">${Math.round((evaluation.score||0)*100)}% rubric coverage</div>${(evaluation.missing_concepts||[]).length?`<p><b>Repair these ideas:</b> ${(evaluation.missing_concepts||[]).map(esc).join(' · ')}</p>`:'<p>All explicit key points were present.</p>'}`:''}<p>${esc(state.revealedAnswer.answer)}</p><span class="mono">${esc(state.revealedAnswer.citation)}</span></div>${state.revealedAnswer.recorded?`<button class="btn primary" onclick="location.reload()">Continue to the next due item</button>`:`<div class="chips"><button class="chip" onclick="ratePractice('again')">Again · missed</button><button class="chip" onclick="ratePractice('hard')">Hard · partial</button><button class="chip" onclick="ratePractice('good')">Good · correct</button><button class="chip" onclick="ratePractice('easy')">Easy · fluent</button></div>`}` : `<button class="btn primary" onclick="revealPractice('${esc(q.id)}')">Commit answer & reveal source</button>`;
   return `
     <section class="hero"><div class="eyebrow">Recall Studio · ${state.practiceIndex+1} of ${due.length}</div><h1>Answer before you look.</h1><p class="mono">Source and answer remain sealed until you commit. “Good” means substantially correct without notes.</p></section>
     <div class="atelier">
       <aside class="syllabus"><span class="eyebrow">Due queue</span>${due.map((x,i)=>`<button class="book-spine ${i===state.practiceIndex?'on':''}" onclick="selectPractice(${i})"><b>${esc(x.prompt)}</b><br><span class="mono">${esc(x.trust)} · ${esc(x.due)}</span></button>`).join('')}</aside>
-      <section class="desk-paper work-surface"><span class="eyebrow">Closed source · ${esc(q.type)} · difficulty ${Number(q.difficulty)||2}</span><div class="review-prompt">${esc(q.prompt)}</div><textarea id="recall-draft" class="input" rows="8" placeholder="Commit your explanation, code outline or derivation here before revealing..."></textarea>${state.revealedAnswer ? `<div class="answer-sheet"><span class="eyebrow">Corrective feedback</span><p>${esc(state.revealedAnswer.answer)}</p><span class="mono">${esc(state.revealedAnswer.citation)}</span></div><div class="chips"><button class="chip" onclick="ratePractice('again')">Again · missed</button><button class="chip" onclick="ratePractice('hard')">Hard · partial</button><button class="chip" onclick="ratePractice('good')">Good · correct</button><button class="chip" onclick="ratePractice('easy')">Easy · fluent</button></div>` : `<button class="btn primary" onclick="revealPractice('${esc(q.id)}')">Commit answer & reveal source</button>`}</section>
+      <section class="desk-paper work-surface"><span class="eyebrow">Closed source · ${esc(q.type)} · difficulty ${Number(q.difficulty)||2}</span><div class="review-prompt">${esc(q.prompt)}</div><textarea id="recall-draft" class="input" rows="8" ${state.revealedAnswer?'disabled':''} placeholder="Commit your explanation, code outline or derivation here before revealing...">${esc(state.committedResponse)}</textarea>${feedback}</section>
       <aside class="evidence-margin"><div class="margin-note"><b>Source seal</b>${esc(q.source_path)}</div><div class="margin-note"><b>Trust</b>${esc(q.trust)} · SHA ${esc((q.source_sha256||'').slice(0,10))}</div><div class="margin-note"><b>Last result</b>${esc(q.last_rating || 'first retrieval')}</div><p class="mono">Answers are fetched only from the nonce-protected localhost server. Static exports never contain them.</p></aside>
     </div>`;
 }
@@ -633,24 +639,32 @@ function renderTasks(){
 function renderStudy(){
   const s = DATA.study_engine;
   const sources = s.sources || [];
-  const selected = sources[state.selectedSource] || sources[0];
+  const curricula = s.curricula || [];
+  const curriculum = curricula[state.selectedCurriculum] || curricula[0];
+  const candidate = sources[state.selectedSource];
+  const selected = (candidate && curriculum?.steps?.some(step=>step.source_path===candidate.path)) ? candidate : sources.find(source=>source.path===curriculum?.steps?.[0]?.source_path) || sources[0];
   const bank = selected ? (s.banks||[]).find(b=>b.source && b.source.path===selected.path) : null;
+  const steps = (curriculum?.steps || []).map((step,index)=>`<button class="journey-step ${esc(step.status)}" data-step="${String(index+1).padStart(2,'0')}" onclick="openJourneyStep('${esc(step.source_path)}')"><b>${esc(step.title)}</b><small>${(step.outcomes||[]).map(esc).join(' · ')}</small></button>`).join('');
   return `
     <section class="hero">
-      <div class="eyebrow">Source Library · local Markdown and text · exact provenance</div>
-      <h1>Your notes should teach back.</h1>
-      <p>Read on a quiet paper surface, keep the source visible, then turn only the useful parts into grounded questions. Answer keys stay outside this library.</p>
+      <div class="eyebrow">Learning Journey · lesson → attempt → feedback → gap repair → exam</div>
+      <h1>See where you came from and what comes next.</h1>
+      <p>Choose a path, study the current lesson, generate grounded questions and prove recall. Progress moves only when an evidence-bearing attempt succeeds.</p>
+      <div class="journey-tabs">${curricula.map((row,index)=>`<button class="chip ${index===state.selectedCurriculum?'on':''}" onclick="selectCurriculum(${index})">${esc(row.title)} · ${row.progress_pct}%</button>`).join('')}</div>
     </section>
     <div class="atelier">
       <aside class="syllabus">
-        <input id="source-search" class="input" placeholder="Search the shelf…" oninput="filterSourceList(this.value)">
-        <div style="margin-top:10px">${sources.map((source,index)=>`<button class="book-spine ${index===state.selectedSource?'on':''}" data-search="${esc((source.title+' '+source.subject+' '+source.path).toLowerCase())}" onclick="state.selectedSource=${index};render()"><b>${esc(source.title)}</b><br><span class="mono">${esc(source.subject)} · ${source.words} words</span></button>`).join('')||'<p class="mono">No learning sources yet. Capture your first note.</p>'}</div>
+        <span class="eyebrow">${esc(curriculum?.skill || 'Study path')}</span>
+        <div class="bar" style="margin:10px 0"><b style="width:${Number(curriculum?.progress_pct)||0}%"></b></div>
+        <span class="mono">${Number(curriculum?.completed_steps)||0} / ${curriculum?.steps?.length||0} lessons proved</span>
+        <div style="margin-top:12px">${steps||'<p class="mono">Add a curriculum manifest to begin.</p>'}</div>
+        <button class="btn" onclick="refreshCurriculum('${esc(curriculum?.id||'')}')">Generate missing questions</button>
       </aside>
       <section class="work-surface desk-paper">
         ${selected ? `<span class="eyebrow">${esc(selected.subject)} · source SHA ${esc(selected.sha256.slice(0,10))}</span><h2>${esc(selected.title)}</h2><pre class="note-body">${esc(selected.content || selected.excerpt)}</pre>` : '<h2>The desk is waiting.</h2><p>Paste a note in the capture margin, or add Markdown under learning/sources.</p>'}
       </section>
       <aside class="evidence-margin">
-        <span class="eyebrow">Source confidence</span>
+        <span class="eyebrow">Lesson evidence</span>
         ${selected ? `<div class="margin-note"><b>Path</b>${esc(selected.path)}</div><div class="margin-note"><b>Outline</b>${(selected.headings||[]).slice(0,8).map(h=>esc(h)).join('<br>') || 'No headings found'}</div><div class="margin-note"><b>Question bank</b>${bank ? bank.question_count+' questions · '+(bank.counts.verified||0)+' verified' : 'Not created yet'}</div><button class="btn primary" onclick="createQuestionBank('${esc(selected.path)}')">${bank?'Regenerate grounded bank':'Create grounded questions'}</button>` : ''}
         <hr style="border:0;border-top:1px solid var(--line);margin:18px 0">
         <span class="eyebrow">Capture a note</span>
@@ -669,12 +683,20 @@ function renderExam(){
   const verified = (s.trust_counts.verified||0) + (s.trust_counts.trusted||0);
   const subjects = [...new Set((s.sources||[]).map(x=>x.subject).filter(Boolean))];
   const exams = (s.exams||[]).map(e=>`<li><span><b>${esc(e.title)}</b><br><span class="mono">${esc(e.path)}</span></span><button class="chip" onclick="copyText('${esc(e.path)}')">Copy path</button></li>`).join('');
+  if(state.examSession){
+    const session=state.examSession, q=session.questions[session.index];
+    if(!q){
+      const graded=state.examResults.filter(x=>x.evaluation?.graded), score=graded.length?Math.round(100*graded.reduce((sum,x)=>sum+(x.evaluation.score||0),0)/graded.length):0;
+      return `<section class="hero"><div class="eyebrow">Quick test complete</div><h1>${score}% rubric coverage</h1><p>${graded.length} answers scored and added to your gap model. Weak concepts now return to Recall Studio and the source journey.</p></section><div class="grid c2"><section class="card"><h2>Result</h2><div class="streak-number">${score}%</div><p>${state.examResults.filter(x=>(x.evaluation?.score||0)<.7).length} answer(s) need repair.</p></section><section class="card gap-card"><h2>Next move</h2><p>Open Recall Studio for spaced repair, or revisit the cited lesson before trying a new test.</p><button class="btn primary" onclick="state.examSession=null;state.examResults=[];setTab('practice')">Open gap clinic</button></section></div>`;
+    }
+    return `<section class="hero"><div class="eyebrow">Interactive test · ${session.index+1} of ${session.questions.length}</div><h1>Commit before feedback.</h1><p>The answer stays sealed until submission. Each rubric-scored answer updates your gap and streak evidence.</p></section><section class="desk-paper" style="max-width:900px;margin:auto"><div class="bar"><b style="width:${Math.round(100*session.index/session.questions.length)}%"></b></div><div class="review-prompt" style="margin:30px 0">${esc(q.prompt)}</div><textarea id="exam-answer" class="input" rows="10" placeholder="Write the complete answer from memory..."></textarea><button class="btn primary" onclick="submitExamAnswer()">Lock answer and grade</button></section>`;
+  }
   return `
     <section class="hero"><div class="eyebrow">Exam Forge · blueprint before questions · separate sealed key</div><h1>Practise the exam you will actually face.</h1><p>Only human-verified, source-grounded questions can enter a mock. The printable paper contains no answers; its key is written separately under learning/exam-keys.</p></section>
     <div class="trust-pipeline"><div class="trust-step"><strong>Draft · ${s.trust_counts.draft||0}</strong>Not eligible</div><div class="trust-step"><strong>Grounded · ${s.trust_counts.grounded||0}</strong>Exact source span</div><div class="trust-step"><strong>Verified · ${s.trust_counts.verified||0}</strong>Human checked</div><div class="trust-step"><strong>Trusted · ${s.trust_counts.trusted||0}</strong>Clean practice history</div></div>
     <div class="atelier">
       <aside class="syllabus"><span class="eyebrow">Blueprint coverage</span>${subjects.map(subject=>`<div class="margin-note"><b>${esc(subject)}</b>${(s.sources||[]).filter(x=>x.subject===subject).length} source(s)</div>`).join('')||'<p class="mono">Capture sources first.</p>'}</aside>
-      <section class="desk-paper work-surface"><span class="eyebrow">Freeze a mock exam</span><h2>Exam Blueprint</h2><label class="mono">Name</label><input id="exam-title" class="input" value="Practice Exam"><label class="mono">Subject or module</label><select id="exam-subject" class="input"><option value="">Mixed verified questions</option>${subjects.map(x=>`<option value="${esc(x)}">${esc(x)}</option>`).join('')}</select><div class="grid c2"><div><label class="mono">Questions</label><input id="exam-count" class="input" type="number" min="1" max="50" value="10"></div><div><label class="mono">Minutes</label><input id="exam-minutes" class="input" type="number" min="5" max="240" value="60"></div></div><div class="exam-seal">${verified} verified questions currently available. The engine refuses an exam larger than verified coverage.</div><button class="btn primary" onclick="forgeExam()">Create paper & sealed key</button></section>
+      <section class="desk-paper work-surface"><span class="eyebrow">Test now or freeze a paper</span><h2>Exam Blueprint</h2><label class="mono">Name</label><input id="exam-title" class="input" value="Practice Exam"><label class="mono">Subject or module</label><select id="exam-subject" class="input"><option value="">Mixed verified questions</option>${subjects.map(x=>`<option value="${esc(x)}">${esc(x)}</option>`).join('')}</select><div class="grid c2"><div><label class="mono">Questions</label><input id="exam-count" class="input" type="number" min="1" max="50" value="10"></div><div><label class="mono">Minutes</label><input id="exam-minutes" class="input" type="number" min="5" max="240" value="60"></div></div><div class="exam-seal">${verified} verified questions currently available. The engine refuses an exam larger than verified coverage.</div><div class="chips"><button class="btn primary" onclick="startQuickExam()">Start interactive test</button><button class="btn" onclick="forgeExam()">Create printable paper & key</button></div></section>
       <aside class="evidence-margin"><span class="eyebrow">Exam weather</span><div class="margin-note"><b>${verified>=10?'Ready for a mixed mock':'Coverage still building'}</b>${verified>=10?'You have enough verified items for a ten-question paper.':'Verify grounded questions in Recall Studio first.'}</div><div class="margin-note"><b>Realism rule</b>Match the IU format, points, allowed aids and time before treating a score as evidence.</div><button class="btn" onclick="setTab('practice')">Review question trust</button></aside>
     </div>
     <section class="card" style="margin-top:20px"><span class="eyebrow">Frozen exam papers</span><ul class="list">${exams||'<li>No frozen source-grounded exam yet.</li>'}</ul></section>`;
@@ -832,6 +854,25 @@ function filterSourceList(value){
   });
 }
 
+function selectCurriculum(index){
+  state.selectedCurriculum = index;
+  const curriculum = (DATA.study_engine.curricula || [])[index];
+  const firstPath = curriculum?.steps?.[0]?.source_path;
+  const sourceIndex = (DATA.study_engine.sources || []).findIndex(source=>source.path===firstPath);
+  state.selectedSource = Math.max(0, sourceIndex);
+  render();
+}
+
+function openJourneyStep(sourcePath){
+  const sourceIndex = (DATA.study_engine.sources || []).findIndex(source=>source.path===sourcePath);
+  if(sourceIndex >= 0){ state.selectedSource=sourceIndex; render(); }
+}
+
+async function refreshCurriculum(curriculum){
+  const result = await apiPost('/api/study/refresh', {curriculum});
+  if(result){ toast(`${result.created} bank(s) created · ${result.needs_verification} question(s) need review`); setTimeout(()=>location.reload(),600); }
+}
+
 async function saveStudyNote(){
   const title = (document.getElementById('note-title') || {}).value || '';
   const subject = (document.getElementById('note-subject') || {}).value || '';
@@ -856,6 +897,7 @@ async function createQuestionBank(source){
 function selectPractice(index){
   state.practiceIndex = index;
   state.revealedAnswer = null;
+  state.committedResponse = '';
   state.practiceStartedAt = Date.now();
   render();
 }
@@ -863,8 +905,9 @@ function selectPractice(index){
 async function revealPractice(questionId){
   const draft = ((document.getElementById('recall-draft') || {}).value || '').trim();
   if(draft.length < 12){ toast('Commit a real answer before opening the source.'); return; }
-  const result = await apiPost('/api/study/answer', {question_id:questionId});
-  if(result){ state.revealedAnswer = result; render(); }
+  const elapsed_seconds = Math.max(0, Math.round((Date.now() - state.practiceStartedAt) / 1000));
+  const result = await apiPost('/api/study/submit', {question_id:questionId, response:draft, elapsed_seconds});
+  if(result){ state.committedResponse=draft; state.revealedAnswer = result; render(); }
 }
 
 async function ratePractice(rating){
@@ -872,7 +915,7 @@ async function ratePractice(rating){
   const question = due[Math.min(state.practiceIndex, Math.max(0,due.length-1))];
   if(!question) return;
   const elapsed_seconds = Math.max(0, Math.round((Date.now() - state.practiceStartedAt) / 1000));
-  const result = await apiPost('/api/study/attempt', {question_id:question.id, rating, elapsed_seconds});
+  const result = await apiPost('/api/study/attempt', {question_id:question.id, rating, elapsed_seconds, response:state.committedResponse});
   if(result){ toast('Review recorded · next due '+result.due); setTimeout(()=>location.reload(), 450); }
 }
 
@@ -898,6 +941,27 @@ async function forgeExam(){
   const minutes = Number((document.getElementById('exam-minutes') || {}).value || 60);
   const result = await apiPost('/api/study/exam', {title, subject, count, minutes});
   if(result){ toast('Exam frozen · paper '+result.exam_path); setTimeout(()=>location.reload(), 600); }
+}
+
+function startQuickExam(){
+  const count=Math.max(1,Math.min(20,Number((document.getElementById('exam-count')||{}).value||10)));
+  const subject=((document.getElementById('exam-subject')||{}).value||'').toLowerCase();
+  const questions=[];
+  for(const bank of (DATA.study_engine.banks||[])){
+    const sourceText=((bank.source||{}).title+' '+(bank.source||{}).path).toLowerCase();
+    if(subject && !sourceText.includes(subject)) continue;
+    for(const q of (bank.questions||[])) if(['verified','trusted'].includes(q.trust)) questions.push(q);
+  }
+  if(questions.length<count){ toast(`Only ${questions.length} verified questions match. Choose fewer or generate and verify more.`); return; }
+  state.examSession={questions:questions.slice(0,count),index:0,started:Date.now()}; state.examResults=[]; render();
+}
+
+async function submitExamAnswer(){
+  const session=state.examSession, q=session?.questions?.[session.index]; if(!q) return;
+  const response=((document.getElementById('exam-answer')||{}).value||'').trim();
+  if(response.length<12){toast('Write a complete attempt before grading.');return;}
+  const result=await apiPost('/api/study/submit',{question_id:q.id,response,elapsed_seconds:Math.round((Date.now()-session.started)/1000)});
+  if(result){state.examResults.push(result);session.index+=1;session.started=Date.now();render();}
 }
 
 async function copyText(value){
@@ -1257,6 +1321,9 @@ def make_cockpit_handler(home):
                     path = study.write_question_bank(home, body.get("source", ""), overwrite=bool(body.get("overwrite")))
                     self._send_json(200, {"ok": True, "path": path.relative_to(home).as_posix()})
                     return
+                if parsed.path == "/api/study/refresh":
+                    self._send_json(200, {"ok": True, **study.refresh_question_banks(home, body.get("curriculum", ""))})
+                    return
                 if parsed.path == "/api/study/trust":
                     result = study.set_question_trust(
                         home, body.get("bank", ""), body.get("question_id", ""), body.get("trust", "verified"),
@@ -1266,6 +1333,12 @@ def make_cockpit_handler(home):
                 if parsed.path == "/api/study/answer":
                     self._send_json(200, {"ok": True, **study.get_question_answer(home, body.get("question_id", ""))})
                     return
+                if parsed.path == "/api/study/submit":
+                    self._send_json(200, {"ok": True, **study.submit_answer(
+                        home, body.get("question_id", ""), body.get("response", ""),
+                        elapsed_seconds=body.get("elapsed_seconds", 0),
+                    )})
+                    return
                 if parsed.path == "/api/study/review-answer":
                     self._send_json(200, {"ok": True, **study.get_question_for_review(home, body.get("question_id", ""))})
                     return
@@ -1273,6 +1346,7 @@ def make_cockpit_handler(home):
                     result = study.record_attempt(
                         home, body.get("question_id", ""), body.get("rating", ""),
                         elapsed_seconds=body.get("elapsed_seconds", 0), exam_id=body.get("exam_id", ""),
+                        response=body.get("response", ""),
                     )
                     self._send_json(200, {"ok": True, **result})
                     return
