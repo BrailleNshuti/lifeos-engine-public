@@ -3,11 +3,14 @@ setlocal
 title LifeOS Study Atelier
 set "LIFEOS_HOME=C:\Users\you\lifeos"
 set "ENGINE_HOME=C:\Users\you\lifeos-engine"
-set "PYTHON_EXE=C:\Users\you\AppData\Local\Programs\Python\Python312\python.exe"
+set "PYTHON_EXE="
+if exist "%LOCALAPPDATA%\Programs\Python\Python312\python.exe" set "PYTHON_EXE=%LOCALAPPDATA%\Programs\Python\Python312\python.exe"
+if not defined PYTHON_EXE if exist "%USERPROFILE%\anaconda3\python.exe" set "PYTHON_EXE=%USERPROFILE%\anaconda3\python.exe"
+if not defined PYTHON_EXE if exist "%USERPROFILE%\miniconda3\python.exe" set "PYTHON_EXE=%USERPROFILE%\miniconda3\python.exe"
+if not defined PYTHON_EXE for /f "delims=" %%P in ('where python.exe 2^>nul') do if not defined PYTHON_EXE set "PYTHON_EXE=%%P"
 
-if not exist "%PYTHON_EXE%" (
-  echo Python was not found at:
-  echo %PYTHON_EXE%
+if not defined PYTHON_EXE (
+  echo Python was not found. Install Python 3.10 or newer, then try again.
   pause
   exit /b 1
 )
