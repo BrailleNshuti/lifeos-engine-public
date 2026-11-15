@@ -33,6 +33,7 @@ Exceptions separate the normal path from error handling. Catch only errors you c
 
 Q: What does a return statement do?
 A: It ends the function call and sends a value to the caller.
+Key points: ends the function call | sends a value | caller
 """,
         encoding="utf-8",
     )
@@ -123,3 +124,45 @@ def test_study_cli_lists_sources_and_builds_bank(home, capsys):
     assert "python-basics.md" in capsys.readouterr().out
     assert main(["--home", str(home), "study", "bank", source.relative_to(home).as_posix()]) == 0
     assert "learning/question-banks/" in capsys.readouterr().out.replace("\\", "/")
+
+
+def test_curriculum_refresh_answer_scoring_gaps_and_streak(home):
+    source = seed_source(home)
+    curriculum_dir = home / "learning" / "curricula"
+    curriculum_dir.mkdir(parents=True, exist_ok=True)
+    (curriculum_dir / "python.json").write_text(json.dumps({
+        "schema_version": 1, "id": "python", "title": "Python", "skill": "Python engineering",
+        "steps": [{"id": "py-01", "title": "Functions", "source_path": source.relative_to(home).as_posix(),
+                   "outcomes": ["Explain return values"]}],
+    }), encoding="utf-8")
+
+    curricula = study.list_curricula(home)
+    assert curricula[0]["steps"][0]["source_path"] == "learning/sources/python-basics.md"
+    refreshed = study.refresh_question_banks(home, "python")
+    assert refreshed["created"] == 1 and refreshed["needs_verification"] >= 1
+    bank_path = home / refreshed["paths"][0]
+    bank = json.loads(bank_path.read_text(encoding="utf-8"))
+    question = next(q for q in bank["questions"] if q.get("key_points"))
+    study.set_question_trust(home, refreshed["paths"][0], question["id"], "verified")
+
+    result = study.submit_answer(home, question["id"], "It ends the function call and sends a value back to the caller.", 18)
+    assert result["recorded"] is True
+    assert result["evaluation"]["score"] == 1.0
+    snapshot = study.study_snapshot(home)
+    assert snapshot["attempt_count"] == 1 and snapshot["streak"]["current"] == 1
+    assert snapshot["curricula"][0]["progress_pct"] == 100
+    assert all("response" not in gap for gap in snapshot["gaps"])
+
+
+def test_submit_answer_records_missing_concepts_without_exporting_response(home):
+    source = seed_source(home)
+    bank_path = study.write_question_bank(home, source.relative_to(home).as_posix())
+    bank = json.loads(bank_path.read_text(encoding="utf-8"))
+    question = next(q for q in bank["questions"] if q.get("key_points"))
+    study.set_question_trust(home, bank_path.relative_to(home).as_posix(), question["id"], "verified")
+    result = study.submit_answer(home, question["id"], "It only sends something somewhere.")
+    assert result["recorded"] is True and result["evaluation"]["missing_concepts"]
+    raw = (home / "logs" / "study-attempts.jsonl").read_text(encoding="utf-8")
+    assert "It only sends" in raw
+    snapshot_text = json.dumps(study.study_snapshot(home))
+    assert "It only sends" not in snapshot_text

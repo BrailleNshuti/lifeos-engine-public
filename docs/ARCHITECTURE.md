@@ -1,4 +1,4 @@
-# Architecture · 2026-11-13
+# Architecture · 2026-11-15
 
 LifeOS Engine is a dependency-free Python package. Personal state lives in a separate private repository selected by `LIFEOS_HOME`; the engine repository contains code and fabricated examples only.
 
@@ -13,10 +13,10 @@ LifeOS Engine is a dependency-free Python package. Personal state lives in a sep
 Imports may point only downward. `tests/test_layering.py` enforces this graph and requires zero cross-module uses of underscore-prefixed APIs.
 
 1. Storage foundation: `store`
-2. Core: `home`, `guard`, `check`, `tasks`, `week`, `labcard`, `labscore`
-3. Context assembly and offline Prompt Lab: `context`, `lab`
-4. Model adapters and guarded recording: `ask`
-5. Routing and local CSV work: `delegate`, `sortcsv`
+2. Core policy and parsing: `home`, `guard`, `check`, `tasks`, `week`, `labcard`, `labscore`, `policy`
+3. Context, logs and offline analysis: `context`, `lab`, `log`, `runs`, `kaizen`, `bakeoff`
+4. Execution and content engines: `ask`, `exam`, `showcase`, `study`
+5. Routing and user surfaces: `delegate`, `sortcsv`, `router`, `cockpit`
 6. Interfaces: `mcp`, then `cli`
 
 ## Read and write paths
@@ -25,6 +25,8 @@ Imports may point only downward. `tests/test_layering.py` enforces this graph an
 - `ask` generates the `run_id` before execution, checks idempotency (`has_run_id`), scans the context, calls one adapter (or multiple independent adapters inside an isolated detached `git worktree` in `run_review`), scans the answer, and commits the task result, ledger row and run record as a single transaction in `store`. Blocked, failed, timed-out, missing-tool and partial review executions are also recorded in `logs/runs.jsonl` with secret redaction (`redact_error`).
 - `store` is the only writer for model/task results, ledger rows, proof rows and execution run records (`logs/runs.jsonl`). It acquires an exclusive lock (`logs/.store.lock`), writes a multi-file write-ahead recovery journal (`logs/.store.journal.json`), performs atomic sibling temp-file replacement (`os.replace`), replays any interrupted transaction on startup (`recover_journal`), suppresses duplicate retry writes by `run_id`, repairs missing final newlines and owns the stable model-call note contract consumed by `week`. Note that `logs/runs.jsonl` is append-only through the engine path, though still a regular file inside the user's Git repository.
 - MCP writes are restricted to task files and the ledger through the same guarded path.
+- `study` owns curriculum validation, source-grounded question banks, committed answers, rubric scoring, spaced review, gap summaries and sealed exam paper/key generation. Static snapshots omit reference answers, learner responses and rubric key points; localhost writes use the Cockpit nonce.
+- `cockpit` is a local-first rendered view over engine data. The static file can study and inspect but cannot perform writes, monitor apps while closed or send messages; write operations require the localhost server.
 - `sort-csv` is separate: it refuses remote Ollama hosts, existing outputs and outputs inside Git repositories.
 
 ## Privacy boundaries
@@ -51,4 +53,5 @@ CI runs the full pytest suite and the repository guard on Python 3.10, 3.11, 3.1
 - CLI integrations need periodic live smoke tests because external command-line interfaces change.
 - Routing is deterministic keyword routing, not an evaluated cost/quality optimizer.
 - The privacy scanner is a backstop, not a substitute for the data policy.
-- Prompt Lab remains a design proposal until real-use evidence justifies another feature.
+- The Prompt Lab runner is implemented, but further prompt features still require real-use evidence.
+- Closed-app phone/email/WhatsApp notifications require a supervised external delivery service; LifeOS may prepare drafts, but sending remains an explicit human action.

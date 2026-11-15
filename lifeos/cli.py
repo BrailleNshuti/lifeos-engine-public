@@ -135,6 +135,15 @@ def cmd_study(args):
         target = study.write_question_bank(home, args.source, overwrite=args.overwrite)
         print(target.relative_to(home).as_posix())
         return 0
+    if args.study_action == "curricula":
+        print(json.dumps(study.list_curricula(home), ensure_ascii=False, indent=2))
+        return 0
+    if args.study_action == "refresh":
+        print(json.dumps(study.refresh_question_banks(home, curriculum_id=args.curriculum or ""), ensure_ascii=False))
+        return 0
+    if args.study_action == "gaps":
+        print(json.dumps(study.study_snapshot(home).get("gaps", []), ensure_ascii=False, indent=2))
+        return 0
     if args.study_action == "verify":
         result = study.set_question_trust(home, args.bank, args.question, args.trust)
         print(json.dumps(result))
@@ -548,6 +557,10 @@ def build_parser():
     std_bnk = std_sub.add_parser("bank", help="create a grounded draft question bank from one learning source")
     std_bnk.add_argument("source", help="LifeOS-relative source path, for example learning/sources/python.md")
     std_bnk.add_argument("--overwrite", action="store_true")
+    std_cur = std_sub.add_parser("curricula", help="list ordered learning journeys and their source steps")
+    std_ref = std_sub.add_parser("refresh", help="create missing grounded banks for curriculum sources")
+    std_ref.add_argument("--curriculum", help="optional curriculum id")
+    std_sub.add_parser("gaps", help="show sanitized weak concepts and their remediation sources")
     std_ver = std_sub.add_parser("verify", help="record human trust state for one grounded question")
     std_ver.add_argument("bank")
     std_ver.add_argument("question")

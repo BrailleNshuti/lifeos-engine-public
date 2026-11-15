@@ -104,5 +104,5 @@ Other MCP apps (Codex, agy) use the same program and `LIFEOS_HOME` environment v
 
 Register `lifeos mcp` in Claude (Desktop or Code). The server tells Claude its role: for work that fits another model it calls `lifeos_delegate`, reads the answer that comes back in the same chat, checks it against rules.md and writes the decision into the task file. You only talk to Claude.
 
-Qwen runs locally through Ollama: `ollama pull qwen2.5:3b` (default). Pick another size with `LIFEOS_QWEN_MODEL`, for example `qwen3:8b` once the laptop has the RAM. `lifeos ask ollama` uses `LIFEOS_OLLAMA_MODEL` (default `llama3.2`); both talk to `OLLAMA_HOST` (default `http://localhost:11434`). Reasoning blocks (`<think>`) are stripped from local answers.
+Local models run through one Ollama installation. The laptop-sized default is `qwen3.5:4b` for `lifeos ask qwen`; the optional model kit adds `deepseek-r1:1.5b` for reasoning and `qwen2.5-coder:3b` for code. Install the audited set from PowerShell with `scripts/install-local-models.ps1 -InstallRuntime`, then run a task with `scripts/use-local-model.ps1 -Role tutor|reasoner|coder -Task T-...`. Override Qwen with `LIFEOS_QWEN_MODEL` or the generic Ollama adapter with `LIFEOS_OLLAMA_MODEL`. Both use the loopback-only `OLLAMA_HOST` (default `http://localhost:11434`); reasoning blocks (`<think>`) are stripped from local answers.
 

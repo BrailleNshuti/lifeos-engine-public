@@ -51,6 +51,8 @@ def test_cockpit_export_creates_self_contained_html_and_passes_guard(home, capsy
     assert "#build" in html and "Project Building Chamber" in html
     assert 'data-tab="communications"' in html and "Communication Hub" in html
     assert "explicit confirmation" in html and "lifeos_reply_draft_v1" in html
+    assert "Learning Journey" in html and "Evidence streak" in html
+    assert "/api/study/submit" in html and "/api/study/refresh" in html
     assert "Capture → Learn → Recall → Exam → Reflect" in html
     assert "fonts.googleapis.com" not in html and "fonts.gstatic.com" not in html
     assert "T-261116-demo-cli" in html
@@ -59,6 +61,7 @@ def test_cockpit_export_creates_self_contained_html_and_passes_guard(home, capsy
     assert "learning" in data
     assert {"focus_tasks", "due_skills", "mastery_pct", "pack_groups"} <= set(data["learning"])
     assert {"sources", "banks", "trust_counts", "due"} <= set(data["study_engine"])
+    assert {"curricula", "gaps", "streak"} <= set(data["study_engine"])
     assert data["project_chamber"]["projects"][0]["id"] == "F01"
     assert data["communications"]["policy"]["send"] == "explicit_confirmation"
     assert {channel["id"] for channel in data["communications"]["channels"]} == {"gmail", "outlook", "whatsapp"}

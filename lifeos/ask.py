@@ -263,7 +263,7 @@ def ask_qwen(prompt):
 
 
 def qwen_model():
-    return os.environ.get("LIFEOS_QWEN_MODEL", "qwen2.5:3b")
+    return os.environ.get("LIFEOS_QWEN_MODEL", "qwen3.5:4b")
 
 
 def label(model):
