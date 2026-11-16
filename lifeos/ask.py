@@ -20,7 +20,8 @@ import urllib.parse
 import urllib.request
 
 from .check import check_answer
-from .context import build_pack, build_review_pack, inspect_repo_commit, pack_hash, task_file
+from .context import build_pack, build_review_pack, inspect_repo_commit, pack_hash, task_file, visible_task
+from .seats import focus_error
 from .guard import (
     CARD_CANDIDATE, EMAIL, IBAN_CANDIDATE, ID_DOCUMENT, PHONE,
     SECRET_ASSIGNMENT, TOKEN_PATTERNS, iban_valid, luhn_valid, private_patterns, scan_text,
@@ -51,14 +52,22 @@ class Blocked(Exception):
 class AskError(RuntimeError):
     """The model call failed."""
 
+    def __init__(self, message, run_id=None):
+        super().__init__(message)
+        self.run_id = run_id
+
 
 class ToolMissing(FileNotFoundError):
     """The command-line tool for this model is not installed."""
 
+    def __init__(self, message, run_id=None):
+        super().__init__(message)
+        self.run_id = run_id
+
 
 def task_data_tier(path):
-    """Classify task facts for execution policy without considering prior model answers."""
-    raw = Path(path).read_text(encoding="utf-8")
+    """Classify task facts for execution policy without considering prior model answers or route notes."""
+    raw = visible_task(Path(path).read_text(encoding="utf-8"))
     facts = re.split(r"^## Result.*$", raw, maxsplit=1, flags=re.MULTILINE)[0]
     return classify_content(facts, f"tasks/{Path(path).name}")
 
@@ -402,7 +411,7 @@ def redact_error(text):
         msg = pat.sub("[REDACTED]", msg)
     if any(f[1] == "BLOCK" for f in scan_text(msg, private_patterns(), allow_mark=False)):
         return "[REDACTED sensitive error]"
-    return msg[:240]
+    return focus_error(msg)[:240]
 
 
 def _classify_ask_error(error):
@@ -683,7 +692,7 @@ def run_ask(home, model, task_id, budget=6000, dry_run=False, adapters=None, tod
                 **base_rec, "finished_at": utc_now_iso(), "duration_ms": elapsed_ms, "status": "tool_missing",
                 "flags": 0, "error": redacted,
             })
-            raise ToolMissing(redacted) from None
+            raise ToolMissing(redacted, run_id=rid) from None
         except AskError as err:
             elapsed_ms = int((time.monotonic() - started) * 1000)
             status = _classify_ask_error(err)
@@ -692,7 +701,7 @@ def run_ask(home, model, task_id, budget=6000, dry_run=False, adapters=None, tod
                 **base_rec, "finished_at": utc_now_iso(), "duration_ms": elapsed_ms, "status": status,
                 "flags": 0, "error": redacted,
             })
-            raise AskError(redacted) from None
+            raise AskError(redacted, run_id=rid) from None
         except Exception as err:
             elapsed_ms = int((time.monotonic() - started) * 1000)
             redacted = redact_error(err)
@@ -700,7 +709,7 @@ def run_ask(home, model, task_id, budget=6000, dry_run=False, adapters=None, tod
                 **base_rec, "finished_at": utc_now_iso(), "duration_ms": elapsed_ms, "status": "failed",
                 "flags": 0, "error": redacted,
             })
-            raise AskError(f"{model} failed: {redacted}") from None
+            raise AskError(f"{model} failed: {redacted}", run_id=rid) from None
         elapsed_ms = int((time.monotonic() - started) * 1000)
 
         try:

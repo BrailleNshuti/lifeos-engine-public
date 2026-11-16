@@ -4,7 +4,7 @@ import urllib.error
 
 import pytest
 
-from lifeos import ask, delegate, mcp
+from lifeos import ask, delegate, mcp, seats
 from lifeos.cli import main
 
 
@@ -77,12 +77,17 @@ def test_all_failing_raises_the_last_error(home):
         delegate.run_delegate(home, "T-261116", adapters={m: gone for m in ADAPTERS})
 
 
-def test_a_failed_call_is_not_retried_elsewhere(home):
+def test_a_failed_call_is_replaced_and_the_reason_is_written(home):
     def broken(prompt):
-        raise ask.AskError("codex failed")
+        raise ask.AskError("codex failed: You've hit your usage limit. try again at Nov 18th, 2026 4:02 PM")
 
-    with pytest.raises(ask.AskError):
-        delegate.run_delegate(home, "T-261116", adapters={**ADAPTERS, "codex": broken})
+    out = delegate.run_delegate(home, "T-261116", adapters={**ADAPTERS, "codex": broken})
+    assert out["model"] == "claude" and out["tried"] == ["codex", "claude"]
+    assert "usage_limit" in out["reason"] and "fell back" in out["reason"]
+    text = out["path"].read_text(encoding="utf-8")
+    note = text.split("## Route", 1)[1]
+    assert "usage_limit" in note and "R-" in note
+    assert "Route" not in out["text"] and out["text"] == "ANSWER FROM claude"
 
 
 def test_unknown_model_is_an_error(home):
@@ -189,6 +194,41 @@ def test_unpulled_model_says_how_to_pull_it(monkeypatch):
     _fake_ollama(monkeypatch, error=urllib.error.HTTPError("u", 404, "not found", {}, None))
     with pytest.raises(ask.ToolMissing, match="ollama pull"):
         ask.ask_qwen("hi")
+
+
+def test_a_private_failure_never_reaches_the_cloud(home):
+    """A failed local seat stops. It is not replaced by Claude, Codex or Gemini."""
+    cloud = []
+
+    def down(prompt):
+        raise ask.AskError("qwen timed out")
+
+    adapters = {**ADAPTERS, "qwen": down, "ollama": down, "claude": lambda prompt: cloud.append(prompt) or "cloud"}
+    with pytest.raises(ask.AskError):
+        delegate.run_delegate(home, "T-261116", model="qwen", adapters=adapters)
+    assert cloud == []
+    note = (home / "tasks" / "T-261116-demo-cli.md").read_text(encoding="utf-8").split("## Route", 1)[1]
+    assert "claude" not in note.lower() and "timeout" in note
+
+
+def test_route_notes_are_not_sent_again(home):
+    task = home / "tasks" / "T-261116-demo-cli.md"
+    task.write_text(task.read_text(encoding="utf-8") + "\n## Route · 2026-11-16\n- codex usage_limit: rested\n", encoding="utf-8")
+    seen = {}
+
+    def grab(prompt):
+        seen["prompt"] = prompt
+        return "ANSWER FROM codex with a next step"
+
+    delegate.run_delegate(home, "T-261116", adapters={**ADAPTERS, "codex": grab})
+    assert "usage_limit" not in seen["prompt"] and "Route" not in seen["prompt"]
+
+
+def test_a_resting_seat_is_skipped_before_the_call(home, monkeypatch):
+    monkeypatch.setattr(seats, "pressure", lambda records, now: {"codex": "usage limit until 2026-11-18 16:02 UTC"})
+    out = delegate.run_delegate(home, "T-261116", adapters=ADAPTERS)
+    assert out["model"] == "claude" and out["tried"] == ["claude"]
+    assert "skipped codex" in out["reason"]
 
 
 def test_a_private_task_never_falls_back_to_the_cloud(home):

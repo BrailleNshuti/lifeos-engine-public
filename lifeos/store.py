@@ -369,6 +369,9 @@ def normalize_run_record(record):
     out.setdefault("started_at", fallback_ts)
     out.setdefault("finished_at", out["started_at"])
     out["terminal"] = out.get("status") in TERMINAL_RUN_STATUSES
+    amount = out.get("tokens")
+    if "context_tokens" not in out and isinstance(amount, int) and not isinstance(amount, bool):
+        out["context_tokens"] = amount
     return out
 
 
@@ -490,6 +493,24 @@ def append_task_result(path, model, text, today):
     path = Path(path)
     atomic_write_bytes(path, _prepare_task_result_bytes(path, model, text, today))
     return True
+
+
+def append_task_note(home, path, heading, body):
+    """Append an operational note to a task file. Not a model result and not a ledger row."""
+    path = Path(path)
+    heading = " ".join(str(heading or "").split())
+    if not heading.startswith("## "):
+        raise ValueError("A task note heading must start with '## '.")
+    text = str(body or "").strip()
+    if not text:
+        raise ValueError("A task note needs a body.")
+    with store_lock(home):
+        if home is not None:
+            recover_journal(home)
+        existing = path.read_text(encoding="utf-8") if path.exists() else ""
+        block = f"\n{heading}\n{text}\n"
+        commit_transaction(home, [(path, (existing.rstrip() + block).encode("utf-8"))])
+    return path
 
 
 def append_csv_row(path, values):

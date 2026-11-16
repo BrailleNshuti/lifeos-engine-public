@@ -29,8 +29,7 @@ TOOLS = [
      _schema({"task": STR, "model": STR, "text": STR}, ["task", "model", "text"])),
     ("lifeos_ask", "Send a task to another model (codex, claude, gemini, ollama, qwen) and write its answer into the task file. Pass run_id for idempotent retries.",
      _schema({"task": STR, "model": STR, "budget": {"type": "integer"}, "full": {"type": "boolean"}, "run_id": STR}, ["task", "model"])),
-    ("lifeos_delegate", "Let LifeOS pick the best-fitting model for a task (or pass model to choose), run it, "
-     "and return its answer here. The answer is also appended to the task file.",
+    ("lifeos_delegate", "Pick the best open seat for a task, replace it if that call fails, record why under ## Route, and return the answer. The answer is also appended to the task file.",
      _schema({"task": STR, "model": STR, "budget": {"type": "integer"}, "full": {"type": "boolean"}}, ["task"])),
     ("lifeos_review", "Run an independent blind review (rule 7) across multiple models on the task's facts-only pack (and optional git repo/commit). Pass run_id for idempotent retries.",
      _schema({"task": STR, "reviewers": STR, "repo": STR, "commit": STR, "budget": {"type": "integer"}, "run_id": STR}, ["task"])),

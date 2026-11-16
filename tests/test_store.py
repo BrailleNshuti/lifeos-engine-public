@@ -2,7 +2,10 @@ import csv
 import datetime as dt
 import json
 
-from lifeos.store import append_ledger_row, append_run_record, model_call_flags, model_call_note, new_run_id, record_result
+from lifeos.store import (
+    append_ledger_row, append_run_record, model_call_flags, model_call_note,
+    new_run_id, normalize_run_record, record_result,
+)
 
 
 
@@ -11,6 +14,11 @@ def test_model_call_note_round_trips_without_string_contract_drift():
     assert note == "asked via lifeos ask; flags: 3"
     assert model_call_flags(note) == 3
     assert model_call_flags("old row without flags") == 0
+
+
+def test_a_run_token_count_is_visible_to_the_weekly_audit():
+    row = normalize_run_record({"status": "ok", "tokens": 1200, "date": "2026-11-16"})
+    assert row["context_tokens"] == 1200
 
 
 def test_ledger_writer_quotes_commas_and_repairs_missing_newline(tmp_path):

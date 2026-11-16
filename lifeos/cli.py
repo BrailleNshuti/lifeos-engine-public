@@ -234,7 +234,9 @@ def cmd_delegate(args):
     except AskError as error:
         print(f"lifeos: {error}", file=sys.stderr)
         return 3
-    print(f"{out['model']}: {out['reason']}" + (" [dry run, nothing sent]" if args.dry_run else ""))
+    chain = " -> ".join(out.get("chain") or [])
+    print(f"{out['model']}: {out['reason']}" + (f" · chain {chain}" if chain else "")
+          + (" [dry run, nothing sent]" if args.dry_run else ""))
     if out["text"]:
         print(f"\n{out['text']}\n\n[result appended to {out['path'].relative_to(home)}]")
     if out["flags"]:  # also when the answer is empty, the case CHECK exists for (a dry run has no flags)
