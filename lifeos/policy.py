@@ -86,7 +86,7 @@ def check_provider_allowed(tier, model, full=False):
     if norm_tier == "SECRET":
         return False, "SECRET data (keys, credentials, private-patterns) cannot be sent to any model."
     if model == "grok" and full:
-        return False, "grok takes its prompt on the command line, so me.md and now.md are never sent to it (no --full)."
+        return False, "grok is the web-connected live-facts seat, so me.md and now.md are never sent to it (no --full)."
     if norm_tier == "SENSITIVE" and locality != "local":
         return False, f"SENSITIVE data requires a local provider; '{model}' is {locality} (use qwen or ollama)."
     if norm_tier == "PERSONAL" and locality == "remote" and not full:

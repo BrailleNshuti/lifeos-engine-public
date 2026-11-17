@@ -63,7 +63,7 @@ GOOD_AT = {
     "claude": "plans, decisions, writing and the code draft",
     "codex": "tests, bugs, review, German and exams",
     "gemini": "long reading and research",
-    "grok": "live facts with a source and a date; locked: no tools, no memory",
+    "grok": "live facts with a source and a date; locked: no plan mode, no subagents, tools refused",
 }
 
 _QUOTA = ("usage limit", "rate limit", "quota", "too many requests", "insufficient_quota")

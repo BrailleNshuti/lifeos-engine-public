@@ -221,25 +221,31 @@ def ask_gemini(prompt):
     return _parse_agy_stream_json(raw)
 
 
-GROK_MAX_PROMPT = 24_000  # characters; the prompt travels as a command-line argument
-
-
 def ask_grok(prompt):
-    """Grok Build in a locked one-turn call: live facts only.
+    """Grok Build in a locked headless call: live facts only.
 
-    Locked means: an empty temp folder (never a repo), no --always-approve so
-    nothing runs on this computer without a yes, no plan mode, no subagents, no
-    memory, no auto-update, one JSON object back. Web search stays on because
-    live facts are what this seat is for. Not verified against the installed
-    CLI until `lifeos doctor` smoke-tests it on the laptop.
+    Flags checked against `grok --help` of version 1.0.77 (2026-11-17): an empty
+    temp folder, no plan mode, no subagents, at most 3 agent turns (a search and
+    an answer), permission mode dontAsk (an unapproved tool is refused, not
+    waited on), one JSON object back. The prompt travels in a private temp file,
+    not on the command line, so other users cannot read it from the process list.
+    Web search stays on because live facts are what this seat is for. Whether
+    dontAsk really refuses tools is not yet proven by a live call.
     """
-    if len(prompt) > GROK_MAX_PROMPT:
-        raise AskError(f"grok failed: the prompt is too long for a command-line argument ({len(prompt)} characters).")
-    raw = _run_cli(
-        ["grok", "--no-auto-update", "--no-plan", "--no-subagents", "--no-memory",
-         "--output-format", "json", "-p", prompt],
-        "", via_stdin=False, use_review_cwd=False,
-    )
+    handle, path = tempfile.mkstemp(prefix="lifeos-grok-", suffix=".txt")
+    try:
+        with os.fdopen(handle, "w", encoding="utf-8") as fh:
+            fh.write(prompt)
+        raw = _run_cli(
+            ["grok", "--no-plan", "--no-subagents", "--max-turns", "3", "--permission-mode", "dontAsk",
+             "--output-format", "json", "--prompt-file", path],
+            "", via_stdin=False, use_review_cwd=False,
+        )
+    finally:
+        try:
+            os.unlink(path)
+        except OSError:
+            pass
     return _parse_grok_json(raw)
 
 
