@@ -68,6 +68,8 @@ def _routing_waste(runs_rows, ledger_rows):
     tokens_by_model = {}
     calls_by_model = {}
     for rec in runs_rows:
+        if rec.get("command") == "smoke":
+            continue
         st = rec.get("status") or "unknown"
         mdl = rec.get("model") or "review_group"
         calls_by_model[mdl] = calls_by_model.get(mdl, 0) + 1

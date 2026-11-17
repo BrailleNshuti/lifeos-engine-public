@@ -21,7 +21,7 @@ import urllib.request
 
 from .check import check_answer
 from .context import build_pack, build_review_pack, inspect_repo_commit, pack_hash, task_file, visible_task
-from .seats import focus_error
+from .seats import failure_kind, focus_error
 from .guard import (
     CARD_CANDIDATE, EMAIL, IBAN_CANDIDATE, ID_DOCUMENT, PHONE,
     SECRET_ASSIGNMENT, TOKEN_PATTERNS, iban_valid, luhn_valid, private_patterns, scan_text,
@@ -378,42 +378,59 @@ def _probe_ollama_tags():
         return None
 
 
-def provider_status(probe=False, smoke=False, adapters=None):
-    """Return availability, capability contract and (when probe=True or smoke=True) live health status for each provider."""
+def _smoke_call(adapter, label):
+    """Make one tiny authenticated call. Return (status, detail, error); error is redacted and short."""
+    try:
+        answer = adapter("Reply with OK only.")
+    except KeyboardInterrupt:
+        raise
+    except Exception as err:
+        reason = redact_error(err)
+        kind = failure_kind(reason)
+        if kind == "usage_limit":
+            return "resting", f"{label}, usage limit: {reason}", reason
+        return "unhealthy", f"{label}, smoke failed: {reason}", reason
+    if answer:
+        return "healthy", f"{label}, smoke ok", ""
+    return "unhealthy", f"{label}, empty smoke response", "empty smoke response"
+
+
+def provider_status(probe=False, smoke=False, adapters=None, only=None, skip=None, on_start=None, on_row=None):
+    """Return availability, capability contract and (when probe=True or smoke=True) live health status for each provider.
+
+    `only` limits the rows to named seats. `skip` maps a seat to the reason it is resting: it is reported, not called.
+    `on_start(name)` runs before a seat is called and `on_row(row)` after it, so a caller can show progress.
+    """
     rows = []
     active_adapters = adapters or ADAPTERS
     tags = _probe_ollama_tags() if (probe or smoke) else None
     for name, info in sorted(PROVIDERS.items()):
+        if only and name not in only:
+            continue
         exe = shutil.which(info["binary"])
         available = bool(exe)
         status = "available" if available else "missing"
         detail = info["binary"]
+        error = ""
+        if on_start and smoke:
+            on_start(name)
         if smoke:
-            if name in ("ollama", "qwen"):
+            local = name in ("ollama", "qwen")
+            label = info["binary"]
+            if local:
                 target = qwen_model() if name == "qwen" else os.environ.get("LIFEOS_OLLAMA_MODEL", "llama3.2")
-                detail = f"ollama ({target})"
-                if tags is None and adapters is None:
-                    status = "unreachable"
-                elif tags is not None and target not in tags and f"{target}:latest" not in tags and adapters is None:
-                    status = "model_missing"
-                else:
-                    try:
-                        ans = active_adapters[name]("Reply with OK only.")
-                        status = "healthy" if ans else "unhealthy"
-                        detail = f"ollama ({target}, smoke ok)" if ans else f"ollama ({target}, empty smoke response)"
-                    except Exception:
-                        status = "unhealthy"
-                        detail = f"ollama ({target}, smoke failed)"
-            elif not available and adapters is None:
+                label = f"ollama ({target})"
+                detail = label
+            if skip and name in skip:
+                status, detail = "resting", skip[name]
+            elif local and tags is None and adapters is None:
+                status = "unreachable"
+            elif local and tags is not None and target not in tags and f"{target}:latest" not in tags and adapters is None:
+                status = "model_missing"
+            elif not local and not available and adapters is None:
                 status = "missing"
             else:
-                try:
-                    ans = active_adapters[name]("Reply with OK only.")
-                    status = "healthy" if ans else "unhealthy"
-                    detail = f"{info['binary']} (smoke ok)" if ans else f"{info['binary']} (empty smoke response)"
-                except Exception:
-                    status = "unhealthy"
-                    detail = f"{info['binary']} (smoke failed)"
+                status, detail, error = _smoke_call(active_adapters[name], label)
         elif probe:
             if name in ("ollama", "qwen"):
                 target = qwen_model() if name == "qwen" else os.environ.get("LIFEOS_OLLAMA_MODEL", "llama3.2")
@@ -439,7 +456,7 @@ def provider_status(probe=False, smoke=False, adapters=None):
                         status = "unhealthy"
                 except Exception:
                     status = "unreachable"
-        rows.append({
+        row = {
             "model": name,
             "locality": info["locality"],
             "binary": info["binary"],
@@ -447,7 +464,12 @@ def provider_status(probe=False, smoke=False, adapters=None):
             "status": status,
             "detail": detail,
             "capabilities": dict(info["capabilities"]),
-        })
+        }
+        if error:
+            row["error"] = error
+        rows.append(row)
+        if on_row:
+            on_row(row)
     return rows
 
 

@@ -241,11 +241,11 @@ def _finished(record):
 
 
 def _spend(records, now):
-    """Return (newest ask/review record per seat, tokens per cloud seat, calls per cloud seat) for 7 days."""
+    """Return (newest ask/review/smoke record per seat, tokens per cloud seat, calls per cloud seat) for 7 days."""
     window = (_aware(now).date() - dt.timedelta(days=SEVEN_DAYS)).isoformat()
     newest, tokens, calls = {}, {}, {}
     for rec in records or []:
-        if rec.get("command") not in ("ask", "review"):
+        if rec.get("command") not in ("ask", "review", "smoke"):
             continue
         seat = seat_name(rec.get("model"))
         if not seat:
@@ -257,7 +257,7 @@ def _spend(records, now):
         prev = newest.get(seat)
         if prev is None or stamp >= prev[0]:
             newest[seat] = (stamp, rec)
-        if rec.get("status") in _SPENDS and seat in SHARES:
+        if rec.get("command") != "smoke" and rec.get("status") in _SPENDS and seat in SHARES:
             amount = rec.get("tokens")
             if isinstance(amount, int) and not isinstance(amount, bool):
                 tokens[seat] = tokens.get(seat, 0) + amount
