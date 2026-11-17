@@ -179,3 +179,35 @@ def test_the_seat_table_shows_share_rest_and_replacement():
     assert rows["qwen"]["limit"] is None  # local seats have no cloud share
     text = seats.render_table(seats.table(records, NOW))
     assert "codex" in text and "resting" in text and "gemini" in text
+
+
+AGY = "Individual quota reached. Please upgrade your subscription to increase your limits. Resets in {t}."
+
+
+def test_agy_quota_message_is_a_usage_limit():
+    assert seats.failure_kind(AGY.format(t="78h40m32s")) == "usage_limit"
+
+
+def test_a_relative_reset_rests_the_seat_from_the_failure_time():
+    """Recorded wording from the agy (Gemini) CLI, 2026-11-17: 'Resets in 78h40m32s'."""
+    resting = seats.pressure([_run("gemini", "failed", error=AGY.format(t="78h40m32s"))], NOW)
+    # failure finished 2026-11-16 10:00 UTC; + 78h40m32s = 2026-11-19 16:40 UTC
+    assert resting["gemini"] == "usage limit until 2026-11-19 16:40 UTC"
+
+
+def test_relative_forms_days_minutes_and_words():
+    for text, until in [
+        ("quota reached. Resets in 163h39m14s.", "2026-11-23 05:39"),
+        ("usage limit hit. resets in 2d 3h", "2026-11-18 13:00"),
+        ("usage limit hit. try again in 150 minutes", "2026-11-16 12:30"),
+        ("usage limit hit. try again in 78 hours", "2026-11-19 16:00"),
+    ]:
+        resting = seats.pressure([_run("gemini", "failed", error=text)], NOW)
+        assert resting["gemini"].startswith(f"usage limit until {until} UTC"), (text, resting)
+
+
+def test_a_relative_reset_beyond_eight_days_is_capped_and_a_zero_one_falls_back():
+    far = seats.pressure([_run("gemini", "failed", error=AGY.format(t="400h"))], NOW)
+    assert "capped" in far["gemini"]
+    zero = seats.pressure([_run("gemini", "failed", error=AGY.format(t="0s"))], NOW)
+    assert "12 h rest" in zero["gemini"]

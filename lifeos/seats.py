@@ -78,6 +78,9 @@ _RESET = re.compile(
     re.I,
 )
 _ISO = re.compile(r"\b(20\d{2}-\d{2}-\d{2})(?:[T ](\d{2}):(\d{2}))?")
+_AFTER = re.compile(r"(?:resets?|try again|available|retry)\s+in\s+((?:\d+\s*[a-z]+[\s,]*(?:and\s+)?){1,4})", re.I)
+_PART = re.compile(r"(\d+)\s*(days?|d|hours?|hrs?|h|minutes?|mins?|m|seconds?|secs?|s)(?![a-z])", re.I)
+_UNIT = {"d": 86400, "h": 3600, "m": 60, "s": 1}
 _SPENDS = frozenset({"ok", "failed", "timeout", "partial"})
 
 
@@ -194,11 +197,30 @@ def _parse_reset(message):
     return (moment - offset if given else moment), given
 
 
+def _parse_relative(message):
+    """Return the wait named as a duration ('Resets in 78h40m32s', 'try again in 45 minutes'), or None."""
+    found = _AFTER.search(message or "")
+    if not found:
+        return None
+    parts = _PART.findall(found.group(1))
+    if not parts:
+        return None
+    seconds = sum(int(number) * _UNIT[unit[0].lower()] for number, unit in parts)
+    return dt.timedelta(seconds=seconds)
+
+
 def _rest_until(record):
     """Return (until, note) for a usage-limit failure. The note flags anything guessed."""
     finished = _finished(record)
     parsed, given = _parse_reset(record.get("error") or "")
     fallback = finished + dt.timedelta(hours=REST_HOURS) if finished else None
+    wait = _parse_relative(record.get("error") or "") if parsed is None else None
+    if wait is not None and finished is not None:
+        if wait <= dt.timedelta(0):
+            return fallback, "reset wait was zero, 12 h rest"
+        if wait > dt.timedelta(days=REST_CEILING_DAYS):
+            return finished + dt.timedelta(days=REST_CEILING_DAYS), f"reset time was over {REST_CEILING_DAYS} days away, capped"
+        return finished + wait, ""
     if parsed is None:
         return fallback, "no time in the message, 12 h rest"
     if finished is not None and parsed <= finished:
