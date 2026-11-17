@@ -455,17 +455,11 @@ def test_execution_policy_blocks_sensitive_remote_blind_review(home):
 
 
 
-def test_timeout_can_be_shortened_for_a_live_failover_check(monkeypatch, tmp_path):
+def test_timeout_can_be_shortened_for_a_live_failover_check(monkeypatch):
     """LIFEOS_TIMEOUT=1 lets a real slow tool prove the timeout failover without waiting ten minutes."""
-    import os
-    import stat
     import sys
-    slow = tmp_path / "slowtool"
-    slow.write_text(f"#!{sys.executable}\nimport time\ntime.sleep(5)\n", encoding="utf-8")
-    slow.chmod(slow.stat().st_mode | stat.S_IEXEC)
-    monkeypatch.setenv("PATH", f"{tmp_path}{os.pathsep}{os.environ['PATH']}")
     monkeypatch.setenv("LIFEOS_TIMEOUT", "1")
     with pytest.raises(ask.AskError, match="timed out after 1 s"):
-        ask._run_cli(["slowtool"], "x", via_stdin=False, use_review_cwd=False)
+        ask._run_cli([sys.executable, "-c", "import time; time.sleep(5)"], "x", via_stdin=False, use_review_cwd=False)
     monkeypatch.setenv("LIFEOS_TIMEOUT", "nonsense")
     assert ask.timeout_seconds() == ask.TIMEOUT
