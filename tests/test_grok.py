@@ -38,27 +38,43 @@ def test_a_sensitive_task_never_selects_grok(tier, explicit):
 
 
 def test_the_seat_is_locked(monkeypatch):
+    """Flags below all exist in `grok --help` of version 1.0.77 (checked 2026-11-17)."""
+    import os
     seen = {}
 
     def fake(cmd, prompt, **kwargs):
-        seen.update(cmd=cmd, prompt=prompt, kwargs=kwargs)
+        path = cmd[cmd.index("--prompt-file") + 1]
+        seen.update(cmd=cmd, prompt=prompt, kwargs=kwargs, path=path, body=open(path, encoding="utf-8").read())
         return json.dumps({"text": "Price is 499 EUR (source: shop, 2026-11-17)."})
 
     monkeypatch.setattr(ask, "_run_cli", fake)
     assert ask.ask_grok("latest price?") == "Price is 499 EUR (source: shop, 2026-11-17)."
     cmd = seen["cmd"]
-    assert cmd[0] == "grok" and "-p" in cmd and cmd[cmd.index("--output-format") + 1] == "json"
-    for flag in ("--no-auto-update", "--no-plan", "--no-subagents", "--no-memory"):
-        assert flag in cmd
-    assert "--always-approve" not in cmd  # nothing runs on this computer without a yes
-    assert seen["kwargs"].get("use_review_cwd") is False  # an empty temp folder, never the repo
-    assert "latest price?" in cmd and seen["kwargs"].get("via_stdin") is False
+    assert cmd[0] == "grok" and cmd[cmd.index("--output-format") + 1] == "json"
+    assert "--no-plan" in cmd and "--no-subagents" in cmd
+    assert cmd[cmd.index("--max-turns") + 1] == "3"
+    assert cmd[cmd.index("--permission-mode") + 1] == "dontAsk"  # an unapproved tool is refused, never waited on
+    for missing in ("--no-memory", "--no-auto-update", "--always-approve"):
+        assert missing not in cmd
+    assert "-p" not in cmd and "latest price?" not in cmd  # the prompt never travels in argv
+    assert seen["body"] == "latest price?"  # it travels in a private temp file
+    assert not os.path.exists(seen["path"])  # and the file is gone afterwards
+    assert seen["kwargs"].get("use_review_cwd") is False and seen["kwargs"].get("via_stdin") is False
 
 
-def test_a_prompt_too_long_for_the_command_line_is_refused_not_cut(monkeypatch):
-    monkeypatch.setattr(ask, "_run_cli", lambda *a, **k: pytest.fail("must not run"))
-    with pytest.raises(ask.AskError, match="too long"):
-        ask.ask_grok("x" * 30_000)
+def test_a_long_prompt_is_fine_and_the_temp_file_is_removed_even_on_failure(monkeypatch):
+    import os
+    paths = []
+
+    def fake(cmd, prompt, **kwargs):
+        paths.append(cmd[cmd.index("--prompt-file") + 1])
+        assert len(open(paths[0], encoding="utf-8").read()) == 60_000
+        raise ask.AskError("grok failed: boom")
+
+    monkeypatch.setattr(ask, "_run_cli", fake)
+    with pytest.raises(ask.AskError, match="boom"):
+        ask.ask_grok("x" * 60_000)
+    assert not os.path.exists(paths[0])
 
 
 @pytest.mark.parametrize("raw,message", [
@@ -78,9 +94,9 @@ def test_grok_is_registered_for_the_provider_table_and_adapters():
     assert ask.PROVIDERS["grok"]["locality"] == "remote" and ask.PROVIDERS["grok"]["binary"] == "grok"
 
 
-def test_grok_never_gets_the_full_pack_because_its_prompt_travels_in_argv():
+def test_grok_never_gets_the_full_pack_me_and_now_stay_off_the_web_seat():
     allowed, why = policy.check_provider_allowed("PERSONAL", "grok", full=True)
-    assert not allowed and "command line" in why
+    assert not allowed and "me.md" in why
     assert policy.check_provider_allowed("PERSONAL", "grok", full=False)[0]
 
 
