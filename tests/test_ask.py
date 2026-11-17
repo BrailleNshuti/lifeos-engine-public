@@ -453,3 +453,13 @@ def test_execution_policy_blocks_sensitive_remote_blind_review(home):
     assert calls == []
 
 
+
+
+def test_timeout_can_be_shortened_for_a_live_failover_check(monkeypatch):
+    """LIFEOS_TIMEOUT=1 lets a real slow tool prove the timeout failover without waiting ten minutes."""
+    import sys
+    monkeypatch.setenv("LIFEOS_TIMEOUT", "1")
+    with pytest.raises(ask.AskError, match="timed out after 1 s"):
+        ask._run_cli([sys.executable, "-c", "import time; time.sleep(5)"], "x", via_stdin=False, use_review_cwd=False)
+    monkeypatch.setenv("LIFEOS_TIMEOUT", "nonsense")
+    assert ask.timeout_seconds() == ask.TIMEOUT

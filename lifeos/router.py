@@ -1,32 +1,17 @@
-"""6-Question Section 8.2 Model Router with 5-tier data policy and token/call budget guard."""
+"""6-Question Section 8.2 Model Router with 5-tier data policy and token/call budget guard.
+
+The model choice is the same seat table `delegate` runs (`seats.choose`).
+"""
+import datetime as dt
 import re
 
+from . import seats
 from .context import task_file
 from .policy import check_provider_allowed, classify_path, normalize_tier, provider_locality
-from .runs import summarize_runs
+from .store import read_run_records
 
-WEEKLY_TOKEN_BUDGET = 120_000
-WEEKLY_CALL_BUDGET = 80
-
-TASK_ROUTES = [
-    ("qwen", "none", "L1", "private or local CSV/sorting task stays on laptop (qwen)",
-     r"private|local(ly)?|csv|sort|classify|categori[sz]e|rename|tidy|offline"),
-    ("gemini", "claude", "L1", "long reading, bulk PDFs or live facts go to gemini, synthesized by claude",
-     r"price|news|latest|today|job posting|long|pdf|paper|research|summari[sz]e|bulk|read all"),
-    ("codex", "claude", "L0", "testing, review, German, quizzes and exam prep go to codex",
-     r"bug|test|pytest|review|adversarial|ship|merge|command|german|exam|quiz|learn|teach|vocabulary"),
-    ("claude", "codex", "L2", "code architecture/implementation written by claude, checked by codex (D23)",
-     r"code|implement|refactor|script|python|function|module|cli|\.py\b|\.js\b|\.ts\b"),
-    ("claude", "codex", "L3", "plans, Decision Memos and high-stakes writing drafted by claude with blind check",
-     r"plan|write|draft|decide|decision|memo|strategy|email|permit|contract|buy|subscription"),
-]
-FALLBACK_CHAIN = {
-    "qwen": ["ollama"],
-    "ollama": [],
-    "claude": ["codex", "gemini"],
-    "codex": ["claude"],
-    "gemini": ["claude", "codex"],
-}
+WEEKLY_TOKEN_BUDGET = seats.WEEKLY_TOKENS  # one ruler: seats.py owns the cloud budget
+WEEKLY_CALL_BUDGET = seats.WEEKLY_CALLS
 
 
 def _extract_meta_and_text(path):
@@ -40,11 +25,8 @@ def _extract_meta_and_text(path):
 
 
 def _pick_task_route(text, explicit_level=None):
-    for primary, reviewer, default_lvl, reason, pattern in TASK_ROUTES:
-        if re.search(rf"(?<![a-z])({pattern})", text, re.I):
-            lvl = explicit_level or default_lvl
-            return primary, reviewer, lvl, reason
-    return "claude", "codex", explicit_level or "L2", "general task routed to claude lead with codex review"
+    primary, reviewer, default_lvl, reason = seats.kind(text)
+    return primary, reviewer, explicit_level or default_lvl, reason
 
 
 def evaluate_route(home, task_or_text, tier=None, full=False, token_budget=WEEKLY_TOKEN_BUDGET):
@@ -115,21 +97,36 @@ def evaluate_route(home, task_or_text, tier=None, full=False, token_budget=WEEKL
         "owner_approval_required": level == "L3",
     }
 
-    # Question 6: Budget & fallback chain
-    run_stats = summarize_runs(home, limit=100)
-    used_tokens = run_stats["total_context_tokens"]
-    used_calls = run_stats["total_matching"]
-    over_budget = used_tokens > token_budget or used_calls > WEEKLY_CALL_BUDGET
-    fallbacks = FALLBACK_CHAIN.get(primary, [])
-    selected_model = (fallbacks[0] if (over_budget and primary == "claude" and fallbacks) else primary)
+    # Question 6: per-seat share, usage-limit rest, and the replacement chain
+    records = read_run_records(home)
+    now = dt.datetime.now(dt.timezone.utc)
+    plan = seats.budget(records, now)
+    used_tokens = plan["used_tokens"]
+    used_calls = plan["used_calls"]
+    resting = seats.pressure(records, now)
+    seat_tier = "SENSITIVE" if effective_tier == "SENSITIVE" else effective_tier
+    selected_model, seat_reason, fallbacks = seats.choose(text, seat_tier, resting)
+    if selected_model != primary and selected_model in seats.CHAINS:
+        primary = selected_model
+        if primary in ("qwen", "ollama"):
+            reviewer = "none"
+        blind_review_required = (
+            level in ("L2", "L3") and reviewer != "none" and provider_locality(primary) == "remote"
+        )
+        q4["primary"] = primary
+        q4["locality"] = provider_locality(primary)
+        q4["reason"] = seat_reason
+        q5["reviewer"] = reviewer
+        q5["blind_review_required"] = blind_review_required
     q6 = {
         "question": "6. Budget & fallback status?",
         "used_tokens": used_tokens,
-        "token_budget": token_budget,
+        "token_budget": plan["cap_tokens"],
         "used_calls": used_calls,
         "call_budget": WEEKLY_CALL_BUDGET,
-        "fallback_active": over_budget,
+        "fallback_active": bool(resting),
         "fallbacks": fallbacks,
+        "skipped": resting,
         "selected_model": selected_model,
     }
 

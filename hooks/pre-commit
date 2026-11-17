@@ -1,3 +1,14 @@
 #!/usr/bin/env bash
-# LifeOS privacy guard: refuses a commit that contains class C data (IDs, bank or card numbers, keys).
-exec lifeos guard --staged
+# LifeOS privacy guard: refuses a commit that contains class C data.
+# A bare `lifeos` is the package directory, so this calls the module instead.
+if command -v python >/dev/null 2>&1; then
+  exec python -m lifeos.cli guard --staged
+fi
+if command -v python3 >/dev/null 2>&1; then
+  exec python3 -m lifeos.cli guard --staged
+fi
+if command -v py >/dev/null 2>&1; then
+  exec py -3 -m lifeos.cli guard --staged
+fi
+echo "lifeos guard: no python interpreter on PATH" >&2
+exit 1

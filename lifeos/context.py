@@ -35,6 +35,22 @@ def _validate_budget(budget):
         raise ValueError("Context budget must be an integer from 1 to 50000 tokens.")
 
 
+def visible_task(text):
+    """Drop ## Route notes. They stay in the task file and out of the next prompt."""
+    kept = []
+    skipping = False
+    for line in (text or "").replace("\r\n", "\n").splitlines():
+        if line.startswith("## Route"):
+            skipping = True
+            continue
+        if skipping and line.startswith("## "):
+            skipping = False
+        if not skipping:
+            kept.append(line)
+    body = "\n".join(kept).strip()
+    return f"{body}\n" if body else ""
+
+
 def build_pack(home, task_id=None, budget=6000, task_first=False, names=None):
     """Return (pack_text, token_estimate). Files are added in priority order; the last ones are trimmed to fit."""
     _validate_budget(budget)
@@ -46,7 +62,7 @@ def build_pack(home, task_id=None, budget=6000, task_first=False, names=None):
         if name == "TASK":
             if task_id:
                 path = task_file(home, task_id)
-                files.append((f"tasks/{path.name}", path.read_text(encoding="utf-8")))
+                files.append((f"tasks/{path.name}", visible_task(path.read_text(encoding="utf-8"))))
         elif (home / name).exists():
             files.append((name, (home / name).read_text(encoding="utf-8")))
 
@@ -90,6 +106,8 @@ def explain_pack(home, task_id=None, budget=6000, task_first=False, names=None):
             items.append({"name": label, "status": "missing", "tokens": 0, "sha256": "-"})
             continue
         text = path.read_text(encoding="utf-8")
+        if name == "TASK":
+            text = visible_task(text)
         digest = pack_hash(text)
         if full:
             items.append({"name": label, "status": "excluded (budget full)", "tokens": 0, "sha256": digest})
@@ -183,7 +201,7 @@ def build_review_pack(home, task_id, budget=6000, diff_text="", repo_info=None):
     has_diff = bool((repo_info and repo_info.get("diff_text", "").strip()) or diff_text.strip())
     home = Path(home)
     path = task_file(home, task_id)
-    facts = re.split(r"\n## Result\s*·", path.read_text(encoding="utf-8"), maxsplit=1)[0].strip()
+    facts = re.split(r"\n## Result\s*·", visible_task(path.read_text(encoding="utf-8")), maxsplit=1)[0].strip()
     parts = [(f"tasks/{path.name} (facts only)", facts)]
     if (home / "rules.md").exists():
         parts.append(("rules.md", (home / "rules.md").read_text(encoding="utf-8").strip()))

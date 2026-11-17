@@ -4,7 +4,7 @@ import re
 TIERS = ("PUBLIC", "INTERNAL", "PERSONAL", "SENSITIVE", "SECRET")
 TIER_RANK = {name: idx for idx, name in enumerate(TIERS)}
 LOCAL_PROVIDERS = frozenset({"ollama", "qwen"})
-REMOTE_PROVIDERS = frozenset({"claude", "codex", "gemini"})
+REMOTE_PROVIDERS = frozenset({"claude", "codex", "gemini", "grok"})
 
 # These expressions intentionally favor privacy over convenience. They identify
 # natural-language content that the byte-pattern guard cannot reliably classify.
@@ -85,6 +85,8 @@ def check_provider_allowed(tier, model, full=False):
     locality = provider_locality(model)
     if norm_tier == "SECRET":
         return False, "SECRET data (keys, credentials, private-patterns) cannot be sent to any model."
+    if model == "grok" and full:
+        return False, "grok takes its prompt on the command line, so me.md and now.md are never sent to it (no --full)."
     if norm_tier == "SENSITIVE" and locality != "local":
         return False, f"SENSITIVE data requires a local provider; '{model}' is {locality} (use qwen or ollama)."
     if norm_tier == "PERSONAL" and locality == "remote" and not full:

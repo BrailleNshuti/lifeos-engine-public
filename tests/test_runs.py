@@ -52,3 +52,13 @@ def test_runs_summary_and_filters(home, capsys):
     text = capsys.readouterr().out
     assert "Runs: 2 total" in text
     assert "R-test-2" in text and "R-test-1" in text
+
+
+def test_duration_comes_from_duration_ms(home):
+    """Run records store milliseconds; the audit must still show seconds."""
+    ask.run_ask(home, "claude", "T-261116", adapters={"claude": lambda p: CLEAN}, today=TODAY, run_id="R-dur-1")
+    rec = runs.filter_runs(home)[0]
+    assert isinstance(rec["duration_ms"], int)
+    assert rec["duration_s"] == round(rec["duration_ms"] / 1000, 3)
+    assert runs.summarize_runs(home)["avg_duration_s"] is not None
+    assert runs.render_runs(runs.summarize_runs(home)).count("n/a") == 0

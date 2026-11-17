@@ -29,8 +29,7 @@ TOOLS = [
      _schema({"task": STR, "model": STR, "text": STR}, ["task", "model", "text"])),
     ("lifeos_ask", "Send a task to another model (codex, claude, gemini, ollama, qwen) and write its answer into the task file. Pass run_id for idempotent retries.",
      _schema({"task": STR, "model": STR, "budget": {"type": "integer"}, "full": {"type": "boolean"}, "run_id": STR}, ["task", "model"])),
-    ("lifeos_delegate", "Let LifeOS pick the best-fitting model for a task (or pass model to choose), run it, "
-     "and return its answer here. The answer is also appended to the task file.",
+    ("lifeos_delegate", "Pick the best open seat for a task, replace it if that call fails, record why under ## Route, and return the answer. The answer is also appended to the task file.",
      _schema({"task": STR, "model": STR, "budget": {"type": "integer"}, "full": {"type": "boolean"}}, ["task"])),
     ("lifeos_review", "Run an independent blind review (rule 7) across multiple models on the task's facts-only pack (and optional git repo/commit). Pass run_id for idempotent retries.",
      _schema({"task": STR, "reviewers": STR, "repo": STR, "commit": STR, "budget": {"type": "integer"}, "run_id": STR}, ["task"])),
@@ -86,7 +85,8 @@ def _run_tool(home, name, a):
     if name == "lifeos_delegate":
         out = delegate.run_delegate(home, a["task"], a.get("model"), a.get("budget", 6000), full=bool(a.get("full")))
         warn = f"\n\nCHECK (free, no model): {'; '.join(out['flags'])}" if out["flags"] else ""
-        return f"{out['model']} answered ({out['reason']}).\n\n{out['text']}{warn}"
+        said = "".join(f"\n\nNOTE {note}" for note in out.get("notes") or [])
+        return f"{out['model']} answered ({out['reason']}).\n\n{out['text']}{said}{warn}"
     if name == "lifeos_ask":
         rid = validate_run_id(a["run_id"]) if a.get("run_id") is not None else new_run_id()
         path = ask.run_ask(
