@@ -2,7 +2,7 @@
 
 Dates are release dates. Newest first.
 
-## [0.3.0] - unreleased
+## [0.3.0] - 2026-11-18
 First public release.
 
 ### Added
