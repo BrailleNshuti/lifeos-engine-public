@@ -16,3 +16,5 @@ logs/.store.journal.corrupt.*
 **/logs/.store.journal.corrupt.*
 .*.tmp
 **/.*.tmp
+.idea/
+.vscode/
