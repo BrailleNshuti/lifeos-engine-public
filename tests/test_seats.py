@@ -198,9 +198,9 @@ def test_a_relative_reset_rests_the_seat_from_the_failure_time():
 def test_relative_forms_days_minutes_and_words():
     for text, until in [
         ("quota reached. Resets in 163h39m14s.", "2026-11-23 05:39"),
-        ("limit hit. resets in 2d 3h", "2026-11-18 13:00"),
-        ("limit hit. try again in 150 minutes", "2026-11-16 12:30"),
-        ("limit hit. try again in 78 hours", "2026-11-19 16:00"),
+        ("usage limit hit. resets in 2d 3h", "2026-11-18 13:00"),
+        ("usage limit hit. try again in 150 minutes", "2026-11-16 12:30"),
+        ("usage limit hit. try again in 78 hours", "2026-11-19 16:00"),
     ]:
         resting = seats.pressure([_run("gemini", "failed", error=text)], NOW)
         assert resting["gemini"].startswith(f"usage limit until {until} UTC"), (text, resting)
