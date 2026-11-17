@@ -1,7 +1,7 @@
 # Prompt card · Demo label · v1 · 2026-11-13
 Goal: Label one made-up support message with one of five labels.
 Used in: Work Console
-OK: rule 9, 2026-11-11, made-up text only
+OK: work approval, 2026-11-11, made-up text only
 Role and context: You sort incoming messages of a made-up shop.
 Inputs (placeholders only): {{ticket}} {{shop}}
 Rules:

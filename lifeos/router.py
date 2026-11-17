@@ -43,13 +43,13 @@ def evaluate_route(home, task_or_text, tier=None, full=False, token_budget=WEEKL
         goal = str(task_or_text or "").strip()
         text = goal
 
-    # Question 1: Is it confidential employer work data?
-    work_leak = bool(re.search(r"\b(employer\s+client|confidential\s+work|internal\s+deal|client\s+dataset)\b", text, re.I))
+    # Question 1: Is it confidential work data?
+    work_leak = bool(re.search(r"\b(work\s+client|confidential\s+work|internal\s+deal|client\s+dataset)\b", text, re.I))
     q1 = {
-        "question": "1. Is it confidential work data (Rule 9 / rule 9)?",
+        "question": "1. Is it confidential work data (Rule 9)?",
         "verdict": "BLOCK_WORK_LANE" if work_leak else "PASS",
         "detail": (
-            "Confidential work data must stay in employer's Console; use Prompt Lab with synthetic data only."
+            "Confidential work data must stay in the employer's own approved tools; use Prompt Lab with synthetic data only."
             if work_leak else "Personal/study/lab or synthetic Prompt Lab scope."
         ),
     }

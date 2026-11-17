@@ -18,7 +18,7 @@ SAMPLE_CARD = """\
 # Prompt card · Demo label · v1 · 2026-11-13
 Goal: Label one made-up support message with one of five labels.
 Used in: Work Console
-OK: rule 9, 2026-11-11, made-up text only
+OK: work approval, 2026-11-11, made-up text only
 Role and context: You sort incoming messages of a made-up shop.
 Inputs (placeholders only): {{ticket}} {{shop}}
 Rules:
@@ -98,7 +98,7 @@ def test_parse_card_refusals():
         labcard.parse_card(missing_val)
 
     # Empty OK: or Safety check:
-    no_ok = SAMPLE_CARD.replace("OK: rule 9, 2026-11-11, made-up text only", "OK: ")
+    no_ok = SAMPLE_CARD.replace("OK: work approval, 2026-11-11, made-up text only", "OK: ")
     with pytest.raises(LabRefused, match="OK"):
         labcard.parse_card(no_ok)
 
