@@ -31,7 +31,8 @@ ADAPTERS = {m: answer(m) for m in ("claude", "codex", "gemini", "ollama", "qwen"
     ("Draft the plan and decide what to cut", "claude"),
     ("Quiz me on German exam vocabulary", "codex"),
     ("Something with no clear keyword", "claude"),
-    ("What is the latest price of the laptop", "gemini"),  # live facts: Grok is not wired yet, Gemini searches
+    ("What is the latest price of the laptop", "grok"),  # live facts go to the locked Grok seat
+    ("Read all of this long pdf and summarise it", "gemini"),
 ])
 def test_pick_routes_by_kind_of_work(text, model):
     assert delegate.pick(text)[0] == model
@@ -242,3 +243,114 @@ def test_a_private_task_never_falls_back_to_the_cloud(home):
         with pytest.raises(ask.ToolMissing):
             delegate.run_delegate(home, "T-261116", model=model, adapters=adapters)
     assert cloud == []
+
+
+def _impl_task(home):
+    task = home / "tasks" / "T-261116-demo-cli.md"
+    task.write_text(task.read_text(encoding="utf-8").replace("Ship the context command", "Implement the export function"), encoding="utf-8")
+    return task
+
+
+def test_a_local_replacement_is_marked_degraded_in_the_answer_and_the_task_file(home):
+    _impl_task(home)
+
+    def gone(prompt):
+        raise ask.ToolMissing("not installed")
+
+    out = delegate.run_delegate(home, "T-261116", adapters={**ADAPTERS, "claude": gone, "codex": gone, "gemini": gone})
+    assert out["model"] == "qwen"
+    assert any(n.startswith("degraded:") for n in out["notes"])
+    assert "degraded:" in out["path"].read_text(encoding="utf-8").split("## Route", 1)[1]
+
+
+def test_a_resting_check_seat_is_reported_as_check_pending(home):
+    _impl_task(home)
+
+    import datetime as dt
+    later = dt.datetime.now(dt.timezone.utc).replace(microsecond=0, second=0) + dt.timedelta(days=2)
+    clock = f"{later:%b} {later.day}, {later:%Y} {later.hour % 12 or 12}:{later:%M} {'PM' if later.hour >= 12 else 'AM'} UTC"
+
+    def limited(prompt):
+        raise ask.AskError(f"codex failed: You've hit your usage limit. try again at {clock}")
+
+    first = delegate.run_delegate(home, "T-261116", model="codex", adapters={**ADAPTERS, "codex": limited})
+    assert first["model"] == "claude"
+    second = delegate.run_delegate(home, "T-261116", adapters=ADAPTERS)  # codex is resting now, no new failed call
+    assert second["model"] == "claude" and second["tried"] == ["claude"]
+    pending = [n for n in second["notes"] if n.startswith("check pending:")]
+    assert pending and "codex is resting" in pending[0] and f"{later:%Y-%m-%d %H:%M} UTC" in pending[0]
+
+
+def test_cli_prints_degraded_and_check_pending(home, monkeypatch, capsys):
+    _impl_task(home)
+
+    def gone(prompt):
+        raise ask.ToolMissing("not installed")
+
+    adapters = {**ADAPTERS, "claude": gone, "codex": gone, "gemini": gone}
+    monkeypatch.setattr(ask, "ADAPTERS", adapters)
+    monkeypatch.setattr(delegate, "ADAPTERS", adapters)
+    assert main(["--home", str(home), "delegate", "T-261116"]) == 0
+    assert "NOTE degraded:" in capsys.readouterr().out
+
+
+def test_every_seat_gets_the_same_prompt_one_mind(home):
+    """LifeOS dictates one prompt (instruction + one context pack). A replacement seat reads exactly what the failed one read."""
+    seen = {}
+
+    def spy(name, fail=False):
+        def fn(prompt):
+            seen[name] = prompt
+            if fail:
+                raise ask.AskError(f"{name} failed: usage limit. try again at Jan 2nd, 2099 1:00 PM UTC")
+            return f"ANSWER FROM {name}"
+        return fn
+
+    import datetime as dt
+    task = home / "tasks" / "T-261116-demo-cli.md"
+    original = task.read_text(encoding="utf-8")
+    adapters = {m: spy(m) for m in ("claude", "codex", "gemini", "grok", "ollama", "qwen")}
+    adapters["codex"] = spy("codex", fail=True)
+    out = delegate.run_delegate(home, "T-261116", adapters=adapters)
+    assert out["tried"] == ["codex", "claude"]
+    assert seen["codex"] == seen["claude"]  # the replacement got the same words
+    assert "## Route" not in seen["claude"]  # the route note never travels
+    for name in ("gemini", "grok", "qwen", "ollama"):
+        task.write_text(original, encoding="utf-8")  # earlier answers are appended to the task; start each seat from the same file
+        ask.run_ask(home, name, "T-261116", adapters=adapters, today=dt.date(2026, 11, 17))
+    assert {seen[name] for name in ("claude", "gemini", "grok", "qwen", "ollama")} == {seen["claude"]}
+
+
+def test_cli_seats_prints_the_table(home, capsys):
+    assert main(["--home", str(home), "seats"]) == 0
+    out = capsys.readouterr().out
+    assert "seat" in out and "grok" in out and "qwen" in out
+    assert main(["--home", str(home), "seats", "--json"]) == 0
+    assert any(row["seat"] == "claude" for row in json.loads(capsys.readouterr().out))
+
+
+def test_check_pending_sees_a_check_seat_that_failed_in_this_same_run(home):
+    _impl_task(home)
+
+    def boom(prompt):
+        raise ask.AskError("server error 500")
+
+    def limited(prompt):
+        raise ask.AskError("codex failed: usage limit reached")
+
+    out = delegate.run_delegate(home, "T-261116", adapters={**ADAPTERS, "claude": boom, "codex": limited})
+    assert out["model"] == "gemini"
+    assert any(n.startswith("check pending:") and "codex" in n for n in out["notes"])
+
+
+def test_check_pending_sees_a_check_seat_that_turned_out_to_be_missing(home):
+    _impl_task(home)
+
+    def boom(prompt):
+        raise ask.AskError("server error 500")
+
+    def gone(prompt):
+        raise ask.ToolMissing("codex is not installed")
+
+    out = delegate.run_delegate(home, "T-261116", adapters={**ADAPTERS, "claude": boom, "codex": gone})
+    assert any(n.startswith("check pending:") and "codex" in n for n in out["notes"])

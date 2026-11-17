@@ -51,7 +51,7 @@ CI runs the full pytest suite and the repository guard on Python 3.10, 3.11, 3.1
 ## Known limits
 
 - CLI integrations need periodic live smoke tests because external command-line interfaces change.
-- Routing is one seat table (`seats.py`): strengths, a 7-day token share and call cap, and a usage-limit rest. It is not a learned cost model. A failed or missing seat is replaced, and the reason is written under `## Route`. Private and sensitive work never leaves the laptop. Route notes stay out of the next context pack.
+- Routing is one seat table (`seats.py`): strengths, one cloud budget (the lower of a seat's 7-day share and what the weekly cap has left), a call cap, and a usage-limit rest with a floor, a ceiling and timezone handling. Grok is a locked live-facts seat. Replacement answers carry `degraded` and `check pending` notes. It is not a learned cost model. A failed or missing seat is replaced, and the reason is written under `## Route`. Private and sensitive work never leaves the laptop. Route notes stay out of the next context pack.
 - The privacy scanner is a backstop, not a substitute for the data policy.
 - The Prompt Lab runner is implemented, but further prompt features still require real-use evidence.
 - Closed-app phone/email/WhatsApp notifications require a supervised external delivery service; LifeOS may prepare drafts, but sending remains an explicit human action.

@@ -55,11 +55,13 @@ def _route_body(failed, winner):
     return body
 
 
-def _mark_route(home, path, failed, winner, today):
-    if not failed:
+def _mark_route(home, path, failed, winner, today, notes=()):
+    if not failed and not notes:
         return
     heading = f"## Route · {today:%Y-%m-%d}"
-    append_task_note(home, path, heading, _route_body(failed, winner))
+    body = _route_body(failed, winner if failed else None)
+    extra = "\n".join(f"- {note}" for note in notes)
+    append_task_note(home, path, heading, "\n".join(part for part in (body, extra) if part))
 
 
 def run_delegate(home, task_id, model=None, budget=6000, full=False, adapters=None, today=None, dry_run=False):
@@ -79,7 +81,8 @@ def run_delegate(home, task_id, model=None, budget=6000, full=False, adapters=No
         raise ask.ToolMissing("no open seat has a model on this computer.")
     if dry_run:
         return {"model": chain[0], "reason": reason, "tried": [], "failed": [], "chain": chain,
-                "path": path, "text": "", "flags": []}
+                "path": path, "text": "", "flags": [],
+                "notes": seats.notes(task_text(path), tier, chain[0], resting, model, set(adapters))}
     day = today or dt.date.today()
     tried = []
     failed = []
@@ -102,9 +105,12 @@ def run_delegate(home, task_id, model=None, budget=6000, full=False, adapters=No
             else:
                 reason += f" · {name} failed ({kind}: {seats.brief(error)}); fell back"
             continue
-        _mark_route(home, path, failed, name, day)
+        now_resting = seats.pressure(read_run_records(home), dt.datetime.now(dt.timezone.utc))
+        gone = {item["model"] for item in failed if item["kind"] == "missing"}
+        notes = seats.notes(task_text(path), tier, name, {**resting, **now_resting}, model, set(adapters) - gone)
+        _mark_route(home, path, failed, name, day, notes)
         return {
             "model": name, "reason": reason, "tried": tried, "failed": failed, "chain": chain,
-            "path": path, "text": last_result(path), "flags": check_answer(last_result(path)),
+            "path": path, "text": last_result(path), "flags": check_answer(last_result(path)), "notes": notes,
         }
     raise ask.AskError("no seat answered.")

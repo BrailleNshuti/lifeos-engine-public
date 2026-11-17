@@ -8,11 +8,10 @@ import re
 from . import seats
 from .context import task_file
 from .policy import check_provider_allowed, classify_path, normalize_tier, provider_locality
-from .runs import summarize_runs
 from .store import read_run_records
 
-WEEKLY_TOKEN_BUDGET = 120_000
-WEEKLY_CALL_BUDGET = 80
+WEEKLY_TOKEN_BUDGET = seats.WEEKLY_TOKENS  # one ruler: seats.py owns the cloud budget
+WEEKLY_CALL_BUDGET = seats.WEEKLY_CALLS
 
 
 def _extract_meta_and_text(path):
@@ -99,16 +98,14 @@ def evaluate_route(home, task_or_text, tier=None, full=False, token_budget=WEEKL
     }
 
     # Question 6: per-seat share, usage-limit rest, and the replacement chain
-    run_stats = summarize_runs(home, limit=100)
-    used_tokens = run_stats["total_context_tokens"]
-    used_calls = run_stats["total_matching"]
-    over_budget = used_tokens > token_budget or used_calls > WEEKLY_CALL_BUDGET
-    resting = seats.pressure(read_run_records(home), dt.datetime.now(dt.timezone.utc))
+    records = read_run_records(home)
+    now = dt.datetime.now(dt.timezone.utc)
+    plan = seats.budget(records, now)
+    used_tokens = plan["used_tokens"]
+    used_calls = plan["used_calls"]
+    resting = seats.pressure(records, now)
     seat_tier = "SENSITIVE" if effective_tier == "SENSITIVE" else effective_tier
     selected_model, seat_reason, fallbacks = seats.choose(text, seat_tier, resting)
-    if over_budget and selected_model == "claude" and len(fallbacks) > 1:
-        selected_model = fallbacks[1]
-        seat_reason += " · weekly budget is spent, so Claude is not the first seat"
     if selected_model != primary and selected_model in seats.CHAINS:
         primary = selected_model
         if primary in ("qwen", "ollama"):
@@ -124,10 +121,10 @@ def evaluate_route(home, task_or_text, tier=None, full=False, token_budget=WEEKL
     q6 = {
         "question": "6. Budget & fallback status?",
         "used_tokens": used_tokens,
-        "token_budget": token_budget,
+        "token_budget": plan["cap_tokens"],
         "used_calls": used_calls,
         "call_budget": WEEKLY_CALL_BUDGET,
-        "fallback_active": over_budget or bool(resting),
+        "fallback_active": bool(resting),
         "fallbacks": fallbacks,
         "skipped": resting,
         "selected_model": selected_model,

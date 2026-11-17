@@ -369,6 +369,9 @@ def normalize_run_record(record):
     out.setdefault("started_at", fallback_ts)
     out.setdefault("finished_at", out["started_at"])
     out["terminal"] = out.get("status") in TERMINAL_RUN_STATUSES
+    ms = out.get("duration_ms")
+    if "duration_s" not in out and isinstance(ms, (int, float)) and not isinstance(ms, bool):
+        out["duration_s"] = round(ms / 1000, 3)
     amount = out.get("tokens")
     if "context_tokens" not in out and isinstance(amount, int) and not isinstance(amount, bool):
         out["context_tokens"] = amount

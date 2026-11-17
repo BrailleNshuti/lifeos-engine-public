@@ -128,7 +128,14 @@ def _child_env():
     return env
 
 
-def _run_cli(cmd, prompt, timeout=TIMEOUT, via_stdin=True, use_review_cwd=True):
+def timeout_seconds():
+    """LIFEOS_TIMEOUT (whole seconds, 1 to 3600) shortens a call for a live check; anything else keeps TIMEOUT."""
+    raw = os.environ.get("LIFEOS_TIMEOUT", "")
+    return int(raw) if raw.isdecimal() and raw.isascii() and 1 <= int(raw) <= 3600 else TIMEOUT
+
+
+def _run_cli(cmd, prompt, timeout=None, via_stdin=True, use_review_cwd=True):
+    timeout = timeout or timeout_seconds()
     exe = shutil.which(cmd[0])  # finds codex.cmd and friends on Windows
     if not exe:
         raise ToolMissing(f"{cmd[0]} is not installed or not on PATH.")
@@ -214,6 +221,46 @@ def ask_gemini(prompt):
     return _parse_agy_stream_json(raw)
 
 
+GROK_MAX_PROMPT = 24_000  # characters; the prompt travels as a command-line argument
+
+
+def ask_grok(prompt):
+    """Grok Build in a locked one-turn call: live facts only.
+
+    Locked means: an empty temp folder (never a repo), no --always-approve so
+    nothing runs on this computer without a yes, no plan mode, no subagents, no
+    memory, no auto-update, one JSON object back. Web search stays on because
+    live facts are what this seat is for. Not verified against the installed
+    CLI until `lifeos doctor` smoke-tests it on the laptop.
+    """
+    if len(prompt) > GROK_MAX_PROMPT:
+        raise AskError(f"grok failed: the prompt is too long for a command-line argument ({len(prompt)} characters).")
+    raw = _run_cli(
+        ["grok", "--no-auto-update", "--no-plan", "--no-subagents", "--no-memory",
+         "--output-format", "json", "-p", prompt],
+        "", via_stdin=False, use_review_cwd=False,
+    )
+    return _parse_grok_json(raw)
+
+
+def _parse_grok_json(raw):
+    try:
+        obj = json.loads(raw or "")
+    except json.JSONDecodeError:
+        raise AskError("grok failed: the output was not JSON.") from None
+    if not isinstance(obj, dict):
+        raise AskError("grok failed: the JSON output was not an object.")
+    if obj.get("error"):
+        raise AskError(f"grok failed: {redact_error(obj['error'])}")
+    for key in ("text", "response", "result", "output", "content"):
+        if key in obj and isinstance(obj[key], str):
+            text = obj[key].strip()
+            if not text:
+                raise AskError("grok failed: empty response.")
+            return text
+    raise AskError("grok failed: the JSON output has no answer field I recognise.")
+
+
 def ask_claude(prompt):
     # Automated repository review must not trust project instructions, plugins,
     # MCP servers, hooks, or mutation-capable tools from the reviewed worktree.
@@ -284,7 +331,7 @@ def label(model):
     return model
 
 
-ADAPTERS = {"codex": ask_codex, "gemini": ask_gemini, "claude": ask_claude, "ollama": ask_ollama, "qwen": ask_qwen}
+ADAPTERS = {"codex": ask_codex, "gemini": ask_gemini, "grok": ask_grok, "claude": ask_claude, "ollama": ask_ollama, "qwen": ask_qwen}
 PROVIDERS = {
     "claude": {
         "locality": "remote", "binary": "claude",
@@ -297,6 +344,10 @@ PROVIDERS = {
     "gemini": {
         "locality": "remote", "binary": "agy",
         "capabilities": {"input": "stdin", "sandbox": "sandbox-flag", "worktree_review": False},
+    },
+    "grok": {
+        "locality": "remote", "binary": "grok",
+        "capabilities": {"input": "argv", "sandbox": "no-approve", "worktree_review": False},
     },
     "ollama": {
         "locality": "local", "binary": "ollama",

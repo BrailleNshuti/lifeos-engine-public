@@ -1,17 +1,19 @@
 """lifeos: command line for the LifeOS Engine."""
 import argparse
+import datetime as dt
 import json
 from pathlib import Path
 import sys
 
 from . import __version__
-from . import bakeoff, cockpit, exam, kaizen, lab, log, mcp, router, runs, showcase, sortcsv, study
+from . import bakeoff, cockpit, exam, kaizen, lab, log, mcp, router, runs, seats, showcase, sortcsv, study
 from .delegate import run_delegate
 from .ask import ADAPTERS, AskError, Blocked, ToolMissing, provider_status, run_ask, run_review
 from .context import build_pack, explain_pack, render_explanation
 from .guard import scan_paths, scan_staged, staged_files
 from .home import CORE_FILES, HomeError, estimate_tokens, find_home
 from .labcard import LabRefused
+from .store import read_run_records
 from .tasks import list_tasks, new_task
 from .week import build_redteam_pack, draft_weekly_review, render_markdown, week_numbers
 
@@ -237,10 +239,19 @@ def cmd_delegate(args):
     chain = " -> ".join(out.get("chain") or [])
     print(f"{out['model']}: {out['reason']}" + (f" · chain {chain}" if chain else "")
           + (" [dry run, nothing sent]" if args.dry_run else ""))
+    for note in out.get("notes") or []:
+        print(f"NOTE {note}")
     if out["text"]:
         print(f"\n{out['text']}\n\n[result appended to {out['path'].relative_to(home)}]")
     if out["flags"]:  # also when the answer is empty, the case CHECK exists for (a dry run has no flags)
         print("CHECK (free, no model): " + "; ".join(out["flags"]))
+    return 0
+
+
+def cmd_seats(args):
+    home = find_home(args.home)
+    rows = seats.table(read_run_records(home), dt.datetime.now(dt.timezone.utc))
+    print(json.dumps(rows, indent=2) if args.json else seats.render_table(rows))
     return 0
 
 
@@ -540,6 +551,10 @@ def build_parser():
     rte_p.add_argument("--full", action="store_true", help="evaluate with me.md and now.md included")
     rte_p.add_argument("--json", action="store_true", help="output structured JSON routing decision")
     rte_p.set_defaults(func=cmd_route)
+
+    seat_p = sub.add_parser("seats", help="show every model seat: 7-day spend against its one limit, rest, and replacement")
+    seat_p.add_argument("--json", action="store_true", help="output the seat table as JSON")
+    seat_p.set_defaults(func=cmd_seats)
 
     ckp_p = sub.add_parser("cockpit", help="export or serve the learning-first LifeOS Cockpit (#focus, #library, #recall, #mastery)")
     ckp_p.add_argument("--export", help="output HTML file path (default: <home>/cockpit/index.html)")
