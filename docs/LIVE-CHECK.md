@@ -34,7 +34,7 @@ $env:PATH = ($env:PATH -split ';' | Where-Object { -not (Test-Path (Join-Path $_
 lifeos delegate T-261116      # expect: codex not available; fell back; Route note written
 lifeos seats                  # expect: every seat listed, replacement column filled
 # 2. smoke test Grok (needs the grok CLI): flags are unverified until this passes
-lifeos doctor --tools --smoke
+lifeos doctor --smoke --only grok   # prints the reason if it fails; a usage limit rests the seat
 grok inspect --json           # confirm no LifeOS MCP server is configured for Grok
 ```
 

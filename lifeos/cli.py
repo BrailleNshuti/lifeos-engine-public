@@ -8,12 +8,12 @@ import sys
 from . import __version__
 from . import bakeoff, cockpit, exam, kaizen, lab, log, mcp, router, runs, seats, showcase, sortcsv, study
 from .delegate import run_delegate
-from .ask import ADAPTERS, AskError, Blocked, ToolMissing, provider_status, run_ask, run_review
+from .ask import ADAPTERS, PROVIDERS, AskError, Blocked, ToolMissing, provider_status, run_ask, run_review
 from .context import build_pack, explain_pack, render_explanation
 from .guard import scan_paths, scan_staged, staged_files
 from .home import CORE_FILES, HomeError, estimate_tokens, find_home
 from .labcard import LabRefused
-from .store import read_run_records
+from .store import append_run_record, new_run_id, read_run_records, utc_now_iso
 from .tasks import list_tasks, new_task
 from .week import build_redteam_pack, draft_weekly_review, render_markdown, week_numbers
 
@@ -371,6 +371,65 @@ def cmd_guard(args):
     return 0
 
 
+_OK_STATES = ("available", "healthy", "cli_healthy", "resting")
+
+
+def _print_provider(row):
+    print(f"  {row['status']:<13} {row['model']:<10} ({row['locality']}, {row['detail']})", flush=True)
+
+
+def _record_rest(home, row):
+    """Save a probe that hit a usage limit, so the seat table rests it. Never spends tokens, never raises."""
+    now = dt.datetime.now(dt.timezone.utc)
+    try:
+        saved = append_run_record(home, {
+            "run_id": new_run_id(now.date()), "date": now.date().isoformat(), "command": "smoke",
+            "model": row["model"], "status": "failed", "tokens": 0, "error": row["error"],
+            "started_at": utc_now_iso(), "finished_at": utc_now_iso(),
+        })
+    except Exception:
+        saved = None
+    if saved is None:
+        print(f"  not saved: {row['model']} is resting but logs/runs.jsonl could not be written", flush=True)
+
+
+def _doctor_providers(home, args):
+    """Print the provider block. Return (problems, None), or (0, exit_code) when the probe must stop."""
+    smoke = bool(getattr(args, "smoke", False))
+    probe = bool(getattr(args, "live", False)) or smoke
+    only = {name.strip() for name in str(getattr(args, "only", "") or "").split(",") if name.strip()}
+    unknown = sorted(only - set(PROVIDERS))
+    if unknown:
+        print(f"lifeos: unknown seat {', '.join(unknown)}; choose from {', '.join(sorted(PROVIDERS))}", file=sys.stderr)
+        return 0, 2
+    title = "authenticated smoke probe" if smoke else "live health probe" if probe else "binary availability"
+    print(f"Providers: ({title})")
+    callbacks = {}
+    skip = None
+    if smoke:
+        print("  One tiny message per cloud seat; seats that are resting are not called.")
+        skip = seats.pressure(read_run_records(home), dt.datetime.now(dt.timezone.utc))
+        callbacks = {"on_start": lambda name: print(f"  probing {name} ...", file=sys.stderr, flush=True)}
+
+        def on_row(row):
+            _print_provider(row)
+            if row["status"] == "resting" and row.get("error"):
+                _record_rest(home, row)
+        callbacks["on_row"] = on_row
+    try:
+        rows = provider_status(probe=probe, smoke=smoke, only=only or None, skip=skip, **callbacks)
+    except KeyboardInterrupt:
+        print("lifeos: stopped; the seats above were already checked.", file=sys.stderr)
+        return 0, 130
+    if not smoke:
+        for row in rows:
+            _print_provider(row)
+    resting = sum(row["status"] == "resting" for row in rows)
+    if resting:
+        print(f"  {resting} seat(s) resting: not a fault, they reopen at the time shown.")
+    return sum(row["status"] not in _OK_STATES for row in rows), None
+
+
 def cmd_doctor(args):
     home = find_home(args.home)
     problems, total = 0, 0
@@ -397,18 +456,10 @@ def cmd_doctor(args):
             print(f"  missing   logs/{name}")
             problems += 1
     if getattr(args, "tools", False) or getattr(args, "live", False) or getattr(args, "smoke", False):
-        smoke = bool(getattr(args, "smoke", False))
-        probe = bool(getattr(args, "live", False)) or smoke
-        if smoke:
-            print("Providers: (authenticated smoke probe)")
-        elif probe:
-            print("Providers: (live health probe)")
-        else:
-            print("Providers: (binary availability)")
-        for p in provider_status(probe=probe, smoke=smoke):
-            state = p["status"]
-            problems += state not in ("available", "healthy", "cli_healthy")
-            print(f"  {state:<13} {p['model']:<10} ({p['locality']}, {p['detail']})")
+        found, stop = _doctor_providers(home, args)
+        if stop is not None:
+            return stop
+        problems += found
     print("doctor: ok" if not problems else f"doctor: {problems} thing(s) to fix")
     return 0 if not problems else 1
 
@@ -489,6 +540,7 @@ def build_parser():
     doctor.add_argument("--tools", action="store_true", help="check binary availability of local and remote model CLIs")
     doctor.add_argument("--live", action="store_true", help="probe live provider health (local Ollama tags and CLI --version)")
     doctor.add_argument("--smoke", action="store_true", help="run an authenticated live smoke request per provider")
+    doctor.add_argument("--only", help="with --smoke or --live: probe only these seats, comma separated (saves usage)")
     doctor.set_defaults(func=cmd_doctor)
 
     lab_p = sub.add_parser("lab", help="Prompt Lab: validate cards, pack test inputs, and score results offline")
