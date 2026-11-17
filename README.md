@@ -88,7 +88,7 @@ CI runs both on every push and pull request.
 
 Standard library only unless a pull request explains why. Tests first. No personal data, ever. Work on a branch; the owner merges.
 
-Licence: to be chosen before the repo goes public.
+Licence: MIT (see `LICENSE`).
 
 ## Chat apps without copy and paste (`lifeos mcp`)
 
