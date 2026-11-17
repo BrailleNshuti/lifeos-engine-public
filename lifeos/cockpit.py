@@ -542,7 +542,7 @@ function renderToday(){
     <section class="hero">
       <div class="eyebrow">Law 1 · Proof or it didn’t happen · Law 4 · Hard thing first</div>
       <h1>Are you in at 100 % on your hardest block today, Braille?</h1>
-      <p class="mono">Personal · IU Applied AI (6 modules) · German B2 track · LifeOS Engine & iwa · employer Prompt Lab (synthetic only)</p>
+      <p class="mono">Personal · IU Applied AI (6 modules) · German B2 track · LifeOS Engine & iwa · Prompt Lab (synthetic only)</p>
       <div class="chips">
         <button class="btn ${state.checkin==='100%'?'primary':''}" onclick="saveCheckin('100%')">Yes — 100 % locked in</button>
         <button class="btn ${state.checkin==='low-energy'?'primary':''}" onclick="saveCheckin('low-energy')">Low energy — protect base & sleep</button>
@@ -567,7 +567,7 @@ function renderToday(){
         <span class="eyebrow">Quick Daily Logger (store-locked & guard-checked)</span>
         <h3>Log Hours, Health or Proof</h3>
         <div class="grid c2">
-          <select id="q-area" class="input"><option value="study">study (IU)</option><option value="german">german (A1→B2)</option><option value="lab">lab (Engine / iwa)</option><option value="work">work (employer hrs)</option></select>
+          <select id="q-area" class="input"><option value="study">study (IU)</option><option value="german">german (A1→B2)</option><option value="lab">lab (Engine / iwa)</option><option value="work">work (hrs)</option></select>
           <input id="q-hours" class="input" type="number" step="0.5" placeholder="Hours (e.g. 1.5)">
         </div>
         <input id="q-note" class="input" placeholder="What did you prove or practice? (max 200 chars)">
@@ -984,7 +984,7 @@ function renderAgents(){
       <div class="card stat"><span class="eyebrow">Context Tokens</span><div class="n">${r.total_context_tokens}</div><div class="l">Core cap <= 2,000 tok</div></div>
     </div>
     <div class="card" style="margin-top:16px">
-      <span class="eyebrow">Work Lane Separation (rule 9) · employer Prompt Lab Cards</span>
+      <span class="eyebrow">Work Lane Separation · Prompt Lab Cards</span>
       <h3>Synthetic Offline Prompt Cards</h3>
       <ul class="list">${cards}</ul>
     </div>

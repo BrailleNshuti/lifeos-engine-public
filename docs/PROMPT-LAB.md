@@ -40,7 +40,7 @@ Score: <kept by hand; the runner never edits a card>
 | `lifeos lab score <card> <results> [--dry-run]` | runs `check` first; scores, prints each test and n/5, logs one proof (see Logging), prints the `Score:` text to paste into the card by hand |
 
 ## Why the runner does not call a model (rule 9; data classes A public, B personal, C sensitive, D employer: employer tools only)
-- rule 9 sends work prompts to the work console, tested only on invented or public text. `claude -p` or `codex exec` from the engine would run them in personal accounts: outside that permission and the work/personal split.
+- Rule 9 sends work prompts to the work console, tested only on invented or public text. `claude -p` or `codex exec` from the engine would run them in personal accounts: outside that permission and the work/personal split.
 - The gate is a person. "Not sensitive or confidential" is not something the regex guard can decide (a paraphrased real case passes it); a caller in code removes the gate and puts the policy in public code.
 - Evidence: the console calls the API directly. `claude -p` and `codex exec` are agent harnesses with their own system prompt, tools and settings, so their scores do not transfer to the console (rule 6).
 - A public, standard-library-only engine gets no key, no network and no subprocess in lab code; scoring is deterministic, so tests and CI need no network, and no personal token pool is drawn.

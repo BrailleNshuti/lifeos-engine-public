@@ -22,7 +22,7 @@ def test_router_evaluates_six_questions_for_task_and_text(home, capsys):
     assert dec["selected_model"] in ("claude", "codex", "qwen", "gemini", "tier0-cli")
 
     # Confidential work data is blocked at Question 1
-    work_dec = router.evaluate_route(home, "Analyze employer client dataset for internal deal")
+    work_dec = router.evaluate_route(home, "Analyze work client dataset for internal deal")
     assert work_dec["blocked"] is True
     assert work_dec["questions"][0]["verdict"] == "BLOCK_WORK_LANE"
 
