@@ -11,7 +11,7 @@ not replaced by a cloud seat.
 import datetime as dt
 import re
 
-from . import ask, seats
+from . import ask, learn, seats
 from .ask import ADAPTERS, run_ask  # noqa: F401  (ADAPTERS is patched in tests)
 from .check import check_answer
 from .context import task_file, visible_task
@@ -64,7 +64,8 @@ def _mark_route(home, path, failed, winner, today, notes=()):
     append_task_note(home, path, heading, "\n".join(part for part in (body, extra) if part))
 
 
-def run_delegate(home, task_id, model=None, budget=6000, full=False, adapters=None, today=None, dry_run=False):
+def run_delegate(home, task_id, model=None, budget=6000, full=False, adapters=None, today=None, dry_run=False,
+                 learned=False):
     """Run the task on the best open seat. Returns model, reason, tried, failures, path and the answer."""
     adapters = adapters if adapters is not None else ADAPTERS
     path = task_file(home, task_id)
@@ -73,9 +74,15 @@ def run_delegate(home, task_id, model=None, budget=6000, full=False, adapters=No
     tier = ask.task_data_tier(path)
     if tier == "SECRET":
         raise ask.Blocked("SECRET data cannot be sent to any model.")
+    learned_note = None
+    if learned and not model:
+        rec = learn.recommend(home, task_text(path))
+        model, learned_note = rec["model"], rec["why"]
     now = dt.datetime.now(dt.timezone.utc)
     resting = seats.pressure(read_run_records(home), now)
     chosen, reason, chain = seats.choose(task_text(path), tier, resting, explicit=model)
+    if learned_note:
+        reason = f"learned ({learned_note}) · {reason}"
     chain = [name for name in chain if name in adapters]
     if not chain:
         raise ask.ToolMissing("no open seat has a model on this computer.")

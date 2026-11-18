@@ -6,7 +6,7 @@ from pathlib import Path
 import sys
 
 from . import __version__
-from . import bakeoff, canary, cockpit, exam, governor, panel, kaizen, lab, log, mcp, replay, router, runs, seats, showcase, sortcsv, study, verify
+from . import bakeoff, canary, cockpit, exam, governor, learn, panel, kaizen, lab, log, mcp, replay, router, runs, seats, showcase, sortcsv, study, verify
 from .delegate import run_delegate
 from .ask import ADAPTERS, MINIMAL, PROVIDERS, AskError, Blocked, ToolMissing, provider_status, run_ask, run_review
 from .context import build_pack, explain_pack, render_explanation
@@ -104,6 +104,27 @@ def cmd_panel(args):
         return 3
     print(json.dumps({k: out[k] for k in ("pack_sha256", "run_ids", "failed", "report")}, indent=2) if args.json
           else "Panel\n" + out["text"])
+    return 0
+
+
+def cmd_rate(args):
+    home = find_home(args.home)
+    try:
+        from .context import task_file
+        from .delegate import task_text
+        text = task_text(task_file(home, args.task))
+        row = learn.add_rating(home, args.task, args.model, args.score, text, note=args.note)
+    except (learn.LearnError, ValueError, FileNotFoundError) as err:
+        print(f"lifeos: {err}", file=sys.stderr)
+        return 2
+    print(f"rated {row['model']} {row['score']}/5 for: {row['kind']}")
+    return 0
+
+
+def cmd_learn(args):
+    home = find_home(args.home)
+    rep = learn.report(home)
+    print(json.dumps(rep, indent=2) if args.json else learn.render(rep))
     return 0
 
 
@@ -273,7 +294,8 @@ def cmd_ask(args):
 def cmd_delegate(args):
     home = find_home(args.home)
     try:
-        out = run_delegate(home, args.task, args.model, args.budget, args.full, dry_run=args.dry_run)
+        out = run_delegate(home, args.task, args.model, args.budget, args.full, dry_run=args.dry_run,
+                           learned=args.learned)
     except Blocked as error:
         print(f"lifeos: BLOCKED. {error}", file=sys.stderr)
         return 1
@@ -557,7 +579,20 @@ def build_parser():
     dele.add_argument("--budget", type=int, default=6000)
     dele.add_argument("--full", action="store_true", help="also send now.md and me.md")
     dele.add_argument("--dry-run", action="store_true", help="show which model would take it; send nothing")
+    dele.add_argument("--learned", action="store_true",
+                      help="use your ratings: pick the model that clearly scores best for this kind of work")
     dele.set_defaults(func=cmd_delegate)
+
+    rate_p = sub.add_parser("rate", help="rate a model's work on a task from 1 to 5 (feeds `learn` and `delegate --learned`)")
+    rate_p.add_argument("task")
+    rate_p.add_argument("model")
+    rate_p.add_argument("score", type=int)
+    rate_p.add_argument("--note", default="")
+    rate_p.set_defaults(func=cmd_rate)
+
+    learn_p = sub.add_parser("learn", help="show your ratings per kind of work and which model scores best")
+    learn_p.add_argument("--json", action="store_true")
+    learn_p.set_defaults(func=cmd_learn)
 
     rev = sub.add_parser("review", help="run an independent blind review (rule 7) across multiple models")
     rev.add_argument("task", help="task id or prefix, for example T-261116")
