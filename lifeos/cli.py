@@ -3,10 +3,11 @@ import argparse
 import datetime as dt
 import json
 from pathlib import Path
+import subprocess
 import sys
 
 from . import __version__
-from . import bakeoff, calibrate, canary, cockpit, exam, governor, learn, mistakes, numbers, panel, vocab, kaizen, lab, log, mcp, replay, router, runs, seats, showcase, sortcsv, study, verify
+from . import bakeoff, calibrate, canary, digest, prove, cockpit, exam, governor, history, hooks, learn, mistakes, numbers, panel, vocab, kaizen, lab, log, mcp, replay, router, runs, seats, showcase, sortcsv, study, verify
 from .delegate import run_delegate
 from .ask import ADAPTERS, MINIMAL, PROVIDERS, AskError, Blocked, ToolMissing, provider_status, run_ask, run_review
 from .context import build_pack, explain_pack, render_explanation
@@ -197,6 +198,50 @@ def cmd_numbers(args):
         print(f"wrote {args.out}")
     else:
         print(json.dumps(data, indent=2) if args.json else page)
+    return 0
+
+
+def cmd_history_scan(args):
+    try:
+        out = history.scan(".", args.max_commits)
+    except (OSError, subprocess.CalledProcessError):
+        print("lifeos: run this inside a git repository.", file=sys.stderr)
+        return 2
+    for f in out["findings"]:
+        print(f"BLOCK {f['commit']} {f['file']}  {f['kind']}  {f['excerpt']}")
+    if out["findings"]:
+        print(f"\n{len(out['findings'])} finding(s) in {out['commits']} commit(s). A removed secret is still in the history: "
+              "rotate it, then clean the history.", file=sys.stderr)
+        return 1
+    print(f"history ok: {out['commits']} commit(s) checked", file=sys.stderr)
+    return 0
+
+
+def cmd_hook(args):
+    try:
+        path = hooks.install(".", args.force)
+    except hooks.HookError as err:
+        print(f"lifeos: {err}", file=sys.stderr)
+        return 2
+    print(f"installed {path}: the guard now runs before every commit")
+    return 0
+
+
+def cmd_prove(args):
+    commands = len(next(a for a in build_parser()._actions if isinstance(a, argparse._SubParsersAction)).choices)
+    out = prove.run(find_home(args.home), run_tests=not args.skip_tests, commands=commands)
+    page = prove.render(out)
+    if args.out:
+        Path(args.out).write_text(page, encoding="utf-8")
+        print(f"wrote {args.out}: {'PASS' if out['ok'] else 'FAIL'}")
+    else:
+        print(page)
+    return 0 if out["ok"] else 1
+
+
+def cmd_digest(args):
+    d = digest.build(find_home(args.home))
+    print(json.dumps(d, indent=2) if args.json else digest.render(d))
     return 0
 
 
@@ -661,6 +706,23 @@ def build_parser():
     rate_p.add_argument("score", type=int)
     rate_p.add_argument("--note", default="")
     rate_p.set_defaults(func=cmd_rate)
+
+    his_p = sub.add_parser("history-scan", help="scan every commit on every branch for class C data (masked output)")
+    his_p.add_argument("--max-commits", type=int)
+    his_p.set_defaults(func=cmd_history_scan)
+    hook_p = sub.add_parser("hook", help="install the pre-commit hook that runs the guard")
+    hook_sub = hook_p.add_subparsers(dest="hook_action", required=True)
+    hook_ins = hook_sub.add_parser("install")
+    hook_ins.add_argument("--force", action="store_true")
+    hook_p.set_defaults(func=cmd_hook)
+
+    prv_p = sub.add_parser("prove", help="run tests, guard score, outbound stop and ledger chain; write one proof file")
+    prv_p.add_argument("--out")
+    prv_p.add_argument("--skip-tests", action="store_true")
+    prv_p.set_defaults(func=cmd_prove)
+    dig_p = sub.add_parser("digest", help="Sunday review in numbers: did every part earn its place this week?")
+    dig_p.add_argument("--json", action="store_true")
+    dig_p.set_defaults(func=cmd_digest)
 
     num_p = sub.add_parser("numbers", help="one page of checkable facts: code, tests, guard score, ledger (counts only)")
     num_p.add_argument("--out", help="write the page to this file")
