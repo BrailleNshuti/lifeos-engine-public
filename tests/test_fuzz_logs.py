@@ -55,3 +55,10 @@ def test_read_csv_rows_skips_short_long_and_bad_rows(tmp_path):
     f.write_bytes(b"\xef\xbb\xbfid,kind,value\nA,predict,5\nshort\nB,predict,1,extra\nC,,9\nD,resolve,\xff\n")
     assert [r["id"] for r in read_csv_rows(f, ("id", "kind"))] == ["A", "D"]
     assert read_csv_rows(tmp_path / "missing.csv") == []
+
+
+def test_nul_bytes_never_reach_the_csv_parser(tmp_path):
+    from lifeos.store import read_csv_rows
+    f = tmp_path / "n.csv"
+    f.write_bytes(b"id,kind\nA,x\n\x00\x00\nB\x00,y\n")
+    assert [r["id"] for r in read_csv_rows(f, ("id",))] == ["A", "B"]
