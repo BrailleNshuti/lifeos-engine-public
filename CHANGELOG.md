@@ -4,6 +4,8 @@ Dates are release dates. Newest first.
 
 ## [Unreleased]
 
+- Tests: a made-up home shaped like the first real one (a level with a note, TODO placeholders, CRLF files, older unchained ledger records). The Sunday pipeline must fail only on the placeholders, pass once they are filled in, and `verify --seal` must pin the older records.
+
 - `lifeos verify --seal`: once, pins the older unchained records (count plus one hash) in `logs/runs.seal.json`; `verify` then reports any later change, removal or reordering of them. Never overwrites a seal; prints the hash to keep outside the file.
 - `lifeos pipeline --run` ends with one summary line (counts per status and the exit code), so a scheduler or a person sees the result at a glance.
 
