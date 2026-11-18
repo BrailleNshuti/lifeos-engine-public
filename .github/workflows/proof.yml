@@ -1,0 +1,34 @@
+name: proof
+on:
+  pull_request:
+  push:
+    branches: [main]
+permissions:
+  contents: read
+jobs:
+  proof:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install -e . pytest
+      - name: Demo on made-up data
+        run: lifeos demo
+      - name: Proof file and numbers page (made-up demo home only)
+        env:
+          LIFEOS_HOME: examples/demo-home
+        run: |
+          lifeos prove --out proof.md
+          lifeos numbers --html numbers.html
+      - name: History scan
+        run: lifeos history-scan
+      - uses: actions/upload-artifact@v4
+        with:
+          name: proof
+          path: |
+            proof.md
+            numbers.html

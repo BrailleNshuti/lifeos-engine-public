@@ -4,8 +4,25 @@ A secret that was committed once and deleted later is still public if the repo i
 every branch, checks only the lines each commit added, and reports commit, file and a masked excerpt (never the value).
 """
 import subprocess
+from pathlib import Path
 
 from . import guard
+
+
+ALLOW_FILE = ".lifeos-history-allow"
+
+
+def _allowed(repo):
+    """Reviewed exceptions: one `<12-char commit> <path>  # reason` per line. Exact commit and file only."""
+    path = Path(repo) / ALLOW_FILE
+    if not path.is_file():
+        return set()
+    out = set()
+    for line in path.read_text(encoding="utf-8").splitlines():
+        parts = line.split("#", 1)[0].split()
+        if len(parts) == 2:
+            out.add((parts[0][:12], parts[1]))
+    return out
 
 
 def scan(repo=".", max_commits=None):
@@ -32,4 +49,5 @@ def scan(repo=".", max_commits=None):
         elif raw.startswith("+") and not raw.startswith("+++"):
             added.append(raw[1:])
     flush()
-    return {"commits": commits, "findings": findings}
+    allowed = _allowed(repo)
+    return {"commits": commits, "findings": [f for f in findings if (f["commit"], f["file"]) not in allowed]}

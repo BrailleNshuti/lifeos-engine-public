@@ -1,0 +1,3 @@
+# Reviewed exceptions for `lifeos history-scan`: <12-char commit> <path>  # why
+# A made-up key in the first draft of demo.py; the line was reworded in the next commit.
+215f41c4ee77 lifeos/demo.py  # fake key built from parts, never a real secret
