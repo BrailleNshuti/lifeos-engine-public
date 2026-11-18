@@ -20,6 +20,7 @@ Dates are release dates. Newest first.
 - README "See it in 60 seconds" section, `docs/DESIGN.md` (each design decision and what it costs) and a `proof` workflow that runs the demo, `prove`, `numbers` and `history-scan` on every pull request and attaches `proof.md` and `numbers.html` as an artifact (made-up demo home only).
 - `lifeos selftest`: 24 commands run on a throwaway copy of the demo home, PASS or FAIL each. Never touches your notes.
 - `lifeos arch` and `docs/ARCHITECTURE-GRAPH.md`: the module graph drawn from the real imports, with a test that fails when the checked-in graph is stale. After adding a module, run `lifeos arch --write docs/ARCHITECTURE-GRAPH.md`.
+- Ledger attack tests: 70 seeded random attacks (edit, delete, swap, forge, duplicate, tear) are all caught by `verify`; cutting the tail and rewriting the last record are caught only with the saved head hash, as documented.
 - `savings` and the numbers page now lead with the measured tokens per cloud run and show the comparison with pasting every note as a ceiling (a worst-case baseline), not as a typical saving.
 - `history-scan` reads `.lifeos-history-allow` for reviewed exceptions (exact commit and file, with a reason). The first one is a made-up key in an early draft of `demo.py`.
 - A damaged line in `logs/runs.jsonl` no longer crashes every reader; `lifeos verify` still reports it. Found by new chaos tests (torn line, CRLF checkout, CSV without final newline, garbage rows).
