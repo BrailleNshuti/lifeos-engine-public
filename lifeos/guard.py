@@ -26,15 +26,17 @@ TOKEN_PATTERNS = [
 ID_DOCUMENT = re.compile(
     r"(?i)\b(?:passport|reisepass|personalausweis|ausweis|aufenthaltstitel|residence permit|id card)"
     r"(?:\s*(?:no\.?|nr\.?|number|nummer))?\s*[:#]?\s*([A-Z0-9]{8,10})\b")
-IBAN_CANDIDATE = re.compile(r"\b[A-Z]{2}\d{2}(?: ?[A-Z0-9]{4}){2,7}(?: ?[A-Z0-9]{1,3})?\b")
-CARD_CANDIDATE = re.compile(r"(?<![\w.])(?:\d[ -]?){12,18}\d(?![\w.])")
+IBAN_CANDIDATE = re.compile(r"(?i)\b[A-Z]{2}\d{2}(?:[ .-]?[A-Z0-9]{4}){2,7}(?:[ .-]?[A-Z0-9]{1,3})?\b")
+# A card number may end a sentence (a full stop after the last digit); a decimal point followed by a digit is still a number.
+CARD_CANDIDATE = re.compile(r"(?<!\w)(?<!\d\.)(?:\d[ -]?){12,18}\d(?!\w|\.\d)")
+CARD_DOTTED = re.compile(r"(?<!\w)(?<!\d\.)\d{4}(?:\.\d{4}){2,4}(?:\.\d{1,3})?(?!\w|\.\d)")
 SECRET_ASSIGNMENT = re.compile(r"(?i)\b(?:password|passwort|api[_-]?key|secret|token)\b\s*[:=]\s*['\"]?[^\s'\"]{8,}")
 EMAIL = re.compile(r"\b[A-Za-z0-9._%+\-]+@[A-Za-z0-9.\-]+\.[A-Za-z]{2,}\b")
 PHONE = re.compile(r"(?<!\w)\+\d{2,3}[ \-]?\d{2,4}[ \-]?\d{3,}[ \-]?\d{0,6}")
 
 
 def iban_valid(text):
-    raw = text.replace(" ", "")
+    raw = re.sub(r"[ .-]", "", text).upper()
     if not 15 <= len(raw) <= 34:
         return False
     moved = raw[4:] + raw[:4]
@@ -101,9 +103,10 @@ def scan_text(text, private=(), allow_mark=True):
         for m in IBAN_CANDIDATE.finditer(line):
             if iban_valid(m.group(0)):
                 findings.append((number, "BLOCK", "IBAN", _mask(m.group(0))))
-        for m in CARD_CANDIDATE.finditer(line):
-            if luhn_valid(m.group(0)):
-                findings.append((number, "BLOCK", "Card number", _mask(m.group(0))))
+        for pattern in (CARD_CANDIDATE, CARD_DOTTED):
+            for m in pattern.finditer(line):
+                if luhn_valid(m.group(0)):
+                    findings.append((number, "BLOCK", "Card number", _mask(m.group(0))))
         for pattern in private:
             for m in pattern.finditer(line):
                 findings.append((number, "BLOCK", "Private pattern", _mask(m.group(0))))
