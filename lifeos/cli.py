@@ -6,7 +6,7 @@ from pathlib import Path
 import sys
 
 from . import __version__
-from . import bakeoff, calibrate, canary, cockpit, exam, governor, learn, mistakes, panel, vocab, kaizen, lab, log, mcp, replay, router, runs, seats, showcase, sortcsv, study, verify
+from . import bakeoff, calibrate, canary, cockpit, exam, governor, learn, mistakes, numbers, panel, vocab, kaizen, lab, log, mcp, replay, router, runs, seats, showcase, sortcsv, study, verify
 from .delegate import run_delegate
 from .ask import ADAPTERS, MINIMAL, PROVIDERS, AskError, Blocked, ToolMissing, provider_status, run_ask, run_review
 from .context import build_pack, explain_pack, render_explanation
@@ -185,6 +185,18 @@ def cmd_vocab(args):
     except vocab.VocabError as err:
         print(f"lifeos: {err}", file=sys.stderr)
         return 2
+    return 0
+
+
+def cmd_numbers(args):
+    commands = len(next(a for a in build_parser()._actions if isinstance(a, argparse._SubParsersAction)).choices)
+    data = numbers.build(find_home(args.home), commands=commands)
+    page = numbers.render(data)
+    if args.out:
+        Path(args.out).write_text(page, encoding="utf-8")
+        print(f"wrote {args.out}")
+    else:
+        print(json.dumps(data, indent=2) if args.json else page)
     return 0
 
 
@@ -649,6 +661,11 @@ def build_parser():
     rate_p.add_argument("score", type=int)
     rate_p.add_argument("--note", default="")
     rate_p.set_defaults(func=cmd_rate)
+
+    num_p = sub.add_parser("numbers", help="one page of checkable facts: code, tests, guard score, ledger (counts only)")
+    num_p.add_argument("--out", help="write the page to this file")
+    num_p.add_argument("--json", action="store_true")
+    num_p.set_defaults(func=cmd_numbers)
 
     mis_p = sub.add_parser("mistakes", help="quiz yourself on the verified questions you missed most")
     mis_p.add_argument("--count", type=int, default=5)
