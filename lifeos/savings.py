@@ -31,13 +31,15 @@ def compute(home):
     base = _baseline(home)
     would = base * len(runs)
     saved = max(would - sent, 0) if runs else 0
-    return {"runs": len(runs), "sent": sent, "baseline_each": base, "saved": saved,
+    return {"runs": len(runs), "sent": sent, "avg_sent": round(sent / len(runs)) if runs else 0,
+            "baseline_each": base, "saved": saved,
             "percent": round(100 * saved / would) if would else 0}
 
 
 def render(s):
     if not s["runs"]:
         return "No ask runs to a cloud model yet. Run `lifeos ask` and this shows what the context pack saved."
-    return (f"{s['runs']} cloud runs sent {s['sent']:,} tokens. Pasting every note each time would have sent about "
-            f"{s['baseline_each'] * s['runs']:,}.\nSaved about {s['saved']:,} tokens ({s['percent']} %) "
-            f"(estimate: the baseline uses your notes as they are today).")
+    return (f"{s['runs']} cloud runs sent {s['sent']:,} tokens, {s['avg_sent']:,} per run (measured).\n"
+            f"Ceiling, not a typical saving: pasting every note each time would have sent about "
+            f"{s['baseline_each'] * s['runs']:,}, so up to {s['percent']} % less. Nobody pastes everything, "
+            f"so read the per-run number first; this estimate uses your notes as they are today.")

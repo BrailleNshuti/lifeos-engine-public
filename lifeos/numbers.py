@@ -8,7 +8,7 @@ import datetime as dt
 import html
 from pathlib import Path
 
-from . import calibrate, canary, learn, verify, vocab
+from . import calibrate, canary, learn, savings, verify, vocab
 from .store import read_run_records
 
 
@@ -32,6 +32,7 @@ def build(home, commands=None):
         "guard": {"blocked": score["blocked"], "total": score["total"],
                   "benign_flagged": len(score["benign_flagged"]), "benign_total": score["benign_total"]},
         "ledger": {"records": chain["records"], "chained": chain["chained"], "legacy": chain["legacy"], "ok": chain["ok"]},
+        "savings": savings.compute(home),
         "runs_by_model": dict(sorted(by_model.items())),
         "practice": {"ratings": len(learn.read_ratings(home)),
                      "predictions": calibrate.report(home)["resolved"] + calibrate.report(home)["open"],
@@ -55,6 +56,10 @@ def render(d, today=None):
     ]
     lines = [f"# Engine in numbers · {day}", "", "Every figure is reproduced by `lifeos numbers`. Counts only; no task text.", "",
              "| What | Value |", "|---|---|"] + [f"| {a} | {b} |" for a, b in rows]
+    sv = d.get("savings") or {}
+    if sv.get("runs"):
+        lines += ["", f"Context pack: {sv['avg_sent']:,} tokens per cloud run on average over {sv['runs']} runs (measured). "
+                      f"Ceiling against pasting every note each time: up to {sv['percent']} % less (a worst-case baseline, not a typical saving)."]
     if d["runs_by_model"]:
         lines += ["", "Runs by model: " + ", ".join(f"{m} {n}" for m, n in d["runs_by_model"].items())]
     return "\n".join(lines) + "\n"
@@ -72,6 +77,10 @@ def render_html(d, today=None):
         (f"{g['benign_flagged']}/{g['benign_total']}", "harmless texts wrongly flagged"),
         (f"{led['chained']}", "hash-chained runs" + ("" if led["ok"] else " (CHAIN BROKEN)")),
     ]
+    sv = d.get("savings") or {}
+    if sv.get("runs"):
+        cards += [(f"{sv['avg_sent']:,}", f"tokens per cloud run, measured over {sv['runs']} runs"),
+                  (f"up to {sv['percent']} %", "fewer tokens than pasting every note each time (a worst-case baseline, not a typical saving)")]
     boxes = "".join(f"<div class=c><b>{html.escape(str(a))}</b><span>{html.escape(b)}</span></div>" for a, b in cards)
     return ("<!doctype html><html lang=en><meta charset=utf-8><meta name=viewport content='width=device-width,initial-scale=1'>"
             f"<title>Engine in numbers · {day}</title><style>body{{font:16px system-ui,sans-serif;max-width:46rem;margin:2rem auto;"

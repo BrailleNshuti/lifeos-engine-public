@@ -61,3 +61,15 @@ def test_cli_savings_demo_and_html(home, tmp_path, monkeypatch, capsys):
     out = tmp_path / "n.html"
     assert main(["numbers", "--html", str(out)]) == 0
     assert out.read_text(encoding="utf-8").startswith("<!doctype html>")
+
+
+def test_honest_labels_say_ceiling_and_show_the_measured_average(home):
+    for _ in range(2):
+        ask.run_ask(home, "claude", "T-261116", adapters={"claude": lambda p: "ok"}, today=D)
+    s = savings.compute(home)
+    assert s["avg_sent"] == round(s["sent"] / 2)
+    text = savings.render(s)
+    assert "measured" in text and "Ceiling" in text
+    page = numbers.render_html(numbers.build(home, commands=3), today=D)
+    assert "worst-case baseline" in page and "per cloud run" in page
+    assert "worst-case baseline" in numbers.render(numbers.build(home, commands=3), today=D)
