@@ -4,17 +4,12 @@ from pathlib import Path
 
 from .guard import private_patterns, scan_text
 from .runs import summarize_runs
-from .store import atomic_write_bytes, store_lock
+from .store import atomic_write_bytes, read_csv_rows, store_lock
 from .week import week_numbers
 
 
 def _recent_proofs(home, limit=6):
-    p = Path(home) / "logs" / "proofs.csv"
-    if not p.exists():
-        return []
-    with p.open(encoding="utf-8", newline="") as f:
-        rows = list(csv.DictReader(f))
-    return rows[-limit:]
+    return read_csv_rows(Path(home) / "logs" / "proofs.csv")[-limit:]
 
 
 def generate_weekly_post(home, week=None):
