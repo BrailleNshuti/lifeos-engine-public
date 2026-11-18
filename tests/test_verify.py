@@ -128,3 +128,53 @@ def test_cli_verify_exit_codes(home, capsys, monkeypatch):
     write_lines(home, lines)
     assert main(["verify"]) == 1
     assert "BROKEN" in capsys.readouterr().out
+
+
+def legacy_then_chain(home):
+    old = [json.dumps({"run_id": f"R-old-{i}", "command": "ask"}).encode() for i in range(3)]
+    write_lines(home, old + [b""])
+    add_runs(home, 2)
+    return old
+
+
+def test_seal_pins_the_older_records_and_catches_a_later_rewrite(home):
+    legacy_then_chain(home)
+    sealed = verify.seal(home)
+    assert sealed["legacy"] == 3 and len(sealed["sha256"]) == 64
+    assert verify.verify_chain(home)["ok"]
+    lines = runs_lines(home)
+    lines[1] = lines[1].replace(b"R-old-1", b"R-old-X")
+    write_lines(home, lines)
+    result = verify.verify_chain(home)
+    assert not result["ok"] and any("the seal" in e for e in result["errors"])
+
+
+def test_seal_is_written_once_and_never_overwritten(home):
+    legacy_then_chain(home)
+    verify.seal(home)
+    with pytest.raises(verify.SealError, match="Already"):
+        verify.seal(home)
+
+
+def test_a_cut_older_record_is_caught_and_new_records_still_pass(home):
+    legacy_then_chain(home)
+    verify.seal(home)
+    add_runs(home, 2, start=10)
+    assert verify.verify_chain(home)["ok"]
+    write_lines(home, runs_lines(home)[1:])
+    assert any("the seal" in e for e in verify.verify_chain(home)["errors"])
+
+
+def test_no_older_records_means_nothing_to_seal(home):
+    add_runs(home, 2)
+    with pytest.raises(verify.SealError, match="no older"):
+        verify.seal(home)
+
+
+def test_cli_seal_prints_the_digest_to_keep_outside_the_file(home, capsys):
+    legacy_then_chain(home)
+    assert main(["--home", str(home), "verify", "--seal"]) == 0
+    out = capsys.readouterr().out
+    assert "3 older records sealed" in out and verify.seal_info(home)["sha256"] in out
+    assert main(["--home", str(home), "verify", "--seal"]) == 2
+    assert main(["--home", str(home), "verify"]) == 0

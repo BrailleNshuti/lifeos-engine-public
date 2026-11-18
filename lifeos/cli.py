@@ -72,6 +72,14 @@ def cmd_runs(args):
 
 
 def cmd_verify(args):
+    if args.seal:
+        try:
+            sealed = verify.seal(find_home(args.home))
+        except verify.SealError as err:
+            print(f"lifeos: {err}", file=sys.stderr)
+            return 2
+        print(f"{sealed['legacy']} older records sealed. Keep this outside the file too: {sealed['sha256']}")
+        return 0
     result = verify.verify_chain(find_home(args.home), anchor=args.anchor)
     print(json.dumps(result, indent=2) if args.json else verify.render(result))
     return 0 if result["ok"] and result["anchor_found"] is not False else 1
@@ -1105,6 +1113,7 @@ def build_parser():
 
     ver_p = sub.add_parser("verify", help="prove logs/runs.jsonl was not edited, reordered or cut (hash chain)")
     ver_p.add_argument("--anchor", help="a head hash you saved earlier; checks the log still contains that exact state")
+    ver_p.add_argument("--seal", action="store_true", help="once: pin the older, unchained records so a later rewrite of them is caught")
     ver_p.add_argument("--json", action="store_true", help="output structured JSON")
     ver_p.set_defaults(func=cmd_verify)
 
