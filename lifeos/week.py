@@ -4,7 +4,7 @@ import datetime as dt
 import re
 from pathlib import Path
 
-from .store import ASK_NOTE_PREFIX, atomic_write_bytes, model_call_flags, store_lock
+from .store import ASK_NOTE_PREFIX, atomic_write_bytes, model_call_flags, read_csv_rows, store_lock
 
 ASKED = ASK_NOTE_PREFIX  # compatibility name; the contract itself lives in store.py
 
@@ -24,11 +24,7 @@ def week_bounds(week=None, today=None):
 
 
 def _rows(path):
-    path = Path(path)
-    if not path.exists():
-        return []
-    with path.open(newline="", encoding="utf-8") as handle:
-        return list(csv.DictReader(handle))
+    return read_csv_rows(path)
 
 
 def _in_range(row, start, end):
