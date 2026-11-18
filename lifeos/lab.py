@@ -7,7 +7,7 @@ from .guard import private_patterns, scan_text
 from .home import estimate_tokens
 from .labcard import LabRefused, decode_card_bytes, format_pack, format_results_template, parse_card
 from .labscore import ScoreRefused, parse_results, score_card_results
-from .store import append_proof_row, atomic_write_bytes, store_lock
+from .store import append_proof_row, atomic_write_bytes, read_csv_rows, store_lock
 
 
 def resolve_card_path(home, card_arg):
@@ -77,17 +77,16 @@ def _prior_lab_runs(home, card, model, results_hash):
     prefix = f"{card['name']} v{card['version']};"
     dedupe_key = f"results {results_hash}"
     if proofs.is_file():
-        with proofs.open(encoding="utf-8", newline="") as fh:
-            for row in csv.DictReader(fh):
-                if row.get("area") != "lab":
-                    continue
-                proof_text = row.get("proof") or ""
-                if dedupe_key in proof_text:
-                    already_logged = True
-                elif proof_text.startswith(prefix) and f"; {model};" in proof_text:
-                    parts = [p.strip() for p in proof_text.split(";")]
-                    if len(parts) >= 2:
-                        prior_scores.append(parts[1])
+        for row in read_csv_rows(proofs):
+            if row.get("area") != "lab":
+                continue
+            proof_text = row.get("proof") or ""
+            if dedupe_key in proof_text:
+                already_logged = True
+            elif proof_text.startswith(prefix) and f"; {model};" in proof_text:
+                parts = [p.strip() for p in proof_text.split(";")]
+                if len(parts) >= 2:
+                    prior_scores.append(parts[1])
 
     lab_dir = Path(home) / "logs" / "lab"
     if lab_dir.is_dir():
