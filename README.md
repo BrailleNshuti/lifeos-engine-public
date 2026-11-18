@@ -4,6 +4,24 @@ The machinery of a personal AI operating system: one shared memory that Claude, 
 
 The engine is code only. Your life lives in a separate **private data repo** (`lifeos`): rules, profile, current week, task files, logs and reviews. The engine reads it through `LIFEOS_HOME`; nothing personal is ever stored here, and everything in `examples/` is made up.
 
+## See it in 60 seconds
+
+```
+pip install -e .
+lifeos demo
+```
+
+`lifeos demo` runs on made-up data, with no account, model or network, and checks each claim in code: the guard refuses a fake secret, a blind panel finds two models disagreeing, an edited ledger record is caught, replay proves which input a run saw, and a removed last record is caught by the saved head hash.
+
+| Check it yourself | Command |
+|---|---|
+| Guard score on generated fake identifiers | `lifeos canary` |
+| Whole proof in one file | `lifeos prove --out proof.md` |
+| Secrets anywhere in the git history | `lifeos history-scan` |
+| Facts about the engine, one page | `lifeos numbers --html numbers.html` |
+
+Why it is built this way, and what each choice costs: [docs/DESIGN.md](docs/DESIGN.md). Every pull request also runs `lifeos prove` and `lifeos demo` in CI and attaches the proof as a build artifact.
+
 ## What v0.1 does
 
 | Command | What it does | Why it matters |
@@ -34,7 +52,7 @@ The engine is code only. Your life lives in a separate **private data repo** (`l
 | `lifeos mistakes [--count N] [--json]`, `lifeos vocab add \| quiz [--reveal] \| answer` | `mistakes` lists the verified study questions you missed most and have not fixed yet (prompts only); `vocab` keeps your own German words with an example from your own day and a 1/3/7/14-day box schedule (`logs/vocab.csv`, local, no model call, private data refused) | Practice follows your real errors and your real words, not a fixed list |
 | `lifeos numbers [--out FILE] [--html FILE] [--json]` | Builds an "Engine in numbers" page: modules, lines, tests, commands, the guard score on generated fake identifiers, ledger chain status and counts of ratings, predictions and own words. Counts only, no task text or paths | A page anyone can check by running the same command |
 | `lifeos prove [--out FILE] [--skip-tests]` | Runs the tests, the guard score, the outbound stop and the ledger chain, then writes one dated proof file with the numbers page; exit 1 if anything fails. No model call | Rule 1 in one command: a file you can link |
-| `lifeos history-scan [--max-commits N]` | Scans every commit on every branch for class C data (added lines only, masked output); exit 1 if found | A secret deleted later is still public in a public repo's history |
+| `lifeos history-scan [--max-commits N]` | Scans every commit on every branch for class C data (added lines only, masked output); exit 1 if found; reviewed exceptions go in `.lifeos-history-allow` (`<12-char commit> <path>  # reason`, exact match only) | A secret deleted later is still public in a public repo's history |
 | `lifeos hook install [--force]` | Installs a pre-commit hook that runs `lifeos guard --staged`; never overwrites a different hook without `--force` | The guard runs without you remembering it |
 | `lifeos digest [--json]` | Sunday review in numbers: per part, uses this week, last use and a verdict; no use for 14 days says pause or remove | Rule 10: every part must earn its place |
 | `lifeos demo [--json]` | A 60-second tour on made-up data in a throwaway folder: the guard refuses a fake key, a blind panel finds a conflict, an edited ledger record is caught, replay proves an input, a cut tail is caught by the anchor. Each step is checked by code. No account, model or network | Shows the promises working instead of describing them |
