@@ -5,6 +5,7 @@ and publish the page if you want; the same command reproduces it.
 """
 import collections
 import datetime as dt
+import html
 from pathlib import Path
 
 from . import calibrate, canary, learn, verify, vocab
@@ -57,3 +58,25 @@ def render(d, today=None):
     if d["runs_by_model"]:
         lines += ["", "Runs by model: " + ", ".join(f"{m} {n}" for m, n in d["runs_by_model"].items())]
     return "\n".join(lines) + "\n"
+
+
+def render_html(d, today=None):
+    """One self-contained page: no script, no link, no font download. Safe to host anywhere."""
+    day = (today or dt.date.today()).isoformat()
+    g, led, pr = d["guard"], d["ledger"], d["practice"]
+    cards = [
+        (d["modules"], "Python modules, standard library only"),
+        (f"{d['code_lines']:,}", "lines of code"),
+        (d["tests"] if d["tests"] is not None else "n/a", "test functions"),
+        (f"{g['blocked']}/{g['total']}", "generated fake identifiers blocked"),
+        (f"{g['benign_flagged']}/{g['benign_total']}", "harmless texts wrongly flagged"),
+        (f"{led['chained']}", "hash-chained runs" + ("" if led["ok"] else " (CHAIN BROKEN)")),
+    ]
+    boxes = "".join(f"<div class=c><b>{html.escape(str(a))}</b><span>{html.escape(b)}</span></div>" for a, b in cards)
+    return ("<!doctype html><html lang=en><meta charset=utf-8><meta name=viewport content='width=device-width,initial-scale=1'>"
+            f"<title>Engine in numbers · {day}</title><style>body{{font:16px system-ui,sans-serif;max-width:46rem;margin:2rem auto;"
+            "padding:0 1rem;color:#1b1b1b}.g{display:grid;grid-template-columns:repeat(auto-fit,minmax(13rem,1fr));gap:.8rem}"
+            ".c{border:1px solid #ddd;border-radius:10px;padding:1rem}.c b{display:block;font-size:2rem}.c span{color:#555}"
+            "@media(prefers-color-scheme:dark){body{background:#111;color:#eee}.c{border-color:#333}.c span{color:#aaa}}</style>"
+            f"<h1>Engine in numbers</h1><p>{day}. Every figure is reproduced by <code>lifeos numbers</code>. Counts only.</p>"
+            f"<div class=g>{boxes}</div></html>\n")
