@@ -38,7 +38,7 @@ Dates are release dates. Newest first.
 - `lifeos decide`: decision records (`add`, `list`, `due`) with a revisit date and an optional linked prediction.
 - `lifeos pipeline`: saved multi-step flows with stop/continue gates; dry run unless `--run`; no nesting.
 - `lifeos experiment`: one tested rule change at a time (start, end, list). Kept only if the chosen metric improves by 5 % or more over the trial; too little data is inconclusive, never a silent keep.
-- `lifeos selftest`: 24 commands run on a throwaway copy of the demo home, PASS or FAIL each. Never touches your notes.
+- `lifeos selftest`: 37 steps run on a throwaway copy of the demo home, PASS or FAIL each. Never touches your notes.
 - `lifeos arch` and `docs/ARCHITECTURE-GRAPH.md`: the module graph drawn from the real imports, with a test that fails when the checked-in graph is stale. After adding a module, run `lifeos arch --write docs/ARCHITECTURE-GRAPH.md`.
 - Ledger attack tests: 70 seeded random attacks (edit, delete, swap, forge, duplicate, tear) are all caught by `verify`; cutting the tail and rewriting the last record are caught only with the saved head hash, as documented.
 - `savings` and the numbers page now lead with the measured tokens per cloud run and show the comparison with pasting every note as a ceiling (a worst-case baseline), not as a typical saving.
