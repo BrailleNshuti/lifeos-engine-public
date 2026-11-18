@@ -10,6 +10,7 @@ from contextlib import contextmanager
 import csv
 import datetime as dt
 import io
+import hashlib
 import json
 import os
 import re
@@ -487,6 +488,8 @@ def _prepare_run_record_bytes(runs_path, record):
     raw = runs_path.read_bytes() if runs_path.exists() else b""
     if raw and raw[-1:] not in (b"\n", b"\r"):
         raw += b"\n"
+    existing = [ln for ln in raw.split(b"\n") if ln.strip()]
+    stamped["prev_hash"] = hashlib.sha256(existing[-1].rstrip(b"\r")).hexdigest() if existing else "0" * 64
     line = (json.dumps(stamped, sort_keys=True) + "\n").encode("utf-8")
     return raw + line
 

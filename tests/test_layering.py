@@ -8,7 +8,7 @@ PKG = Path(__file__).resolve().parent.parent / "lifeos"
 # A module may import only from a lower layer (a smaller number). Same layer = no import.
 LAYER = {
     "store": -1,
-    "home": 0, "guard": 0, "check": 0, "tasks": 0, "week": 0, "labcard": 0, "labscore": 0, "policy": 0,
+    "home": 0, "verify": 0, "guard": 0, "check": 0, "tasks": 0, "week": 0, "labcard": 0, "labscore": 0, "policy": 0,
     "context": 1, "lab": 1, "log": 1, "runs": 1, "kaizen": 1, "bakeoff": 1, "seats": 1,
     "ask": 2, "exam": 2, "showcase": 2, "study": 2,
     "delegate": 3, "sortcsv": 3, "router": 3, "cockpit": 3,
