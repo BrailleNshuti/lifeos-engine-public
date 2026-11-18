@@ -7,7 +7,7 @@ import subprocess
 import sys
 
 from . import __version__
-from . import backup, bakeoff, calibrate, arch, canary, decision, demo, digest, earn, experiment, prove, savings, selftest, cockpit, exam, governor, history, hooks, learn, lint, mistakes, numbers, panel, pipeline, redact, release, today, vocab, kaizen, lab, log, mcp, replay, router, runs, seats, showcase, sortcsv, stale, study, verify
+from . import backup, bakeoff, calibrate, arch, canary, decision, demo, digest, earn, experiment, prove, savings, selftest, cockpit, exam, governor, history, hooks, learn, lint, mistakes, numbers, panel, pipeline, redact, release, today, vocab, kaizen, lab, log, mcp, replay, router, runs, seats, schema, showcase, sortcsv, stale, study, verify
 from .delegate import run_delegate
 from .ask import ADAPTERS, MINIMAL, PROVIDERS, AskError, Blocked, ToolMissing, provider_status, run_ask, run_review
 from .context import build_pack, explain_pack, render_explanation
@@ -383,6 +383,23 @@ def cmd_lint(args):
 
 def cmd_stale(args):
     print(stale.render(stale.find(find_home(args.home), days=args.days)))
+    return 0
+
+
+def cmd_schema(args):
+    page = schema.page()
+    if args.check:
+        path = Path(args.check)
+        if path.exists() and path.read_text(encoding="utf-8") == page:
+            print(f"{args.check} matches the code")
+            return 0
+        print(f"{args.check} is missing or stale: run `lifeos schema --write {args.check}`", file=sys.stderr)
+        return 1
+    if args.write:
+        Path(args.write).write_text(page, encoding="utf-8", newline="\n")
+        print(f"wrote {args.write}")
+    else:
+        print(page)
     return 0
 
 
@@ -929,6 +946,10 @@ def build_parser():
     sl_p = sub.add_parser("stale", help="open tasks, unresolved predictions and due decisions older than N days")
     sl_p.add_argument("--days", type=int, default=14)
     sl_p.set_defaults(func=cmd_stale)
+    sc_p = sub.add_parser("schema", help="the format of every log and file the engine writes, generated from the code")
+    sc_p.add_argument("--write")
+    sc_p.add_argument("--check")
+    sc_p.set_defaults(func=cmd_schema)
     st_p = sub.add_parser("selftest", help="run the commands on a throwaway copy of the demo home; PASS or FAIL for each")
     st_p.add_argument("--example", help="path to examples/demo-home (default: the one in the repository)")
     st_p.set_defaults(func=cmd_selftest)
