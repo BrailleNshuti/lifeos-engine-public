@@ -20,7 +20,7 @@ import urllib.parse
 import urllib.request
 
 from .check import check_answer
-from .context import build_pack, build_review_pack, inspect_repo_commit, pack_hash, task_file, visible_task
+from .context import build_pack, build_review_pack, explain_pack, inspect_repo_commit, pack_hash, task_file, visible_task
 from .seats import failure_kind, focus_error
 from .guard import (
     CARD_CANDIDATE, EMAIL, IBAN_CANDIDATE, ID_DOCUMENT, PHONE,
@@ -731,6 +731,12 @@ def run_ask(home, model, task_id, budget=6000, dry_run=False, adapters=None, tod
             "date": day.isoformat(), "started_at": started_iso, "command": "ask",
             "task_id": path.stem, "model": expected_model, "locality": locality,
             "context_sha256": digest, "tokens": tokens, "budget": budget, "full": bool(full), "terminal": True,
+            "context_files": [
+                {"name": i["name"], "sha256": i["sha256"], "status": i["status"]}
+                for i in explain_pack(home, task_id, budget, task_first=True, names=None if full else MINIMAL)["items"]
+                if i["status"] in ("included", "trimmed")
+            ],
+            "task_chars": len(path.read_text(encoding="utf-8")),
         }
         try:
             check_text(pack, "the context pack", "Nothing was sent.")

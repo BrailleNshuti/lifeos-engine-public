@@ -7,6 +7,7 @@ Dates are release dates. Newest first.
 - `lifeos ask`, `delegate` and the MCP tools attach notes listed under `## Context` of a task (max four `.md`/`.txt` files inside the data repository, trimmed to a token cap, guarded like the rest of the pack). Models no longer need a pasted copy.
 - Privacy guard: now also blocks lowercase IBANs, IBANs written with dashes or dots, dotted card numbers, and a card number that ends a sentence. Found by new property tests that generate many checksum-valid identifiers in many layouts.
 - `lifeos verify`: new run records carry the hash of the previous line (tamper-evident ledger); `--anchor` catches a rewritten last record or a cut tail.
+- `lifeos replay <run-id>`: proves an `ask` run's input is unchanged, or names the file that changed. Run records now keep per-file digests and the task length (no content).
 
 ## [0.3.0] - 2026-11-18
 First public release.
