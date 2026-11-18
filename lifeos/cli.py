@@ -7,7 +7,7 @@ import subprocess
 import sys
 
 from . import __version__
-from . import bakeoff, calibrate, arch, canary, demo, digest, prove, savings, selftest, cockpit, exam, governor, history, hooks, learn, mistakes, numbers, panel, vocab, kaizen, lab, log, mcp, replay, router, runs, seats, showcase, sortcsv, study, verify
+from . import bakeoff, calibrate, arch, canary, demo, digest, experiment, prove, savings, selftest, cockpit, exam, governor, history, hooks, learn, mistakes, numbers, panel, vocab, kaizen, lab, log, mcp, replay, router, runs, seats, showcase, sortcsv, study, verify
 from .delegate import run_delegate
 from .ask import ADAPTERS, MINIMAL, PROVIDERS, AskError, Blocked, ToolMissing, provider_status, run_ask, run_review
 from .context import build_pack, explain_pack, render_explanation
@@ -278,6 +278,24 @@ def cmd_arch(args):
         print(f"wrote {args.write}")
     else:
         print(page)
+    return 0
+
+
+def cmd_experiment(args):
+    home = find_home(args.home)
+    try:
+        if args.exp_action == "start":
+            e = experiment.start(home, args.change, args.metric, args.days)
+            print(f"{e['id']} started: {args.metric} baseline {e['baseline']} ({e['baseline_points']} data points). "
+                  f"Finish after {e['days']} days: lifeos experiment end {e['id']}")
+        elif args.exp_action == "end":
+            out = experiment.end(home, args.id)
+            print(f"{out['id']}: {out['verdict'].upper()}. {out['why']}")
+        else:
+            print(experiment.render(experiment.list_all(home)))
+    except experiment.ExperimentError as err:
+        print(f"lifeos: {err}", file=sys.stderr)
+        return 2
     return 0
 
 
@@ -774,6 +792,16 @@ def build_parser():
     demo_p.add_argument("--json", action="store_true")
     demo_p.set_defaults(func=cmd_demo)
 
+    exp_p = sub.add_parser("experiment", help="one tested rule change at a time; kept only if the numbers improve (rule 11)")
+    exp_sub = exp_p.add_subparsers(dest="exp_action", required=True)
+    exp_start = exp_sub.add_parser("start")
+    exp_start.add_argument("change")
+    exp_start.add_argument("--metric", required=True, choices=sorted(experiment.METRICS))
+    exp_start.add_argument("--days", type=int, default=28)
+    exp_end = exp_sub.add_parser("end")
+    exp_end.add_argument("id")
+    exp_sub.add_parser("list")
+    exp_p.set_defaults(func=cmd_experiment)
     arch_p = sub.add_parser("arch", help="draw the module graph from the real imports (Mermaid); --check fails when docs are stale")
     arch_p.add_argument("--write", metavar="FILE")
     arch_p.add_argument("--check", metavar="FILE")
