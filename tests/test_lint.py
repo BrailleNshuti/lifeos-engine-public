@@ -57,3 +57,10 @@ def test_no_frontmatter_and_cli_exit_codes(tmp_path, capsys):
     (tmp_path / "tasks" / "T-261101-bare.md").unlink()
     put(tmp_path, "T-261101-ok", GOOD)
     assert main(["--home", str(tmp_path), "lint"]) == 0
+
+
+def test_a_level_with_a_note_after_it_is_accepted(tmp_path):
+    put(tmp_path, "T-261101-ok", GOOD.replace("level: L2", "level: L2 (renames and other public changes are L3: my yes)"))
+    assert lint.check(tmp_path) == []
+    put(tmp_path, "T-261102-x", GOOD.replace("T-261101-ok", "T-261102-x").replace("level: L2", "level: L2x"))
+    assert ("T-261102-x", "level") in problems(tmp_path)

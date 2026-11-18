@@ -10,7 +10,6 @@ from pathlib import Path
 from .tasks import read_frontmatter
 
 STATUSES = {"inbox", "todo", "doing", "blocked", "done"}
-LEVELS = {"L0", "L1", "L2", "L3"}
 REQUIRED = ("id", "goal", "done_when", "route", "level", "status")
 
 
@@ -43,7 +42,7 @@ def check(home):
             bad(f"id: '{f['id']}' does not match the file name")
         if f.get("done_when", "").startswith("TODO"):
             bad("done_when: still the TODO placeholder")
-        if f.get("level") and f["level"] not in LEVELS:
+        if f.get("level") and not re.match(r"L[0-3](?:\s|$)", f["level"]):
             bad(f"level: '{f['level']}' is not one of L0-L3")
         if f.get("status") and f["status"] not in STATUSES:
             bad(f"status: '{f['status']}' is not one of {', '.join(sorted(STATUSES))}")
