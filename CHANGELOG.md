@@ -4,6 +4,8 @@ Dates are release dates. Newest first.
 
 ## [Unreleased]
 
+- `lifeos pipeline --run` ends with one summary line (counts per status and the exit code), so a scheduler or a person sees the result at a glance.
+
 ## [0.4.0] - 2026-11-18
 
 - `lifeos ask`, `delegate` and the MCP tools attach notes listed under `## Context` of a task (max four `.md`/`.txt` files inside the data repository, trimmed to a token cap, guarded like the rest of the pack). Models no longer need a pasted copy.
