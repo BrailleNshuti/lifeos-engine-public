@@ -7,7 +7,7 @@ import subprocess
 import sys
 
 from . import __version__
-from . import backup, bakeoff, calibrate, arch, canary, decision, demo, digest, earn, experiment, prove, savings, selftest, cockpit, exam, governor, history, hooks, learn, mistakes, numbers, panel, pipeline, redact, release, today, vocab, kaizen, lab, log, mcp, replay, router, runs, seats, showcase, sortcsv, study, verify
+from . import backup, bakeoff, calibrate, arch, canary, decision, demo, digest, earn, experiment, prove, savings, selftest, cockpit, exam, governor, history, hooks, learn, lint, mistakes, numbers, panel, pipeline, redact, release, today, vocab, kaizen, lab, log, mcp, replay, router, runs, seats, showcase, sortcsv, study, verify
 from .delegate import run_delegate
 from .ask import ADAPTERS, MINIMAL, PROVIDERS, AskError, Blocked, ToolMissing, provider_status, run_ask, run_review
 from .context import build_pack, explain_pack, render_explanation
@@ -373,6 +373,12 @@ def cmd_earn(args):
 def cmd_today(args):
     print(today.render(today.build(find_home(args.home))))
     return 0
+
+
+def cmd_lint(args):
+    found = lint.check(find_home(args.home))
+    print(lint.render(found))
+    return 1 if found else 0
 
 
 def cmd_selftest(args):
@@ -913,6 +919,8 @@ def build_parser():
     ea_p.set_defaults(func=cmd_earn)
     td_p = sub.add_parser("today", help="one screen for the day: next task, due decisions and words, open predictions, experiment")
     td_p.set_defaults(func=cmd_today)
+    li_p = sub.add_parser("lint", help="check task files: front matter, done_when, level, status, due, proof on done tasks")
+    li_p.set_defaults(func=cmd_lint)
     st_p = sub.add_parser("selftest", help="run the commands on a throwaway copy of the demo home; PASS or FAIL for each")
     st_p.add_argument("--example", help="path to examples/demo-home (default: the one in the repository)")
     st_p.set_defaults(func=cmd_selftest)
