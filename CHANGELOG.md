@@ -20,6 +20,7 @@ Dates are release dates. Newest first.
 - README "See it in 60 seconds" section, `docs/DESIGN.md` (each design decision and what it costs) and a `proof` workflow that runs the demo, `prove`, `numbers` and `history-scan` on every pull request and attaches `proof.md` and `numbers.html` as an artifact (made-up demo home only).
 - `lifeos completion powershell|bash`: tab-completion generated from the real parser.
 - Tests: 16 look-alike lines (SHAs, UUIDs, timestamps) the guard must not flag; a CRLF and BOM checkout must give the same answers and the same ledger verification as a Linux one.
+- `docs/SECURITY.md`: 13 promises, each linked to the test that proves it (a test checks the links), plus what is not promised.
 - `lifeos timeline`: proofs and minutes saved per week with a bar. Read-only.
 - `lifeos schema` and `docs/LOGS.md`: the format of every file the engine writes, generated from the code and pinned by a drift test.
 - `lifeos stale`: open tasks, unresolved predictions and due decisions older than N days. Read-only.
