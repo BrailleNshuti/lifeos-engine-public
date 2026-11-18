@@ -7,7 +7,7 @@ import subprocess
 import sys
 
 from . import __version__
-from . import backup, bakeoff, calibrate, arch, canary, completion, decision, demo, digest, earn, experiment, prove, savings, selftest, cockpit, exam, governor, history, hooks, learn, lint, mistakes, numbers, panel, pipeline, redact, release, today, vocab, kaizen, lab, log, mcp, replay, router, runs, seats, schema, showcase, sortcsv, stale, timeline, study, verify
+from . import backup, bakeoff, calibrate, arch, canary, completion, decision, demo, digest, earn, experiment, prove, savings, selftest, cockpit, exam, export, governor, history, hooks, learn, lint, mistakes, numbers, panel, pipeline, redact, release, today, vocab, kaizen, lab, log, mcp, replay, router, runs, seats, schema, showcase, sortcsv, stale, timeline, study, verify
 from .delegate import run_delegate
 from .ask import ADAPTERS, MINIMAL, PROVIDERS, AskError, Blocked, ToolMissing, provider_status, run_ask, run_review
 from .context import build_pack, explain_pack, render_explanation
@@ -410,6 +410,16 @@ def cmd_schema(args):
 
 def cmd_timeline(args):
     print(timeline.render(timeline.weeks(find_home(args.home), count=args.weeks)))
+    return 0
+
+
+def cmd_export(args):
+    try:
+        path = export.write(find_home(args.home), args.out)
+    except export.ExportError as err:
+        print(f"lifeos: {err}", file=sys.stderr)
+        return 2
+    print(f"Wrote {path}")
     return 0
 
 
@@ -966,6 +976,9 @@ def build_parser():
     tl_p = sub.add_parser("timeline", help="proofs and minutes saved per week, oldest first, with a bar")
     tl_p.add_argument("--weeks", type=int, default=8)
     tl_p.set_defaults(func=cmd_timeline)
+    ex_p = sub.add_parser("export", help="one redacted evidence page for a CV or portfolio: proofs, numbers, ledger head, rhythm")
+    ex_p.add_argument("--out", required=True)
+    ex_p.set_defaults(func=cmd_export)
     st_p = sub.add_parser("selftest", help="run the commands on a throwaway copy of the demo home; PASS or FAIL for each")
     st_p.add_argument("--example", help="path to examples/demo-home (default: the one in the repository)")
     st_p.set_defaults(func=cmd_selftest)
