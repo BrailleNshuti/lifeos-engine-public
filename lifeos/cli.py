@@ -7,7 +7,7 @@ import subprocess
 import sys
 
 from . import __version__
-from . import bakeoff, calibrate, arch, canary, demo, digest, experiment, prove, savings, selftest, cockpit, exam, governor, history, hooks, learn, mistakes, numbers, panel, vocab, kaizen, lab, log, mcp, replay, router, runs, seats, showcase, sortcsv, study, verify
+from . import bakeoff, calibrate, arch, canary, demo, digest, experiment, prove, savings, selftest, cockpit, exam, governor, history, hooks, learn, mistakes, numbers, panel, pipeline, vocab, kaizen, lab, log, mcp, replay, router, runs, seats, showcase, sortcsv, study, verify
 from .delegate import run_delegate
 from .ask import ADAPTERS, MINIMAL, PROVIDERS, AskError, Blocked, ToolMissing, provider_status, run_ask, run_review
 from .context import build_pack, explain_pack, render_explanation
@@ -297,6 +297,17 @@ def cmd_experiment(args):
         print(f"lifeos: {err}", file=sys.stderr)
         return 2
     return 0
+
+
+def cmd_pipeline(args):
+    home = find_home(args.home)
+    try:
+        rows = pipeline.run(home, args.name, main, execute=args.run)
+    except pipeline.PipelineError as err:
+        print(f"lifeos: {err}", file=sys.stderr)
+        return 2
+    print(pipeline.render(rows, args.run))
+    return 1 if any(r["status"] == "failed" for r in rows) else 0
 
 
 def cmd_selftest(args):
@@ -806,6 +817,10 @@ def build_parser():
     arch_p.add_argument("--write", metavar="FILE")
     arch_p.add_argument("--check", metavar="FILE")
     arch_p.set_defaults(func=cmd_arch)
+    pl_p = sub.add_parser("pipeline", help="run a saved flow of lifeos commands with gates (dry run unless --run)")
+    pl_p.add_argument("name")
+    pl_p.add_argument("--run", action="store_true")
+    pl_p.set_defaults(func=cmd_pipeline)
     st_p = sub.add_parser("selftest", help="run the commands on a throwaway copy of the demo home; PASS or FAIL for each")
     st_p.add_argument("--example", help="path to examples/demo-home (default: the one in the repository)")
     st_p.set_defaults(func=cmd_selftest)
