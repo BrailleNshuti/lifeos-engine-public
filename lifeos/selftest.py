@@ -35,6 +35,19 @@ STEPS = [
     ("ledger verify", ["{h}", "verify"]),
     ("savings", ["{h}", "savings"]),
     ("numbers page", ["{h}", "numbers", "--html", "{out}/n.html"]),
+    ("today", ["{h}", "today"]),
+    ("earn", ["{h}", "earn"]),
+    ("lint", ["{h}", "lint"]),
+    ("stale", ["{h}", "stale"]),
+    ("timeline", ["{h}", "timeline", "--weeks", "4"]),
+    ("decide", ["{h}", "decide", "add", "selftest decision", "--why", "proves the command", "--revisit", "2099-01-01"]),
+    ("decide list", ["{h}", "decide", "list"]),
+    ("experiment", ["{h}", "experiment", "start", "selftest change", "--metric", "minutes_saved"]),
+    ("export", ["{h}", "export", "--out", "{out}/evidence.md"]),
+    ("redact", ["redact", "{out}/evidence.md", "--out", "{out}/redacted"]),
+    ("backup", ["{h}", "backup", "--out", "{out}/bk"]),
+    ("schema", ["schema"]),
+    ("pipeline", ["{h}", "pipeline", "before-push", "--run"]),
 ]
 
 
