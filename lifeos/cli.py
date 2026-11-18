@@ -7,7 +7,7 @@ import subprocess
 import sys
 
 from . import __version__
-from . import bakeoff, calibrate, canary, digest, prove, cockpit, exam, governor, history, hooks, learn, mistakes, numbers, panel, vocab, kaizen, lab, log, mcp, replay, router, runs, seats, showcase, sortcsv, study, verify
+from . import bakeoff, calibrate, canary, demo, digest, prove, savings, cockpit, exam, governor, history, hooks, learn, mistakes, numbers, panel, vocab, kaizen, lab, log, mcp, replay, router, runs, seats, showcase, sortcsv, study, verify
 from .delegate import run_delegate
 from .ask import ADAPTERS, MINIMAL, PROVIDERS, AskError, Blocked, ToolMissing, provider_status, run_ask, run_review
 from .context import build_pack, explain_pack, render_explanation
@@ -193,12 +193,31 @@ def cmd_numbers(args):
     commands = len(next(a for a in build_parser()._actions if isinstance(a, argparse._SubParsersAction)).choices)
     data = numbers.build(find_home(args.home), commands=commands)
     page = numbers.render(data)
-    if args.out:
+    if args.html:
+        Path(args.html).write_text(numbers.render_html(data), encoding="utf-8")
+        print(f"wrote {args.html}")
+    elif args.out:
         Path(args.out).write_text(page, encoding="utf-8")
         print(f"wrote {args.out}")
     else:
         print(json.dumps(data, indent=2) if args.json else page)
     return 0
+
+
+def cmd_savings(args):
+    s = savings.compute(find_home(args.home))
+    print(json.dumps(s, indent=2) if args.json else savings.render(s))
+    return 0
+
+
+def cmd_demo(args):
+    try:
+        steps = demo.run(args.example)
+    except (OSError, ValueError, KeyError) as err:
+        print(f"lifeos: demo needs the examples/demo-home folder from the repository ({err}).", file=sys.stderr)
+        return 2
+    print(json.dumps(steps, indent=2) if args.json else demo.render(steps))
+    return 0 if all(s["ok"] for s in steps) else 1
 
 
 def cmd_history_scan(args):
@@ -724,8 +743,17 @@ def build_parser():
     dig_p.add_argument("--json", action="store_true")
     dig_p.set_defaults(func=cmd_digest)
 
+    sav_p = sub.add_parser("savings", help="tokens the context packs saved, from your own ledger")
+    sav_p.add_argument("--json", action="store_true")
+    sav_p.set_defaults(func=cmd_savings)
+    demo_p = sub.add_parser("demo", help="60-second tour on made-up data: guard, blind panel, tamper-evident ledger, replay")
+    demo_p.add_argument("--example", help="path to examples/demo-home (default: the one in the repository)")
+    demo_p.add_argument("--json", action="store_true")
+    demo_p.set_defaults(func=cmd_demo)
+
     num_p = sub.add_parser("numbers", help="one page of checkable facts: code, tests, guard score, ledger (counts only)")
     num_p.add_argument("--out", help="write the page to this file")
+    num_p.add_argument("--html", help="write a self-contained HTML page (no script, no links) to this file")
     num_p.add_argument("--json", action="store_true")
     num_p.set_defaults(func=cmd_numbers)
 
