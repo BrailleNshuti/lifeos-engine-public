@@ -2,6 +2,10 @@
 
 Dates are release dates. Newest first.
 
+## [Unreleased]
+
+- `lifeos ask`, `delegate` and the MCP tools attach notes listed under `## Context` of a task (max four `.md`/`.txt` files inside the data repository, trimmed to a token cap, guarded like the rest of the pack). Models no longer need a pasted copy.
+
 ## [0.3.0] - 2026-11-18
 First public release.
 
