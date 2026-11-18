@@ -18,6 +18,7 @@ Dates are release dates. Newest first.
 - `lifeos prove`, `history-scan`, `hook install`, `digest`: one proof file, a whole-history secret scan, a pre-commit guard hook and a Sunday review in numbers.
 - `lifeos demo`: a 60-second tour of the engine's promises on made-up data. `lifeos savings`: measured token savings from your ledger. `lifeos numbers --html`: one self-contained page (no script, no links).
 - README "See it in 60 seconds" section, `docs/DESIGN.md` (each design decision and what it costs) and a `proof` workflow that runs the demo, `prove`, `numbers` and `history-scan` on every pull request and attaches `proof.md` and `numbers.html` as an artifact (made-up demo home only).
+- `lifeos experiment`: one tested rule change at a time (start, end, list). Kept only if the chosen metric improves by 5 % or more over the trial; too little data is inconclusive, never a silent keep.
 - `lifeos selftest`: 24 commands run on a throwaway copy of the demo home, PASS or FAIL each. Never touches your notes.
 - `lifeos arch` and `docs/ARCHITECTURE-GRAPH.md`: the module graph drawn from the real imports, with a test that fails when the checked-in graph is stale. After adding a module, run `lifeos arch --write docs/ARCHITECTURE-GRAPH.md`.
 - Ledger attack tests: 70 seeded random attacks (edit, delete, swap, forge, duplicate, tear) are all caught by `verify`; cutting the tail and rewriting the last record are caught only with the saved head hash, as documented.
