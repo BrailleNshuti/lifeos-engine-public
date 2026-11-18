@@ -4,6 +4,24 @@ The machinery of a personal AI operating system: one shared memory that Claude, 
 
 The engine is code only. Your life lives in a separate **private data repo** (`lifeos`): rules, profile, current week, task files, logs and reviews. The engine reads it through `LIFEOS_HOME`; nothing personal is ever stored here, and everything in `examples/` is made up.
 
+## See it in 60 seconds
+
+```
+pip install -e .
+lifeos demo
+```
+
+`lifeos demo` runs on made-up data, with no account, model or network, and checks each claim in code: the guard refuses a fake secret, a blind panel finds two models disagreeing, an edited ledger record is caught, replay proves which input a run saw, and a removed last record is caught by the saved head hash.
+
+| Check it yourself | Command |
+|---|---|
+| Guard score on generated fake identifiers | `lifeos canary` |
+| Whole proof in one file | `lifeos prove --out proof.md` |
+| Secrets anywhere in the git history | `lifeos history-scan` |
+| Facts about the engine, one page | `lifeos numbers --html numbers.html` |
+
+Why it is built this way, and what each choice costs: [docs/DESIGN.md](docs/DESIGN.md). Every pull request also runs `lifeos prove` and `lifeos demo` in CI and attaches the proof as a build artifact.
+
 ## What v0.1 does
 
 | Command | What it does | Why it matters |

@@ -17,6 +17,7 @@ Dates are release dates. Newest first.
 - `lifeos numbers`: an "Engine in numbers" page built from the code, the guard score and the ledger (counts only).
 - `lifeos prove`, `history-scan`, `hook install`, `digest`: one proof file, a whole-history secret scan, a pre-commit guard hook and a Sunday review in numbers.
 - `lifeos demo`: a 60-second tour of the engine's promises on made-up data. `lifeos savings`: measured token savings from your ledger. `lifeos numbers --html`: one self-contained page (no script, no links).
+- README "See it in 60 seconds" section, `docs/DESIGN.md` (each design decision and what it costs) and a `proof` workflow that runs the demo, `prove`, `numbers` and `history-scan` on every pull request and attaches `proof.md` and `numbers.html` as an artifact (made-up demo home only).
 - A damaged line in `logs/runs.jsonl` no longer crashes every reader; `lifeos verify` still reports it. Found by new chaos tests (torn line, CRLF checkout, CSV without final newline, garbage rows).
 - `lifeos numbers` now says "Test functions" (parametrized tests run more checks than there are functions).
 
