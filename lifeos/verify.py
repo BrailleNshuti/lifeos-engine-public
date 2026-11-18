@@ -11,6 +11,58 @@ from pathlib import Path
 ZERO = "0" * 64
 
 
+class SealError(Exception):
+    pass
+
+
+def _lines(home):
+    path = Path(home) / "logs" / "runs.jsonl"
+    return [ln.rstrip(b"\r") for ln in path.read_bytes().split(b"\n") if ln.strip()] if path.exists() else []
+
+
+def _legacy_count(lines):
+    """How many leading records have no prev_hash (written before the chain existed)."""
+    count = 0
+    for line in lines:
+        try:
+            rec = json.loads(line.decode("utf-8"))
+        except (UnicodeDecodeError, ValueError):
+            break
+        if not isinstance(rec, dict) or "prev_hash" in rec:
+            break
+        count += 1
+    return count
+
+
+def _digest(lines):
+    return hashlib.sha256(b"\n".join(lines)).hexdigest()
+
+
+def seal_path(home):
+    return Path(home) / "logs" / "runs.seal.json"
+
+
+def seal_info(home):
+    try:
+        data = json.loads(seal_path(home).read_text(encoding="utf-8"))
+        return data if isinstance(data, dict) and isinstance(data.get("legacy"), int) else None
+    except (OSError, ValueError):
+        return None
+
+
+def seal(home):
+    """Pin the older, unchained records: store how many there are and one hash over all of them. Written once."""
+    if seal_path(home).exists():
+        raise SealError("Already sealed. A seal is written once and never overwritten.")
+    lines = _lines(home)
+    count = _legacy_count(lines)
+    if not count:
+        raise SealError("There are no older, unchained records to seal.")
+    data = {"legacy": count, "sha256": _digest(lines[:count])}
+    seal_path(home).write_text(json.dumps(data) + "\n", encoding="utf-8")
+    return data
+
+
 def line_hash(line):
     """SHA-256 of one JSONL line's exact bytes, ignoring the line ending (so LF and CRLF checkouts agree)."""
     if isinstance(line, str):
@@ -51,6 +103,9 @@ def verify_chain(home, anchor=None):
                 result["errors"].append(f"line {number}: chain broken (an earlier record was changed, removed or reordered)")
         prev = line_hash(line)
         hashes.add(prev)
+    sealed = seal_info(home)
+    if sealed and _digest(lines[:sealed["legacy"]]) != sealed.get("sha256"):
+        result["errors"].append(f"the {sealed['legacy']} older records no longer match the seal (changed, removed or reordered)")
     result["records"] = len(lines)
     result["head"] = prev
     result["ok"] = not result["errors"]
