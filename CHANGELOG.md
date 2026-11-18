@@ -18,6 +18,7 @@ Dates are release dates. Newest first.
 - `lifeos prove`, `history-scan`, `hook install`, `digest`: one proof file, a whole-history secret scan, a pre-commit guard hook and a Sunday review in numbers.
 - `lifeos demo`: a 60-second tour of the engine's promises on made-up data. `lifeos savings`: measured token savings from your ledger. `lifeos numbers --html`: one self-contained page (no script, no links).
 - README "See it in 60 seconds" section, `docs/DESIGN.md` (each design decision and what it costs) and a `proof` workflow that runs the demo, `prove`, `numbers` and `history-scan` on every pull request and attaches `proof.md` and `numbers.html` as an artifact (made-up demo home only).
+- `lifeos earn`: uses per part in the last N days, from the logs each part writes (rule 10). Removes nothing.
 - `lifeos release`: read-only release plan (version check, proposed bump, draft notes). Never tags.
 - Budgets as tests: CLI import time, everyday command speed, a size ratchet per module, and a standard-library-only check.
 - Robustness: seeded garbage in every log (short rows, extra columns, bad bytes, NUL, huge lines) no longer crashes any read command. New `store.read_csv_rows` is the one tolerant reader; `runs` no longer fails on null fields.
