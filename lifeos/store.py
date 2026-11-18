@@ -629,10 +629,10 @@ def read_csv_rows(path, required=()):
     rows = []
     try:
         with p.open(encoding="utf-8-sig", errors="replace", newline="") as fh:
-            for row in csv.DictReader(fh):
+            for row in csv.DictReader(line.replace("\0", "") for line in fh):
                 if None in row or any(row.get(k) in (None, "") for k in required):
                     continue
-                rows.append(row)
+                rows.append({k: ("" if v is None else v) for k, v in row.items()})
     except (OSError, csv.Error):
         pass
     return rows

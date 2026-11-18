@@ -9,15 +9,11 @@ import json
 from pathlib import Path
 
 from . import study
-from .store import read_run_records
+from .store import read_csv_rows, read_run_records
 
 
 def _dates_csv(path, col="date"):
-    p = Path(path)
-    if not p.exists():
-        return []
-    with p.open(encoding="utf-8", newline="") as fh:
-        return [r[col] for r in csv.DictReader(fh) if r.get(col)]
+    return [r[col] for r in read_csv_rows(path) if r.get(col)]
 
 
 def _day(value):
