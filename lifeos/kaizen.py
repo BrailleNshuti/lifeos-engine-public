@@ -8,7 +8,7 @@ import datetime as dt
 import re
 from pathlib import Path
 
-from .store import ASK_NOTE_PREFIX, atomic_write_bytes, model_call_flags, read_run_records, store_lock
+from .store import ASK_NOTE_PREFIX, atomic_write_bytes, model_call_flags, read_csv_rows, read_run_records, store_lock
 
 MONTH_RE = re.compile(r"^\d{4}-(0[1-9]|1[0-2])$")
 TRACKED_AREAS = ("lab", "study", "german", "work")
@@ -34,11 +34,7 @@ def _parse_month_window(month=None, today=None):
 
 
 def _csv_rows_in_window(path, start, end):
-    path = Path(path)
-    if not path.exists():
-        return []
-    with path.open(newline="", encoding="utf-8") as fh:
-        rows = list(csv.DictReader(fh))
+    rows = read_csv_rows(path)
     out = []
     for row in rows:
         try:
