@@ -10,7 +10,7 @@ import datetime as dt
 from pathlib import Path
 
 from . import guard, seats
-from .store import append_csv_row, atomic_write_bytes
+from .store import append_csv_row, atomic_write_bytes, read_csv_rows
 
 HEADER = ["date", "task", "model", "score", "kind", "note"]
 MIN_N = 3
@@ -26,17 +26,13 @@ def _path(home):
 
 
 def read_ratings(home):
-    path = _path(home)
-    if not path.exists():
-        return []
-    with path.open(encoding="utf-8", newline="") as fh:
-        rows = []
-        for r in csv.DictReader(fh):
-            try:
-                rows.append({**r, "score": int(r["score"])})
-            except (KeyError, TypeError, ValueError):
-                continue
-        return rows
+    rows = []
+    for r in read_csv_rows(_path(home), ("score",)):
+        try:
+            rows.append({**r, "score": int(r["score"])})
+        except (TypeError, ValueError):
+            continue
+    return rows
 
 
 def add_rating(home, task_id, model, score, text, today=None, note=""):

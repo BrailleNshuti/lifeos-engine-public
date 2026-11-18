@@ -614,3 +614,25 @@ def record_result(home, path, model, text, today, note="written via lifeos mcp",
                 ops.append((runs, _prepare_run_record_bytes(runs, run_record)))
         commit_transaction(home, ops)
         return True
+
+
+def read_csv_rows(path, required=()):
+    """Rows of a CSV log as dicts; never raises on a damaged file.
+
+    A missing file is no rows. Rows that are short, have extra columns or lack a required field are skipped, and bytes
+    that are not UTF-8 are replaced, so one bad line cannot take a whole command down.
+    """
+    import csv
+    p = Path(path)
+    if not p.exists():
+        return []
+    rows = []
+    try:
+        with p.open(encoding="utf-8-sig", errors="replace", newline="") as fh:
+            for row in csv.DictReader(line.replace("\0", "") for line in fh):
+                if None in row or any(row.get(k) in (None, "") for k in required):
+                    continue
+                rows.append({k: ("" if v is None else v) for k, v in row.items()})
+    except (OSError, csv.Error):
+        pass
+    return rows

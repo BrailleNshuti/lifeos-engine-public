@@ -10,7 +10,7 @@ import json
 from pathlib import Path
 
 from . import guard, learn
-from .store import append_csv_row, atomic_write_bytes, read_run_records
+from .store import append_csv_row, atomic_write_bytes, read_csv_rows, read_run_records
 
 HEADER = ["date", "id", "kind", "metric", "value", "text"]
 MIN_POINTS = 3
@@ -29,11 +29,7 @@ def _day(value):
 
 
 def _csv_rows(path):
-    p = Path(path)
-    if not p.exists():
-        return []
-    with p.open(encoding="utf-8", newline="") as fh:
-        return list(csv.DictReader(fh))
+    return read_csv_rows(path)
 
 
 def _window(rows, lo, hi):
@@ -88,7 +84,7 @@ def _path(home):
 
 
 def _rows(home):
-    return _csv_rows(_path(home))
+    return read_csv_rows(_path(home), ("id", "kind", "value", "text"))
 
 
 def _append(home, values):
