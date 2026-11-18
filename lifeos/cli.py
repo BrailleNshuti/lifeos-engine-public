@@ -7,7 +7,7 @@ import subprocess
 import sys
 
 from . import __version__
-from . import bakeoff, calibrate, canary, demo, digest, prove, savings, cockpit, exam, governor, history, hooks, learn, mistakes, numbers, panel, vocab, kaizen, lab, log, mcp, replay, router, runs, seats, showcase, sortcsv, study, verify
+from . import bakeoff, calibrate, canary, demo, digest, prove, savings, selftest, cockpit, exam, governor, history, hooks, learn, mistakes, numbers, panel, vocab, kaizen, lab, log, mcp, replay, router, runs, seats, showcase, sortcsv, study, verify
 from .delegate import run_delegate
 from .ask import ADAPTERS, MINIMAL, PROVIDERS, AskError, Blocked, ToolMissing, provider_status, run_ask, run_review
 from .context import build_pack, explain_pack, render_explanation
@@ -262,6 +262,12 @@ def cmd_digest(args):
     d = digest.build(find_home(args.home))
     print(json.dumps(d, indent=2) if args.json else digest.render(d))
     return 0
+
+
+def cmd_selftest(args):
+    rows = selftest.run(main, args.example)
+    print(selftest.render(rows))
+    return 0 if all(r["ok"] for r in rows) else 1
 
 
 def cmd_kaizen(args):
@@ -750,6 +756,10 @@ def build_parser():
     demo_p.add_argument("--example", help="path to examples/demo-home (default: the one in the repository)")
     demo_p.add_argument("--json", action="store_true")
     demo_p.set_defaults(func=cmd_demo)
+
+    st_p = sub.add_parser("selftest", help="run the commands on a throwaway copy of the demo home; PASS or FAIL for each")
+    st_p.add_argument("--example", help="path to examples/demo-home (default: the one in the repository)")
+    st_p.set_defaults(func=cmd_selftest)
 
     num_p = sub.add_parser("numbers", help="one page of checkable facts: code, tests, guard score, ledger (counts only)")
     num_p.add_argument("--out", help="write the page to this file")
