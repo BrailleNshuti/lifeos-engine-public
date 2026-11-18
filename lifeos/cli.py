@@ -7,7 +7,7 @@ import subprocess
 import sys
 
 from . import __version__
-from . import backup, bakeoff, calibrate, arch, canary, decision, demo, digest, earn, experiment, prove, savings, selftest, cockpit, exam, governor, history, hooks, learn, lint, mistakes, numbers, panel, pipeline, redact, release, today, vocab, kaizen, lab, log, mcp, replay, router, runs, seats, showcase, sortcsv, stale, study, verify
+from . import backup, bakeoff, calibrate, arch, canary, completion, decision, demo, digest, earn, experiment, prove, savings, selftest, cockpit, exam, governor, history, hooks, learn, lint, mistakes, numbers, panel, pipeline, redact, release, today, vocab, kaizen, lab, log, mcp, replay, router, runs, seats, showcase, sortcsv, stale, study, verify
 from .delegate import run_delegate
 from .ask import ADAPTERS, MINIMAL, PROVIDERS, AskError, Blocked, ToolMissing, provider_status, run_ask, run_review
 from .context import build_pack, explain_pack, render_explanation
@@ -383,6 +383,11 @@ def cmd_lint(args):
 
 def cmd_stale(args):
     print(stale.render(stale.find(find_home(args.home), days=args.days)))
+    return 0
+
+
+def cmd_completion(args):
+    print(completion.script(args.shell, build_parser()))
     return 0
 
 
@@ -929,6 +934,9 @@ def build_parser():
     sl_p = sub.add_parser("stale", help="open tasks, unresolved predictions and due decisions older than N days")
     sl_p.add_argument("--days", type=int, default=14)
     sl_p.set_defaults(func=cmd_stale)
+    cp_p = sub.add_parser("completion", help="print a tab-completion script for PowerShell or bash, generated from the real commands")
+    cp_p.add_argument("shell", choices=["powershell", "bash"])
+    cp_p.set_defaults(func=cmd_completion)
     st_p = sub.add_parser("selftest", help="run the commands on a throwaway copy of the demo home; PASS or FAIL for each")
     st_p.add_argument("--example", help="path to examples/demo-home (default: the one in the repository)")
     st_p.set_defaults(func=cmd_selftest)
