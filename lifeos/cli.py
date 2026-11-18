@@ -7,7 +7,7 @@ import subprocess
 import sys
 
 from . import __version__
-from . import backup, bakeoff, calibrate, arch, canary, decision, demo, digest, earn, experiment, prove, savings, selftest, cockpit, exam, governor, history, hooks, learn, lint, mistakes, numbers, panel, pipeline, redact, release, today, vocab, kaizen, lab, log, mcp, replay, router, runs, seats, showcase, sortcsv, study, verify
+from . import backup, bakeoff, calibrate, arch, canary, decision, demo, digest, earn, experiment, prove, savings, selftest, cockpit, exam, governor, history, hooks, learn, lint, mistakes, numbers, panel, pipeline, redact, release, today, vocab, kaizen, lab, log, mcp, replay, router, runs, seats, showcase, sortcsv, stale, study, verify
 from .delegate import run_delegate
 from .ask import ADAPTERS, MINIMAL, PROVIDERS, AskError, Blocked, ToolMissing, provider_status, run_ask, run_review
 from .context import build_pack, explain_pack, render_explanation
@@ -379,6 +379,11 @@ def cmd_lint(args):
     found = lint.check(find_home(args.home))
     print(lint.render(found))
     return 1 if found else 0
+
+
+def cmd_stale(args):
+    print(stale.render(stale.find(find_home(args.home), days=args.days)))
+    return 0
 
 
 def cmd_selftest(args):
@@ -921,6 +926,9 @@ def build_parser():
     td_p.set_defaults(func=cmd_today)
     li_p = sub.add_parser("lint", help="check task files: front matter, done_when, level, status, due, proof on done tasks")
     li_p.set_defaults(func=cmd_lint)
+    sl_p = sub.add_parser("stale", help="open tasks, unresolved predictions and due decisions older than N days")
+    sl_p.add_argument("--days", type=int, default=14)
+    sl_p.set_defaults(func=cmd_stale)
     st_p = sub.add_parser("selftest", help="run the commands on a throwaway copy of the demo home; PASS or FAIL for each")
     st_p.add_argument("--example", help="path to examples/demo-home (default: the one in the repository)")
     st_p.set_defaults(func=cmd_selftest)
