@@ -6,7 +6,7 @@ from pathlib import Path
 import sys
 
 from . import __version__
-from . import bakeoff, calibrate, canary, cockpit, exam, governor, learn, panel, kaizen, lab, log, mcp, replay, router, runs, seats, showcase, sortcsv, study, verify
+from . import bakeoff, calibrate, canary, cockpit, exam, governor, learn, mistakes, panel, vocab, kaizen, lab, log, mcp, replay, router, runs, seats, showcase, sortcsv, study, verify
 from .delegate import run_delegate
 from .ask import ADAPTERS, MINIMAL, PROVIDERS, AskError, Blocked, ToolMissing, provider_status, run_ask, run_review
 from .context import build_pack, explain_pack, render_explanation
@@ -151,6 +151,40 @@ def cmd_resolve(args):
 def cmd_calibration(args):
     rep = calibrate.report(find_home(args.home))
     print(json.dumps(rep, indent=2) if args.json else calibrate.render(rep))
+    return 0
+
+
+def cmd_mistakes(args):
+    items = mistakes.quiz(find_home(args.home), args.count)
+    if args.json:
+        print(json.dumps(items, indent=2))
+    elif not items:
+        print("No open mistakes. Practise with `lifeos study attempt` and they will show up here.")
+    else:
+        print("Your mistake quiz (answers hidden; check with the study desk):")
+        for n, item in enumerate(items, 1):
+            print(f"{n}. {item['prompt']}  [{item['id']}]")
+    return 0
+
+
+def cmd_vocab(args):
+    home = find_home(args.home)
+    try:
+        if args.vocab_action == "add":
+            vocab.add(home, args.word, args.meaning, args.example)
+            print(f"added: {args.word}")
+        elif args.vocab_action == "answer":
+            vocab.answer(home, args.word, args.result == "good")
+            print(f"{args.word}: {args.result}")
+        else:
+            words = vocab.due(home)[:args.count]
+            if not words:
+                print("Nothing due. Add words from your own day: lifeos vocab add \"die Wohnung\" \"the flat\"")
+            for w in words:
+                print(f"{w['word']}" + (f"  = {w['meaning']}" if args.reveal else "") + (f"\n   {w['example']}" if args.reveal and w["example"] else ""))
+    except vocab.VocabError as err:
+        print(f"lifeos: {err}", file=sys.stderr)
+        return 2
     return 0
 
 
@@ -615,6 +649,24 @@ def build_parser():
     rate_p.add_argument("score", type=int)
     rate_p.add_argument("--note", default="")
     rate_p.set_defaults(func=cmd_rate)
+
+    mis_p = sub.add_parser("mistakes", help="quiz yourself on the verified questions you missed most")
+    mis_p.add_argument("--count", type=int, default=5)
+    mis_p.add_argument("--json", action="store_true")
+    mis_p.set_defaults(func=cmd_mistakes)
+    voc_p = sub.add_parser("vocab", help="your own German words: add, quiz, answer (local only, no model)")
+    voc_sub = voc_p.add_subparsers(dest="vocab_action", required=True)
+    voc_add = voc_sub.add_parser("add")
+    voc_add.add_argument("word")
+    voc_add.add_argument("meaning")
+    voc_add.add_argument("--example", default="")
+    voc_quiz = voc_sub.add_parser("quiz")
+    voc_quiz.add_argument("--count", type=int, default=10)
+    voc_quiz.add_argument("--reveal", action="store_true")
+    voc_ans = voc_sub.add_parser("answer")
+    voc_ans.add_argument("word")
+    voc_ans.add_argument("result", choices=["good", "again"])
+    voc_p.set_defaults(func=cmd_vocab)
 
     pre_p = sub.add_parser("predict", help="write down what you expect and how sure you are (1-99 %), before you know")
     pre_p.add_argument("claim")
