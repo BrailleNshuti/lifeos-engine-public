@@ -4,7 +4,7 @@ Read this first. Keep it short; update it after meaningful merges.
 
 ## Now
 
-- Version 0.3.0 (first public release). Commands are listed in README.md; the roadmap is there too.
+- Version 0.4.0. Commands are listed in README.md; the roadmap is there too.
 - Seats: one table (`lifeos/seats.py`) with failover, one cloud budget and rest-until logic that reads absolute and relative reset times.
 - `lifeos doctor --smoke [--only a,b]` probes seats, prints why a probe failed and rests seats that hit a usage limit. A smoke record never counts as spend.
 - Prompt Lab runner (`lifeos lab check/pack/score`) is offline: no model, no network.

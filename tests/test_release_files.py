@@ -19,10 +19,10 @@ def test_licence_is_mit_with_owner_name():
     assert "Permission is hereby granted, free of charge" in text
 
 
-def test_version_is_030_in_both_places():
+def test_version_is_040_in_both_places():
     toml = read("pyproject.toml")
     match = re.search(r'^version = "([^"]+)"', toml, re.M)
-    assert match and match.group(1) == lifeos.__version__ == "0.3.0"
+    assert match and match.group(1) == lifeos.__version__ == "0.4.0"
 
 
 def test_changelog_top_entry_matches_version():
