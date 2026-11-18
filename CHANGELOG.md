@@ -11,6 +11,7 @@ Dates are release dates. Newest first.
 - `lifeos canary`: reproducible guard score on generated fake identifiers, and an end-to-end proof that `ask` refuses to send them.
 - Budget governor: `lifeos ask` checks the weekly cloud budget, the seat's share and usage-limit rests before sending and holds the call (exit 4) unless `--force`. Tokens and calls, not euros: the engine uses subscription tools and has no prices.
 - `lifeos panel`: ask two to four models the same task blind (identical pack, no cross-leak) and get a report of agreements, conflicts and single-model claims appended to the task. Same-input proof via the pack hash; each run is a normal ledger record and replayable.
+- `lifeos rate`, `lifeos learn`, `delegate --learned`: rate a model's work per kind of task; the router follows the ratings only with enough evidence (3+ ratings and a full-point gap), otherwise the default stands.
 
 ## [0.3.0] - 2026-11-18
 First public release.
