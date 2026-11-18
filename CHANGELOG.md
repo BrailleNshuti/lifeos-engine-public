@@ -14,6 +14,7 @@ Dates are release dates. Newest first.
 - `lifeos rate`, `lifeos learn`, `delegate --learned`: rate a model's work per kind of task; the router follows the ratings only with enough evidence (3+ ratings and a full-point gap), otherwise the default stands.
 - `lifeos predict`, `resolve`, `calibration`: decision calibration with an append-only log, a Brier score and confidence bands; says "too few results" until five predictions are resolved.
 - `lifeos mistakes`: a quiz from the verified questions you miss most. `lifeos vocab`: your own German words with a simple review schedule, kept local.
+- `lifeos numbers`: an "Engine in numbers" page built from the code, the guard score and the ledger (counts only).
 
 ## [0.3.0] - 2026-11-18
 First public release.
