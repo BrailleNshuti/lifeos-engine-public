@@ -6,7 +6,7 @@ from pathlib import Path
 import sys
 
 from . import __version__
-from . import bakeoff, canary, cockpit, exam, governor, kaizen, lab, log, mcp, replay, router, runs, seats, showcase, sortcsv, study, verify
+from . import bakeoff, canary, cockpit, exam, governor, panel, kaizen, lab, log, mcp, replay, router, runs, seats, showcase, sortcsv, study, verify
 from .delegate import run_delegate
 from .ask import ADAPTERS, MINIMAL, PROVIDERS, AskError, Blocked, ToolMissing, provider_status, run_ask, run_review
 from .context import build_pack, explain_pack, render_explanation
@@ -90,6 +90,21 @@ def cmd_canary(args):
     g, o = canary.guard_score(), canary.outbound_check()
     print(json.dumps({"guard": g, "outbound": o}, indent=2) if args.json else canary.render(g, o))
     return 0 if not g["misses"] and not g["benign_flagged"] and o["ok"] else 1
+
+
+def cmd_panel(args):
+    models = [m.strip() for m in args.models.split(",") if m.strip()]
+    try:
+        out = panel.run_panel(find_home(args.home), models, args.task, args.budget, full=args.full)
+    except panel.PanelError as err:
+        print(f"lifeos: {err}", file=sys.stderr)
+        return 2
+    except (ToolMissing, Blocked, AskError) as err:
+        print(f"lifeos: {err}", file=sys.stderr)
+        return 3
+    print(json.dumps({k: out[k] for k in ("pack_sha256", "run_ids", "failed", "report")}, indent=2) if args.json
+          else "Panel\n" + out["text"])
+    return 0
 
 
 def cmd_kaizen(args):
@@ -637,6 +652,14 @@ def build_parser():
     can_p = sub.add_parser("canary", help="guard score on generated fake identifiers, and proof ask never sends them")
     can_p.add_argument("--json", action="store_true", help="output structured JSON")
     can_p.set_defaults(func=cmd_canary)
+
+    pan_p = sub.add_parser("panel", help="ask two to four models the same task blind, then report where they disagree")
+    pan_p.add_argument("task")
+    pan_p.add_argument("--models", required=True, help="comma-separated, for example claude,codex,gemini")
+    pan_p.add_argument("--budget", type=int, default=6000)
+    pan_p.add_argument("--full", action="store_true", help="also send now.md and me.md")
+    pan_p.add_argument("--json", action="store_true")
+    pan_p.set_defaults(func=cmd_panel)
 
     kzn_p = sub.add_parser("kaizen", help="monthly System Health check (Section 10.3) and 4-week trial audit")
     kzn_p.add_argument("--month", help="YYYY-MM (default: current month)")

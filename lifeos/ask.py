@@ -703,7 +703,7 @@ def _verify_review_child_identity(
 
 
 def run_ask(home, model, task_id, budget=6000, dry_run=False, adapters=None, today=None, full=False,
-            parent_run_id=None, run_id=None):
+            parent_run_id=None, run_id=None, task_limit=None):
     """Return the task path after writing the answer, or (pack, tokens) for a dry run."""
     adapters = adapters or ADAPTERS
     if model not in adapters:
@@ -723,7 +723,8 @@ def run_ask(home, model, task_id, budget=6000, dry_run=False, adapters=None, tod
                 raise _reconstruct_persisted_error(home, existing)
 
         started_iso = utc_now_iso()
-        pack, tokens = build_pack(home, task_id, budget, task_first=True, names=None if full else MINIMAL)
+        pack, tokens = build_pack(home, task_id, budget, task_first=True, names=None if full else MINIMAL,
+                                  task_limit=task_limit)
         digest = pack_hash(pack)
         locality = PROVIDERS.get(model, {}).get("locality", "remote")
         base_rec = {
@@ -733,10 +734,11 @@ def run_ask(home, model, task_id, budget=6000, dry_run=False, adapters=None, tod
             "context_sha256": digest, "tokens": tokens, "budget": budget, "full": bool(full), "terminal": True,
             "context_files": [
                 {"name": i["name"], "sha256": i["sha256"], "status": i["status"]}
-                for i in explain_pack(home, task_id, budget, task_first=True, names=None if full else MINIMAL)["items"]
+                for i in explain_pack(home, task_id, budget, task_first=True, names=None if full else MINIMAL,
+                                      task_limit=task_limit)["items"]
                 if i["status"] in ("included", "trimmed")
             ],
-            "task_chars": len(path.read_text(encoding="utf-8")),
+            "task_chars": task_limit if task_limit is not None else len(path.read_text(encoding="utf-8")),
         }
         try:
             check_text(pack, "the context pack", "Nothing was sent.")
