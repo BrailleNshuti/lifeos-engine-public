@@ -50,6 +50,55 @@ def visible_task(text):
     body = "\n".join(kept).strip()
     return f"{body}\n" if body else ""
 
+ATTACH_EXT = (".md", ".txt")
+ATTACH_MAX_FILES = 4
+ATTACH_MAX_TOKENS = 3000
+ATTACH_BLOCKED = ("logs", ".git", ".github")
+
+
+def _context_section(task_text):
+    lines, inside = [], False
+    for line in (task_text or "").replace("\r\n", "\n").splitlines():
+        if line.startswith("## "):
+            inside = line.startswith("## Context")
+            continue
+        if inside:
+            lines.append(line)
+    return lines
+
+
+def context_attachments(home, task_id):
+    """Files the task lists under '## Context', as [(label, text)]. Only notes (.md/.txt) inside the data
+    repository qualify: no '..', no absolute paths, no symlink escape, nothing under logs/ or .git. At most four
+    files, each cut to a token cap. Lines that are not an existing file are plain text and ignored."""
+    if not task_id:
+        return []
+    home = Path(home).resolve()
+    out, seen = [], set()
+    for raw in _context_section(task_file(home, task_id).read_text(encoding="utf-8")):
+        line = raw.strip().lstrip("-*+ ").strip().strip("`").lstrip("@").strip().replace("\\", "/")
+        if not line or line.startswith("/") or ":" in line or ".." in line.split("/"):
+            continue
+        if not line.lower().endswith(ATTACH_EXT) or line.split("/")[0].lower() in ATTACH_BLOCKED:
+            continue
+        path = home / line
+        try:
+            real = path.resolve(strict=True)
+            rel = real.relative_to(home).as_posix()
+        except (OSError, ValueError):
+            continue
+        if not real.is_file() or rel in seen or rel.split("/")[0].lower() in ATTACH_BLOCKED or rel in PRIORITY:
+            continue
+        seen.add(rel)
+        text = real.read_text(encoding="utf-8", errors="replace")
+        limit = ATTACH_MAX_TOKENS * 4
+        if len(text) > limit:
+            text = text[:limit]
+        out.append((f"{rel} (attached)", text))
+        if len(out) == ATTACH_MAX_FILES:
+            break
+    return out
+
 
 def build_pack(home, task_id=None, budget=6000, task_first=False, names=None):
     """Return (pack_text, token_estimate). Files are added in priority order; the last ones are trimmed to fit."""
@@ -65,6 +114,8 @@ def build_pack(home, task_id=None, budget=6000, task_first=False, names=None):
                 files.append((f"tasks/{path.name}", visible_task(path.read_text(encoding="utf-8"))))
         elif (home / name).exists():
             files.append((name, (home / name).read_text(encoding="utf-8")))
+    if task_id:
+        files.extend(context_attachments(home, task_id))
 
     blocks, used = [], 0
     for name, text in files:
@@ -126,6 +177,22 @@ def explain_pack(home, task_id=None, budget=6000, task_first=False, names=None):
             t_cost = estimate_tokens(trimmed)
             items.append({"name": label, "status": "trimmed", "tokens": t_cost, "sha256": digest})
             used += t_cost
+        else:
+            items.append({"name": label, "status": "excluded (budget full)", "tokens": 0, "sha256": digest})
+        full = True
+    for label, text in (context_attachments(home, task_id) if task_id else []):
+        digest = pack_hash(text)
+        block = f"=== {label} ===\n{text.strip()}\n"
+        cost = estimate_tokens(block)
+        if not full and used + cost <= budget:
+            items.append({"name": label, "status": "included", "tokens": cost, "sha256": digest})
+            used += cost
+            continue
+        room_chars = (budget - used) * 4 - 80
+        if not full and room_chars > 400:
+            trimmed = f"=== {label} (trimmed to fit {budget} tokens) ===\n{text.strip()[:room_chars]}\n"
+            items.append({"name": label, "status": "trimmed", "tokens": estimate_tokens(trimmed), "sha256": digest})
+            used += estimate_tokens(trimmed)
         else:
             items.append({"name": label, "status": "excluded (budget full)", "tokens": 0, "sha256": digest})
         full = True
