@@ -21,6 +21,7 @@ Dates are release dates. Newest first.
 - `lifeos completion powershell|bash`: tab-completion generated from the real parser.
 - Tests: 16 look-alike lines (SHAs, UUIDs, timestamps) the guard must not flag; a CRLF and BOM checkout must give the same answers and the same ledger verification as a Linux one.
 - `docs/SECURITY.md`: 13 promises, each linked to the test that proves it (a test checks the links), plus what is not promised.
+- `lifeos export`: redacted evidence page (proofs, numbers, ledger head, calibration, rhythm).
 - `lifeos timeline`: proofs and minutes saved per week with a bar. Read-only.
 - `lifeos schema` and `docs/LOGS.md`: the format of every file the engine writes, generated from the code and pinned by a drift test.
 - `lifeos stale`: open tasks, unresolved predictions and due decisions older than N days. Read-only.
