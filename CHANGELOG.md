@@ -19,6 +19,7 @@ Dates are release dates. Newest first.
 - `lifeos demo`: a 60-second tour of the engine's promises on made-up data. `lifeos savings`: measured token savings from your ledger. `lifeos numbers --html`: one self-contained page (no script, no links).
 - README "See it in 60 seconds" section, `docs/DESIGN.md` (each design decision and what it costs) and a `proof` workflow that runs the demo, `prove`, `numbers` and `history-scan` on every pull request and attaches `proof.md` and `numbers.html` as an artifact (made-up demo home only).
 - `lifeos completion powershell|bash`: tab-completion generated from the real parser.
+- `lifeos schema` and `docs/LOGS.md`: the format of every file the engine writes, generated from the code and pinned by a drift test.
 - `lifeos stale`: open tasks, unresolved predictions and due decisions older than N days. Read-only.
 - `lifeos lint`: task-file checks (front matter, done_when, level, status, due, proof on done tasks). Read-only.
 - `lifeos today`: one-screen daily view (next task, due decisions and words, open predictions, running experiment). Read-only.
