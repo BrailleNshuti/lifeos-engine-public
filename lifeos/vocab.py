@@ -9,7 +9,7 @@ import datetime as dt
 from pathlib import Path
 
 from . import guard
-from .store import append_csv_row, atomic_write_bytes
+from .store import append_csv_row, atomic_write_bytes, read_csv_rows
 
 HEADER = ["date", "word", "kind", "value", "text"]
 GAPS = [0, 1, 3, 7, 14]
@@ -24,11 +24,7 @@ def _path(home):
 
 
 def _rows(home):
-    path = _path(home)
-    if not path.exists():
-        return []
-    with path.open(encoding="utf-8", newline="") as fh:
-        return list(csv.DictReader(fh))
+    return read_csv_rows(_path(home), ("word", "kind"))
 
 
 def _append(home, values):
