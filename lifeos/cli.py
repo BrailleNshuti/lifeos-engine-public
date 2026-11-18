@@ -7,7 +7,7 @@ import subprocess
 import sys
 
 from . import __version__
-from . import bakeoff, calibrate, arch, canary, decision, demo, digest, experiment, prove, savings, selftest, cockpit, exam, governor, history, hooks, learn, mistakes, numbers, panel, pipeline, vocab, kaizen, lab, log, mcp, replay, router, runs, seats, showcase, sortcsv, study, verify
+from . import backup, bakeoff, calibrate, arch, canary, decision, demo, digest, experiment, prove, savings, selftest, cockpit, exam, governor, history, hooks, learn, mistakes, numbers, panel, pipeline, vocab, kaizen, lab, log, mcp, replay, router, runs, seats, showcase, sortcsv, study, verify
 from .delegate import run_delegate
 from .ask import ADAPTERS, MINIMAL, PROVIDERS, AskError, Blocked, ToolMissing, provider_status, run_ask, run_review
 from .context import build_pack, explain_pack, render_explanation
@@ -320,6 +320,24 @@ def cmd_decide(args):
             rows = decision.due(home) if args.dec_action == "due" else decision.list_all(home)
             print(decision.render(rows))
     except decision.DecisionError as err:
+        print(f"lifeos: {err}", file=sys.stderr)
+        return 2
+    return 0
+
+
+def cmd_backup(args):
+    try:
+        if args.check:
+            res = backup.check(args.check)
+            print(f"backup ok: {res['files']} file(s) match the manifest." if res["ok"]
+                  else "backup BAD:\n" + "\n".join(res["errors"]))
+            return 0 if res["ok"] else 1
+        if not args.out:
+            print("lifeos: give --out DIR or --check DIR", file=sys.stderr)
+            return 2
+        folder = backup.make(find_home(args.home), args.out)
+        print(f"Backed up to {folder}. Check it any time: lifeos backup --check {folder}")
+    except backup.BackupError as err:
         print(f"lifeos: {err}", file=sys.stderr)
         return 2
     return 0
@@ -847,6 +865,10 @@ def build_parser():
     dc_sub.add_parser("list")
     dc_sub.add_parser("due")
     dc_p.set_defaults(func=cmd_decide)
+    bk_p = sub.add_parser("backup", help="copy logs/ with a hash manifest; --check verifies a backup")
+    bk_p.add_argument("--out")
+    bk_p.add_argument("--check")
+    bk_p.set_defaults(func=cmd_backup)
     st_p = sub.add_parser("selftest", help="run the commands on a throwaway copy of the demo home; PASS or FAIL for each")
     st_p.add_argument("--example", help="path to examples/demo-home (default: the one in the repository)")
     st_p.set_defaults(func=cmd_selftest)

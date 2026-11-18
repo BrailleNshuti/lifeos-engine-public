@@ -18,6 +18,7 @@ Dates are release dates. Newest first.
 - `lifeos prove`, `history-scan`, `hook install`, `digest`: one proof file, a whole-history secret scan, a pre-commit guard hook and a Sunday review in numbers.
 - `lifeos demo`: a 60-second tour of the engine's promises on made-up data. `lifeos savings`: measured token savings from your ledger. `lifeos numbers --html`: one self-contained page (no script, no links).
 - README "See it in 60 seconds" section, `docs/DESIGN.md` (each design decision and what it costs) and a `proof` workflow that runs the demo, `prove`, `numbers` and `history-scan` on every pull request and attaches `proof.md` and `numbers.html` as an artifact (made-up demo home only).
+- `lifeos backup`: hashed copy of `logs/` and `--check` to verify it; never overwrites, never inside the home.
 - `lifeos decide`: decision records (`add`, `list`, `due`) with a revisit date and an optional linked prediction.
 - `lifeos pipeline`: saved multi-step flows with stop/continue gates; dry run unless `--run`; no nesting.
 - `lifeos experiment`: one tested rule change at a time (start, end, list). Kept only if the chosen metric improves by 5 % or more over the trial; too little data is inconclusive, never a silent keep.
