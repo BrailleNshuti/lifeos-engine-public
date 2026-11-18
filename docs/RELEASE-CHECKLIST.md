@@ -16,5 +16,5 @@ Run top to bottom. Do not skip a step; tick it with a date.
 - [ ] Repository is made public only after the steps above.
 
 ## Tag
-- [ ] `git tag -a v0.3.0 -m "v0.3.0"` and push the tag.
+- [ ] `git tag -a v0.4.0 -m "v0.4.0"` and push the tag.
 - [ ] Create the GitHub release from the tag; paste the CHANGELOG entry.
