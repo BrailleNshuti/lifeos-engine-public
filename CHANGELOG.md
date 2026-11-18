@@ -4,13 +4,11 @@ Dates are release dates. Newest first.
 
 ## [Unreleased]
 
-- Tests: a made-up home shaped like the first real one (a level with a note, TODO placeholders, CRLF files, older unchained ledger records). The Sunday pipeline must fail only on the placeholders, pass once they are filled in, and `verify --seal` must pin the older records.
-
-- `lifeos verify --seal`: once, pins the older unchained records (count plus one hash) in `logs/runs.seal.json`; `verify` then reports any later change, removal or reordering of them. Never overwrites a seal; prints the hash to keep outside the file.
-- `lifeos pipeline --run` ends with one summary line (counts per status and the exit code), so a scheduler or a person sees the result at a glance.
-
 ## [0.4.0] - 2026-11-18
 
+- Tests: a made-up home shaped like the first real one (a level with a note, TODO placeholders, CRLF files, older unchained ledger records). The Sunday pipeline must fail only on the placeholders, pass once they are filled in, and `verify --seal` must pin the older records.
+- `lifeos verify --seal`: once, pins the older unchained records (count plus one hash) in `logs/runs.seal.json`; `verify` then reports any later change, removal or reordering of them. Never overwrites a seal; prints the hash to keep outside the file.
+- `lifeos pipeline --run` ends with one summary line (counts per status and the exit code), so a scheduler or a person sees the result at a glance.
 - `lifeos ask`, `delegate` and the MCP tools attach notes listed under `## Context` of a task (max four `.md`/`.txt` files inside the data repository, trimmed to a token cap, guarded like the rest of the pack). Models no longer need a pasted copy.
 - Privacy guard: now also blocks lowercase IBANs, IBANs written with dashes or dots, dotted card numbers, and a card number that ends a sentence. Found by new property tests that generate many checksum-valid identifiers in many layouts.
 - `lifeos verify`: new run records carry the hash of the previous line (tamper-evident ledger); `--anchor` catches a rewritten last record or a cut tail.
