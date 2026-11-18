@@ -16,6 +16,7 @@ Dates are release dates. Newest first.
 - `lifeos mistakes`: a quiz from the verified questions you miss most. `lifeos vocab`: your own German words with a simple review schedule, kept local.
 - `lifeos numbers`: an "Engine in numbers" page built from the code, the guard score and the ledger (counts only).
 - `lifeos prove`, `history-scan`, `hook install`, `digest`: one proof file, a whole-history secret scan, a pre-commit guard hook and a Sunday review in numbers.
+- `lifeos demo`: a 60-second tour of the engine's promises on made-up data. `lifeos savings`: measured token savings from your ledger. `lifeos numbers --html`: one self-contained page (no script, no links).
 - A damaged line in `logs/runs.jsonl` no longer crashes every reader; `lifeos verify` still reports it. Found by new chaos tests (torn line, CRLF checkout, CSV without final newline, garbage rows).
 - `lifeos numbers` now says "Test functions" (parametrized tests run more checks than there are functions).
 
