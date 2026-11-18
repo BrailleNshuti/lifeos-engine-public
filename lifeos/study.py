@@ -726,3 +726,8 @@ def compose_exam(home, title="Practice Exam", subject="", count=10, minutes=60):
             (key_path, ("\n".join(key_lines) + "\n").encode("utf-8")),
         ])
     return {"exam_id": exam_id, "exam_path": exam_path, "key_path": key_path, "question_count": count, "minutes": minutes}
+
+
+def attempts(home):
+    """All recorded retrieval attempts, oldest first (public read for other modules)."""
+    return _read_attempts(home)
