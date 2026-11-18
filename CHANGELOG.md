@@ -4,6 +4,8 @@ Dates are release dates. Newest first.
 
 ## [Unreleased]
 
+- `lifeos verify --seal`: once, pins the older unchained records (count plus one hash) in `logs/runs.seal.json`; `verify` then reports any later change, removal or reordering of them. Never overwrites a seal; prints the hash to keep outside the file.
+
 ## [0.4.0] - 2026-11-18
 
 - `lifeos ask`, `delegate` and the MCP tools attach notes listed under `## Context` of a task (max four `.md`/`.txt` files inside the data repository, trimmed to a token cap, guarded like the rest of the pack). Models no longer need a pasted copy.
