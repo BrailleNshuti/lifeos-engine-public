@@ -26,6 +26,7 @@ Dates are release dates. Newest first.
 - `lifeos timeline`: proofs and minutes saved per week with a bar. Read-only.
 - `lifeos schema` and `docs/LOGS.md`: the format of every file the engine writes, generated from the code and pinned by a drift test.
 - `lifeos stale`: open tasks, unresolved predictions and due decisions older than N days. Read-only.
+- `lifeos lint`: a level followed by a note (`L2 (renames are L3)`) is accepted; found on the first run against a real home.
 - `lifeos lint`: task-file checks (front matter, done_when, level, status, due, proof on done tasks). Read-only.
 - `lifeos today`: one-screen daily view (next task, due decisions and words, open predictions, running experiment). Read-only.
 - Tests: docs drift (every command has a README row), `--help` for every command, and parallel writers (8 threads, 5 processes) that must keep the ledger chain valid. README rows added for `bakeoff`, `exam`, `showcase`.
