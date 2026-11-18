@@ -6,7 +6,7 @@ from pathlib import Path
 import sys
 
 from . import __version__
-from . import bakeoff, cockpit, exam, kaizen, lab, log, mcp, replay, router, runs, seats, showcase, sortcsv, study, verify
+from . import bakeoff, canary, cockpit, exam, kaizen, lab, log, mcp, replay, router, runs, seats, showcase, sortcsv, study, verify
 from .delegate import run_delegate
 from .ask import ADAPTERS, PROVIDERS, AskError, Blocked, ToolMissing, provider_status, run_ask, run_review
 from .context import build_pack, explain_pack, render_explanation
@@ -84,6 +84,12 @@ def cmd_replay(args):
         return 2
     print(json.dumps(out, indent=2) if args.json else replay.render(out))
     return 0 if out["identical"] else (2 if not out["supported"] else 1)
+
+
+def cmd_canary(args):
+    g, o = canary.guard_score(), canary.outbound_check()
+    print(json.dumps({"guard": g, "outbound": o}, indent=2) if args.json else canary.render(g, o))
+    return 0 if not g["misses"] and not g["benign_flagged"] and o["ok"] else 1
 
 
 def cmd_kaizen(args):
@@ -616,6 +622,10 @@ def build_parser():
     rpl_p.add_argument("run_id")
     rpl_p.add_argument("--json", action="store_true", help="output structured JSON")
     rpl_p.set_defaults(func=cmd_replay)
+
+    can_p = sub.add_parser("canary", help="guard score on generated fake identifiers, and proof ask never sends them")
+    can_p.add_argument("--json", action="store_true", help="output structured JSON")
+    can_p.set_defaults(func=cmd_canary)
 
     kzn_p = sub.add_parser("kaizen", help="monthly System Health check (Section 10.3) and 4-week trial audit")
     kzn_p.add_argument("--month", help="YYYY-MM (default: current month)")
