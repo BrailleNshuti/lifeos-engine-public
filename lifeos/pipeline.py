@@ -76,4 +76,13 @@ def render(rows, execute):
     lines = [f"{r['status']:8} {r['name']}  ({' '.join(r['argv'])})" for r in rows]
     if not execute:
         lines.append("\nDry run: nothing was executed. Add --run to execute.")
+    else:
+        lines.append(summary(rows))
     return "\n".join(lines)
+
+
+def summary(rows):
+    """One line for people and schedulers: counts per status and the exit code the command will return."""
+    counts = [f"{sum(r['status'] == s for r in rows)} {s}" for s in ("ok", "failed", "skipped")]
+    code = 1 if any(r["status"] == "failed" for r in rows) else 0
+    return f"Summary: {', '.join(c for c in counts if not c.startswith('0 '))}. Exit code {code}."

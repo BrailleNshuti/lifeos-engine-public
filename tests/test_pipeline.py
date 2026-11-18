@@ -76,3 +76,12 @@ def test_steps_run_with_the_home_as_working_folder_and_it_is_restored(tmp_path):
     seen = []
     pipeline.run(tmp_path, "check", lambda argv: seen.append(os.getcwd()) or 0, execute=True)
     assert seen == [str(tmp_path.resolve())] and os.getcwd() == before
+
+
+def test_a_run_ends_with_a_one_line_summary_and_a_dry_run_does_not():
+    rows = [{"name": "a", "argv": ["a"], "status": "ok"}, {"name": "b", "argv": ["b"], "status": "failed"},
+            {"name": "c", "argv": ["c"], "status": "skipped"}]
+    out = pipeline.render(rows, True)
+    assert out.splitlines()[-1] == "Summary: 1 ok, 1 failed, 1 skipped. Exit code 1."
+    assert "Summary" not in pipeline.render(rows, False)
+    assert pipeline.render(rows[:1], True).splitlines()[-1] == "Summary: 1 ok. Exit code 0."
