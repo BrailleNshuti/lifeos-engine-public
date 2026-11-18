@@ -6,7 +6,7 @@ from pathlib import Path
 import sys
 
 from . import __version__
-from . import bakeoff, canary, cockpit, exam, governor, learn, panel, kaizen, lab, log, mcp, replay, router, runs, seats, showcase, sortcsv, study, verify
+from . import bakeoff, calibrate, canary, cockpit, exam, governor, learn, panel, kaizen, lab, log, mcp, replay, router, runs, seats, showcase, sortcsv, study, verify
 from .delegate import run_delegate
 from .ask import ADAPTERS, MINIMAL, PROVIDERS, AskError, Blocked, ToolMissing, provider_status, run_ask, run_review
 from .context import build_pack, explain_pack, render_explanation
@@ -125,6 +125,32 @@ def cmd_learn(args):
     home = find_home(args.home)
     rep = learn.report(home)
     print(json.dumps(rep, indent=2) if args.json else learn.render(rep))
+    return 0
+
+
+def cmd_predict(args):
+    try:
+        pid = calibrate.predict(find_home(args.home), args.claim, args.p)
+    except calibrate.CalibrationError as err:
+        print(f"lifeos: {err}", file=sys.stderr)
+        return 2
+    print(f"{pid} recorded at {args.p} %. Resolve it later: lifeos resolve {pid} yes|no")
+    return 0
+
+
+def cmd_resolve(args):
+    try:
+        calibrate.resolve(find_home(args.home), args.id, args.outcome == "yes")
+    except calibrate.CalibrationError as err:
+        print(f"lifeos: {err}", file=sys.stderr)
+        return 2
+    print(f"{args.id} resolved: {args.outcome}")
+    return 0
+
+
+def cmd_calibration(args):
+    rep = calibrate.report(find_home(args.home))
+    print(json.dumps(rep, indent=2) if args.json else calibrate.render(rep))
     return 0
 
 
@@ -589,6 +615,18 @@ def build_parser():
     rate_p.add_argument("score", type=int)
     rate_p.add_argument("--note", default="")
     rate_p.set_defaults(func=cmd_rate)
+
+    pre_p = sub.add_parser("predict", help="write down what you expect and how sure you are (1-99 %), before you know")
+    pre_p.add_argument("claim")
+    pre_p.add_argument("--p", type=int, required=True, help="probability in percent, 1 to 99")
+    pre_p.set_defaults(func=cmd_predict)
+    res_p = sub.add_parser("resolve", help="record what happened to a prediction")
+    res_p.add_argument("id")
+    res_p.add_argument("outcome", choices=["yes", "no"])
+    res_p.set_defaults(func=cmd_resolve)
+    cal_p = sub.add_parser("calibration", help="Brier score and confidence bands from your resolved predictions")
+    cal_p.add_argument("--json", action="store_true")
+    cal_p.set_defaults(func=cmd_calibration)
 
     learn_p = sub.add_parser("learn", help="show your ratings per kind of work and which model scores best")
     learn_p.add_argument("--json", action="store_true")
