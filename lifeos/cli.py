@@ -6,7 +6,7 @@ from pathlib import Path
 import sys
 
 from . import __version__
-from . import bakeoff, cockpit, exam, kaizen, lab, log, mcp, router, runs, seats, showcase, sortcsv, study, verify
+from . import bakeoff, cockpit, exam, kaizen, lab, log, mcp, replay, router, runs, seats, showcase, sortcsv, study, verify
 from .delegate import run_delegate
 from .ask import ADAPTERS, PROVIDERS, AskError, Blocked, ToolMissing, provider_status, run_ask, run_review
 from .context import build_pack, explain_pack, render_explanation
@@ -74,6 +74,16 @@ def cmd_verify(args):
     result = verify.verify_chain(find_home(args.home), anchor=args.anchor)
     print(json.dumps(result, indent=2) if args.json else verify.render(result))
     return 0 if result["ok"] and result["anchor_found"] is not False else 1
+
+
+def cmd_replay(args):
+    try:
+        out = replay.replay_run(find_home(args.home), args.run_id)
+    except replay.ReplayError as err:
+        print(f"lifeos: {err}", file=sys.stderr)
+        return 2
+    print(json.dumps(out, indent=2) if args.json else replay.render(out))
+    return 0 if out["identical"] else (2 if not out["supported"] else 1)
 
 
 def cmd_kaizen(args):
@@ -601,6 +611,11 @@ def build_parser():
     ver_p.add_argument("--anchor", help="a head hash you saved earlier; checks the log still contains that exact state")
     ver_p.add_argument("--json", action="store_true", help="output structured JSON")
     ver_p.set_defaults(func=cmd_verify)
+
+    rpl_p = sub.add_parser("replay", help="rebuild an ask run's context from today's files and prove it is the same input")
+    rpl_p.add_argument("run_id")
+    rpl_p.add_argument("--json", action="store_true", help="output structured JSON")
+    rpl_p.set_defaults(func=cmd_replay)
 
     kzn_p = sub.add_parser("kaizen", help="monthly System Health check (Section 10.3) and 4-week trial audit")
     kzn_p.add_argument("--month", help="YYYY-MM (default: current month)")
