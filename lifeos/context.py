@@ -100,7 +100,7 @@ def context_attachments(home, task_id):
     return out
 
 
-def build_pack(home, task_id=None, budget=6000, task_first=False, names=None):
+def build_pack(home, task_id=None, budget=6000, task_first=False, names=None, task_limit=None):
     """Return (pack_text, token_estimate). Files are added in priority order; the last ones are trimmed to fit."""
     _validate_budget(budget)
     home = Path(home)
@@ -111,7 +111,7 @@ def build_pack(home, task_id=None, budget=6000, task_first=False, names=None):
         if name == "TASK":
             if task_id:
                 path = task_file(home, task_id)
-                files.append((f"tasks/{path.name}", visible_task(path.read_text(encoding="utf-8"))))
+                files.append((f"tasks/{path.name}", visible_task(path.read_text(encoding="utf-8")[:task_limit])))
         elif (home / name).exists():
             files.append((name, (home / name).read_text(encoding="utf-8")))
     if task_id:
@@ -135,7 +135,7 @@ def build_pack(home, task_id=None, budget=6000, task_first=False, names=None):
     return pack, estimate_tokens(pack)
 
 
-def explain_pack(home, task_id=None, budget=6000, task_first=False, names=None):
+def explain_pack(home, task_id=None, budget=6000, task_first=False, names=None, task_limit=None):
     """Return provenance, inclusion status, token cost and full SHA-256 digests for every candidate context source."""
     _validate_budget(budget)
     home = Path(home)
@@ -158,7 +158,7 @@ def explain_pack(home, task_id=None, budget=6000, task_first=False, names=None):
             continue
         text = path.read_text(encoding="utf-8")
         if name == "TASK":
-            text = visible_task(text)
+            text = visible_task(text[:task_limit])
         digest = pack_hash(text)
         if full:
             items.append({"name": label, "status": "excluded (budget full)", "tokens": 0, "sha256": digest})
@@ -196,7 +196,7 @@ def explain_pack(home, task_id=None, budget=6000, task_first=False, names=None):
         else:
             items.append({"name": label, "status": "excluded (budget full)", "tokens": 0, "sha256": digest})
         full = True
-    pack, total = build_pack(home, task_id, budget, task_first=task_first, names=names)
+    pack, total = build_pack(home, task_id, budget, task_first=task_first, names=names, task_limit=task_limit)
     return {"budget": budget, "tokens": total, "sha256": pack_hash(pack), "items": items}
 
 
