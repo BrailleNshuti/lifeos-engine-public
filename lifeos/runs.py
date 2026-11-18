@@ -82,9 +82,9 @@ def render_runs(summary):
         "",
     ]
     for rec in summary["runs"]:
-        rid = rec.get("run_id", "?")
-        cmd = rec.get("command", "?")
-        st = rec.get("status", "?")
+        rid = str(rec.get("run_id") or "?")
+        cmd = str(rec.get("command") or "?")
+        st = str(rec.get("status") or "?")
         mdl = rec.get("model") or ",".join(rec.get("reviewers") or []) or "-"
         tsk = rec.get("task") or "-"
         dur = f"{rec['duration_s']}s" if isinstance(rec.get("duration_s"), (int, float)) else "-"
