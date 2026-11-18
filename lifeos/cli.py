@@ -6,9 +6,9 @@ from pathlib import Path
 import sys
 
 from . import __version__
-from . import bakeoff, canary, cockpit, exam, kaizen, lab, log, mcp, replay, router, runs, seats, showcase, sortcsv, study, verify
+from . import bakeoff, canary, cockpit, exam, governor, kaizen, lab, log, mcp, replay, router, runs, seats, showcase, sortcsv, study, verify
 from .delegate import run_delegate
-from .ask import ADAPTERS, PROVIDERS, AskError, Blocked, ToolMissing, provider_status, run_ask, run_review
+from .ask import ADAPTERS, MINIMAL, PROVIDERS, AskError, Blocked, ToolMissing, provider_status, run_ask, run_review
 from .context import build_pack, explain_pack, render_explanation
 from .guard import scan_paths, scan_staged, staged_files
 from .home import CORE_FILES, HomeError, estimate_tokens, find_home
@@ -223,6 +223,16 @@ def cmd_context(args):
 
 def cmd_ask(args):
     home = find_home(args.home)
+    try:
+        estimate = build_pack(home, args.task, args.budget, task_first=True, names=None if args.full else MINIMAL)[1]
+        gate = governor.check(home, args.model, estimate)
+    except (ValueError, FileNotFoundError, OSError):
+        gate = None  # the real run below reports a bad task or budget with its own message
+    if gate is not None:
+        print(governor.render(gate), file=sys.stderr)
+        if not gate["allowed"] and not args.dry_run and not getattr(args, "force", False):
+            print("lifeos: nothing was sent. Use --force to send anyway, or wait for the reset.", file=sys.stderr)
+            return 4
     try:
         result = run_ask(
             home, args.model, args.task, args.budget, args.dry_run,
@@ -523,6 +533,7 @@ def build_parser():
     ask.add_argument("--full", action="store_true", help="also send now.md and me.md (default: task and rules only)")
     ask.add_argument("--run-id", help="explicit run_id for idempotent retry")
     ask.add_argument("--dry-run", action="store_true", help="show the pack and token cost; send nothing")
+    ask.add_argument("--force", action="store_true", help="send even if the budget governor holds the call")
     ask.set_defaults(func=cmd_ask)
 
     dele = sub.add_parser("delegate", help="let LifeOS pick the best-fitting model for a task, run it, and print the answer")
