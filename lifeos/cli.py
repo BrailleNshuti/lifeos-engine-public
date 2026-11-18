@@ -7,7 +7,7 @@ import subprocess
 import sys
 
 from . import __version__
-from . import bakeoff, calibrate, arch, canary, demo, digest, experiment, prove, savings, selftest, cockpit, exam, governor, history, hooks, learn, mistakes, numbers, panel, vocab, kaizen, lab, log, mcp, replay, router, runs, seats, showcase, sortcsv, study, verify
+from . import bakeoff, calibrate, arch, canary, decision, demo, digest, experiment, prove, savings, selftest, cockpit, exam, governor, history, hooks, learn, mistakes, numbers, panel, pipeline, vocab, kaizen, lab, log, mcp, replay, router, runs, seats, showcase, sortcsv, study, verify
 from .delegate import run_delegate
 from .ask import ADAPTERS, MINIMAL, PROVIDERS, AskError, Blocked, ToolMissing, provider_status, run_ask, run_review
 from .context import build_pack, explain_pack, render_explanation
@@ -294,6 +294,32 @@ def cmd_experiment(args):
         else:
             print(experiment.render(experiment.list_all(home)))
     except experiment.ExperimentError as err:
+        print(f"lifeos: {err}", file=sys.stderr)
+        return 2
+    return 0
+
+
+def cmd_pipeline(args):
+    home = find_home(args.home)
+    try:
+        rows = pipeline.run(home, args.name, main, execute=args.run)
+    except pipeline.PipelineError as err:
+        print(f"lifeos: {err}", file=sys.stderr)
+        return 2
+    print(pipeline.render(rows, args.run))
+    return 1 if any(r["status"] == "failed" for r in rows) else 0
+
+
+def cmd_decide(args):
+    home = find_home(args.home)
+    try:
+        if args.dec_action == "add":
+            path = decision.record(home, args.title, args.why, args.revisit, args.predict, args.p)
+            print(f"Recorded {path.name}")
+        else:
+            rows = decision.due(home) if args.dec_action == "due" else decision.list_all(home)
+            print(decision.render(rows))
+    except decision.DecisionError as err:
         print(f"lifeos: {err}", file=sys.stderr)
         return 2
     return 0
@@ -806,6 +832,21 @@ def build_parser():
     arch_p.add_argument("--write", metavar="FILE")
     arch_p.add_argument("--check", metavar="FILE")
     arch_p.set_defaults(func=cmd_arch)
+    pl_p = sub.add_parser("pipeline", help="run a saved flow of lifeos commands with gates (dry run unless --run)")
+    pl_p.add_argument("name")
+    pl_p.add_argument("--run", action="store_true")
+    pl_p.set_defaults(func=cmd_pipeline)
+    dc_p = sub.add_parser("decide", help="short decision records with a revisit date and an optional calibrated prediction")
+    dc_sub = dc_p.add_subparsers(dest="dec_action", required=True)
+    dc_add = dc_sub.add_parser("add")
+    dc_add.add_argument("title")
+    dc_add.add_argument("--why", required=True)
+    dc_add.add_argument("--revisit", default="")
+    dc_add.add_argument("--predict", default="")
+    dc_add.add_argument("--p", type=int, default=70)
+    dc_sub.add_parser("list")
+    dc_sub.add_parser("due")
+    dc_p.set_defaults(func=cmd_decide)
     st_p = sub.add_parser("selftest", help="run the commands on a throwaway copy of the demo home; PASS or FAIL for each")
     st_p.add_argument("--example", help="path to examples/demo-home (default: the one in the repository)")
     st_p.set_defaults(func=cmd_selftest)
