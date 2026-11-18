@@ -26,7 +26,7 @@ def test_version_is_030_in_both_places():
 
 
 def test_changelog_top_entry_matches_version():
-    entries = re.findall(r"^## \[([^\]]+)\]", read("CHANGELOG.md"), re.M)
+    entries = [e for e in re.findall(r"^## \[([^\]]+)\]", read("CHANGELOG.md"), re.M) if e != "Unreleased"]
     assert entries[0] == lifeos.__version__
 
 
