@@ -1,0 +1,8 @@
+{"steps": [
+  {"name": "ledger intact", "argv": ["verify"]},
+  {"name": "numbers of the week", "argv": ["digest"], "gate": "continue"},
+  {"name": "did each part earn its place", "argv": ["earn"], "gate": "continue"},
+  {"name": "open loops", "argv": ["stale"], "gate": "continue"},
+  {"name": "task files", "argv": ["lint"], "gate": "continue"},
+  {"name": "rhythm", "argv": ["timeline", "--weeks", "8"], "gate": "continue"}
+]}

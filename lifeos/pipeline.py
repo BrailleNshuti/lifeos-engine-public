@@ -6,6 +6,7 @@ safety check of that command still applies. The default gate is "stop": a failin
 cannot nest and cannot hold private data in their arguments (rule 9).
 """
 import json
+import os
 import re
 from pathlib import Path
 
@@ -47,6 +48,16 @@ def load(home, name):
 def run(home, name, runner, execute=False):
     steps = load(home, name)
     rows, halted = [], False
+    here = os.getcwd()
+    if execute:
+        os.chdir(home)  # relative paths in a step (guard now.md) mean files in your home
+    try:
+        return _go(home, steps, runner, execute, rows, halted)
+    finally:
+        os.chdir(here)
+
+
+def _go(home, steps, runner, execute, rows, halted):
     for step in steps:
         row = {"name": step["name"], "argv": step["argv"], "gate": step["gate"]}
         if halted:
