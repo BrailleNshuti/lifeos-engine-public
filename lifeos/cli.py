@@ -6,7 +6,7 @@ from pathlib import Path
 import sys
 
 from . import __version__
-from . import bakeoff, cockpit, exam, kaizen, lab, log, mcp, router, runs, seats, showcase, sortcsv, study
+from . import bakeoff, cockpit, exam, kaizen, lab, log, mcp, router, runs, seats, showcase, sortcsv, study, verify
 from .delegate import run_delegate
 from .ask import ADAPTERS, PROVIDERS, AskError, Blocked, ToolMissing, provider_status, run_ask, run_review
 from .context import build_pack, explain_pack, render_explanation
@@ -68,6 +68,12 @@ def cmd_runs(args):
     summary = runs.summarize_runs(home, status=args.status, model=args.model, task=args.task, limit=args.limit)
     print(json.dumps(summary, indent=2) if args.json else runs.render_runs(summary))
     return 0
+
+
+def cmd_verify(args):
+    result = verify.verify_chain(find_home(args.home), anchor=args.anchor)
+    print(json.dumps(result, indent=2) if args.json else verify.render(result))
+    return 0 if result["ok"] and result["anchor_found"] is not False else 1
 
 
 def cmd_kaizen(args):
@@ -590,6 +596,11 @@ def build_parser():
     runs_p.add_argument("--limit", type=int, default=20, help="max recent records to display (default: 20)")
     runs_p.add_argument("--json", action="store_true", help="output structured JSON summary and records")
     runs_p.set_defaults(func=cmd_runs)
+
+    ver_p = sub.add_parser("verify", help="prove logs/runs.jsonl was not edited, reordered or cut (hash chain)")
+    ver_p.add_argument("--anchor", help="a head hash you saved earlier; checks the log still contains that exact state")
+    ver_p.add_argument("--json", action="store_true", help="output structured JSON")
+    ver_p.set_defaults(func=cmd_verify)
 
     kzn_p = sub.add_parser("kaizen", help="monthly System Health check (Section 10.3) and 4-week trial audit")
     kzn_p.add_argument("--month", help="YYYY-MM (default: current month)")
