@@ -12,7 +12,7 @@ LAYER = {
     "context": 1, "calibrate": 1, "vocab": 1, "lab": 1, "log": 1, "runs": 1, "kaizen": 1, "bakeoff": 1, "seats": 1,
     "ask": 2, "learn": 2, "mistakes": 3, "exam": 2, "showcase": 2, "study": 2,
     "delegate": 3, "panel": 3, "governor": 2, "canary": 3, "replay": 3, "sortcsv": 3, "router": 3, "cockpit": 3,
-    "mcp": 4,
+    "numbers": 4, "mcp": 4,
     "cli": 5,
 }
 
