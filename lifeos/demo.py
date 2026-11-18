@@ -31,7 +31,7 @@ def run(example=None):
         steps.append({"step": name, "ok": bool(ok), "detail": detail})
 
     try:
-        hits = guard.scan_text(f"token = {FAKE_KEY}")
+        hits = guard.scan_text("note: " + FAKE_KEY)
         step("guard blocks a fake secret", any(h[1] == "BLOCK" for h in hits), "a made-up API key was refused, shown masked")
         fakes = {"claude": lambda p: "- Use sqlite\n- The limit is 14 calls",
                  "codex": lambda p: "- Use sqlite\n- The limit is 15 calls"}
