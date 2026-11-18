@@ -7,7 +7,7 @@ import subprocess
 import sys
 
 from . import __version__
-from . import bakeoff, calibrate, canary, demo, digest, prove, savings, selftest, cockpit, exam, governor, history, hooks, learn, mistakes, numbers, panel, vocab, kaizen, lab, log, mcp, replay, router, runs, seats, showcase, sortcsv, study, verify
+from . import bakeoff, calibrate, arch, canary, demo, digest, prove, savings, selftest, cockpit, exam, governor, history, hooks, learn, mistakes, numbers, panel, vocab, kaizen, lab, log, mcp, replay, router, runs, seats, showcase, sortcsv, study, verify
 from .delegate import run_delegate
 from .ask import ADAPTERS, MINIMAL, PROVIDERS, AskError, Blocked, ToolMissing, provider_status, run_ask, run_review
 from .context import build_pack, explain_pack, render_explanation
@@ -261,6 +261,23 @@ def cmd_prove(args):
 def cmd_digest(args):
     d = digest.build(find_home(args.home))
     print(json.dumps(d, indent=2) if args.json else digest.render(d))
+    return 0
+
+
+def cmd_arch(args):
+    page = arch.page()
+    if args.check:
+        path = Path(args.check)
+        if path.exists() and path.read_text(encoding="utf-8") == page:
+            print(f"{args.check} matches the code")
+            return 0
+        print(f"{args.check} is missing or stale: run `lifeos arch --write {args.check}`", file=sys.stderr)
+        return 1
+    if args.write:
+        Path(args.write).write_text(page, encoding="utf-8", newline="\n")
+        print(f"wrote {args.write}")
+    else:
+        print(page)
     return 0
 
 
@@ -757,6 +774,10 @@ def build_parser():
     demo_p.add_argument("--json", action="store_true")
     demo_p.set_defaults(func=cmd_demo)
 
+    arch_p = sub.add_parser("arch", help="draw the module graph from the real imports (Mermaid); --check fails when docs are stale")
+    arch_p.add_argument("--write", metavar="FILE")
+    arch_p.add_argument("--check", metavar="FILE")
+    arch_p.set_defaults(func=cmd_arch)
     st_p = sub.add_parser("selftest", help="run the commands on a throwaway copy of the demo home; PASS or FAIL for each")
     st_p.add_argument("--example", help="path to examples/demo-home (default: the one in the repository)")
     st_p.set_defaults(func=cmd_selftest)
