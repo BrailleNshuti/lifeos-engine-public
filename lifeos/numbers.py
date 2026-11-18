@@ -44,7 +44,7 @@ def render(d, today=None):
     rows = [
         ("Python modules (standard library only)", d["modules"]),
         ("Lines of code", d["code_lines"]),
-        ("Tests", d["tests"] if d["tests"] is not None else "n/a here"),
+        ("Test functions", d["tests"] if d["tests"] is not None else "n/a here"),
         ("Commands", d["commands"] if d["commands"] is not None else "n/a here"),
         ("Privacy guard on generated fake identifiers", f"{g['blocked']} of {g['total']} blocked"),
         ("Harmless texts wrongly flagged", f"{g['benign_flagged']} of {g['benign_total']}"),

@@ -451,7 +451,14 @@ def read_run_records(home, normalize=True):
         recover_journal(home)
         if not runs.exists():
             return []
-        rows = [json.loads(line) for line in runs.read_text(encoding="utf-8").splitlines() if line.strip()]
+        rows = []
+        for line in runs.read_text(encoding="utf-8").splitlines():
+            try:  # a torn or damaged line must not take every reader down; `lifeos verify` reports it
+                row = json.loads(line) if line.strip() else None
+            except ValueError:
+                continue
+            if isinstance(row, dict):
+                rows.append(row)
     return [normalize_run_record(r) for r in rows] if normalize else rows
 
 
