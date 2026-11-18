@@ -8,6 +8,7 @@ Dates are release dates. Newest first.
 - Privacy guard: now also blocks lowercase IBANs, IBANs written with dashes or dots, dotted card numbers, and a card number that ends a sentence. Found by new property tests that generate many checksum-valid identifiers in many layouts.
 - `lifeos verify`: new run records carry the hash of the previous line (tamper-evident ledger); `--anchor` catches a rewritten last record or a cut tail.
 - `lifeos replay <run-id>`: proves an `ask` run's input is unchanged, or names the file that changed. Run records now keep per-file digests and the task length (no content).
+- `lifeos canary`: reproducible guard score on generated fake identifiers, and an end-to-end proof that `ask` refuses to send them.
 
 ## [0.3.0] - 2026-11-18
 First public release.
