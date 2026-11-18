@@ -10,7 +10,7 @@ import datetime as dt
 from pathlib import Path
 
 from . import guard
-from .store import append_csv_row, atomic_write_bytes
+from .store import append_csv_row, atomic_write_bytes, read_csv_rows
 
 HEADER = ["date", "id", "kind", "value", "text"]
 MIN_RESOLVED = 5
@@ -26,11 +26,7 @@ def _path(home):
 
 
 def _rows(home):
-    path = _path(home)
-    if not path.exists():
-        return []
-    with path.open(encoding="utf-8", newline="") as fh:
-        return list(csv.DictReader(fh))
+    return read_csv_rows(_path(home), ("id", "kind", "value"))
 
 
 def _append(home, values):
