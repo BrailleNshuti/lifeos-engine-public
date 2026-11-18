@@ -1,0 +1,5 @@
+{"steps": [
+  {"name": "week", "argv": ["week"]},
+  {"name": "seats", "argv": ["seats"]},
+  {"name": "guard", "argv": ["guard", "now.md"]}
+]}
