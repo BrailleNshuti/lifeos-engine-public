@@ -67,3 +67,12 @@ def test_cli_dry_run_then_run(tmp_path, capsys):
     assert "planned" in capsys.readouterr().out
     assert main(["--home", str(tmp_path), "pipeline", "check", "--run"]) == 0
     assert main(["--home", str(tmp_path), "pipeline", "missing"]) == 2
+
+
+def test_steps_run_with_the_home_as_working_folder_and_it_is_restored(tmp_path):
+    import os
+    before = os.getcwd()
+    make(tmp_path, [{"name": "a", "argv": ["x"]}])
+    seen = []
+    pipeline.run(tmp_path, "check", lambda argv: seen.append(os.getcwd()) or 0, execute=True)
+    assert seen == [str(tmp_path.resolve())] and os.getcwd() == before
