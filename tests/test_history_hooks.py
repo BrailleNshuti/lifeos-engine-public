@@ -62,3 +62,15 @@ def test_hook_install_and_no_silent_overwrite(repo):
 def test_hook_needs_a_git_repo(tmp_path):
     with pytest.raises(hooks.HookError):
         hooks.install(tmp_path)
+
+
+def test_reviewed_exception_is_honoured_only_for_that_commit_and_file(repo):
+    (repo / "b.txt").write_text(f"{FAKE}\n")
+    git(repo, "add", "."); git(repo, "commit", "-qm", "fake key on purpose")
+    found = history.scan(repo)["findings"][0]
+    (repo / ".lifeos-history-allow").write_text(f"{found['commit']} b.txt  # made-up key, reviewed\n# comment\n\n")
+    assert history.scan(repo)["findings"] == []
+    (repo / ".lifeos-history-allow").write_text(f"{found['commit']} other.txt\n")
+    assert len(history.scan(repo)["findings"]) == 1
+    (repo / ".lifeos-history-allow").write_text("deadbeef0000 b.txt\n")
+    assert len(history.scan(repo)["findings"]) == 1
