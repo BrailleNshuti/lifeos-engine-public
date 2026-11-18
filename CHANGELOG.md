@@ -5,6 +5,7 @@ Dates are release dates. Newest first.
 ## [Unreleased]
 
 - `lifeos ask`, `delegate` and the MCP tools attach notes listed under `## Context` of a task (max four `.md`/`.txt` files inside the data repository, trimmed to a token cap, guarded like the rest of the pack). Models no longer need a pasted copy.
+- Privacy guard: now also blocks lowercase IBANs, IBANs written with dashes or dots, dotted card numbers, and a card number that ends a sentence. Found by new property tests that generate many checksum-valid identifiers in many layouts.
 
 ## [0.3.0] - 2026-11-18
 First public release.
