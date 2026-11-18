@@ -7,7 +7,7 @@ import subprocess
 import sys
 
 from . import __version__
-from . import backup, bakeoff, calibrate, arch, canary, decision, demo, digest, experiment, prove, savings, selftest, cockpit, exam, governor, history, hooks, learn, mistakes, numbers, panel, pipeline, vocab, kaizen, lab, log, mcp, replay, router, runs, seats, showcase, sortcsv, study, verify
+from . import backup, bakeoff, calibrate, arch, canary, decision, demo, digest, experiment, prove, savings, selftest, cockpit, exam, governor, history, hooks, learn, mistakes, numbers, panel, pipeline, redact, vocab, kaizen, lab, log, mcp, replay, router, runs, seats, showcase, sortcsv, study, verify
 from .delegate import run_delegate
 from .ask import ADAPTERS, MINIMAL, PROVIDERS, AskError, Blocked, ToolMissing, provider_status, run_ask, run_review
 from .context import build_pack, explain_pack, render_explanation
@@ -341,6 +341,18 @@ def cmd_backup(args):
         print(f"lifeos: {err}", file=sys.stderr)
         return 2
     return 0
+
+
+def cmd_redact(args):
+    code = 0
+    for name in args.files:
+        try:
+            dest, n = redact.copy(name, args.out)
+            print(f"{dest}: {n} line(s) redacted")
+        except redact.RedactError as err:
+            print(f"lifeos: {err}", file=sys.stderr)
+            code = 2
+    return code
 
 
 def cmd_selftest(args):
@@ -869,6 +881,10 @@ def build_parser():
     bk_p.add_argument("--out")
     bk_p.add_argument("--check")
     bk_p.set_defaults(func=cmd_backup)
+    rd_p = sub.add_parser("redact", help="write copies of files with guard-flagged lines replaced, for sharing")
+    rd_p.add_argument("files", nargs="+")
+    rd_p.add_argument("--out", required=True)
+    rd_p.set_defaults(func=cmd_redact)
     st_p = sub.add_parser("selftest", help="run the commands on a throwaway copy of the demo home; PASS or FAIL for each")
     st_p.add_argument("--example", help="path to examples/demo-home (default: the one in the repository)")
     st_p.set_defaults(func=cmd_selftest)
