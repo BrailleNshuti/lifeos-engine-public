@@ -19,6 +19,8 @@ import time
 import uuid
 from pathlib import Path
 
+from . import diag
+
 try:
     import fcntl
 except ImportError:  # pragma: no cover - Windows
@@ -95,7 +97,11 @@ def atomic_write_bytes(path, data):
             os.fsync(fd)
         finally:
             os.close(fd)
-        os.replace(tmp, path)
+        try:
+            os.replace(tmp, path)
+        except PermissionError as err:  # diagnose a sharing violation; never retry, never hide it
+            diag.report(err, tmp, path)
+            raise
         _fsync_parent_dir(path)
     finally:
         if tmp.exists():
