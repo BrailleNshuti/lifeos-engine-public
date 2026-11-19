@@ -4,7 +4,7 @@ Read this first. Keep it short; update it after meaningful merges.
 
 ## Now
 
-- Version 0.4.0. Commands are listed in README.md; the roadmap is there too.
+- Version 0.4.1. Commands are listed in README.md; the roadmap is there too.
 - Seats: one table (`lifeos/seats.py`) with failover, one cloud budget and rest-until logic that reads absolute and relative reset times.
 - `lifeos doctor --smoke [--only a,b]` probes seats, prints why a probe failed and rests seats that hit a usage limit. A smoke record never counts as spend.
 - Prompt Lab runner (`lifeos lab check/pack/score`) is offline: no model, no network.
@@ -14,7 +14,7 @@ Read this first. Keep it short; update it after meaningful merges.
 
 ## Open
 
-- The published v0.4.0 tag crashes on `lifeos --help` (a bare `%` in one help string; per-command `--help` works). Fixed on `fix/top-level-help`, with tests; a patch release is the owner's call.
+- The v0.4.0 tag still crashes on `lifeos --help` (a bare `%` in one help string; per-command `--help` works). Fixed in v0.4.1; use that release.
 - One full test run on Windows hit a `PermissionError` from `os.replace` in `store.atomic_write_bytes` (once; passes alone; cause not proven). Next: log the Windows error code and paths on failure before adding any retry.
 - `lifeos delegate` (and probably `ask`) crash with `UnicodeEncodeError` when stdout is redirected to a file on Windows and the answer holds a character outside cp1252 (for example `≤`). The answer is still saved in the task file. Found 2026-11-19; not fixed yet.
 - Public docs still cite private plan sections ("Section 8.2", "Section 10.3") in README, CLI help, docstrings and MCP descriptions, and the README row for `route` says "work-lane check".
