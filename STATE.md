@@ -21,6 +21,11 @@ Read this first. Keep it short; update it after meaningful merges.
 - Live proof of the Grok seat flags is still to be recorded after its usage resets.
 - External CLIs need a periodic `--smoke` run; an empty working directory is not an operating-system sandbox.
 
+## Decision for the owner: the next release
+
+- Unreleased since v0.4.1: the new command `lifeos debate` and six fixes (retry on a short Windows sharing violation, replace diagnostics, claim unit, output encoding, release-bump proposal, private-plan references removed). `lifeos release` proposes **0.5.0** (a new command means minor).
+- That number collides with the roadmap, where v0.5 is the model router (Jun 2027). Options: **0.5.0** and move the router to a later row; or **0.4.2** and accept that a patch holds a new command. I did not publish either: the number and the roadmap are yours (rule 8). To release: bump `pyproject.toml` and `lifeos/__init__.py`, move `[Unreleased]` under the new heading in CHANGELOG, tag the merge commit, publish the GitHub release with the notes.
+
 ## Next
 
 - Use the engine on real tasks, record corrections and failed calls, then choose the next feature from those numbers.
