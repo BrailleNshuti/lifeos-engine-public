@@ -12,7 +12,9 @@ NT = os.name == "nt"
 
 
 def violation(winerror=5):
-    return PermissionError(13, "Access is denied", None, winerror)
+    err = PermissionError(13, "Access is denied", None, winerror)
+    err.winerror = winerror  # on Linux the constructor ignores the 4th argument; set it so the test is the same everywhere
+    return err
 
 
 @pytest.fixture
