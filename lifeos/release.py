@@ -8,6 +8,22 @@ import re
 from pathlib import Path
 
 
+FIX_PREFIX = re.compile(r"^- (?:fix|fixed|fixes|docs?|tests?|chore|refactor|robustness|ci)\b", re.I)
+FIX_WORDS = re.compile(r"\b(?:fix|fixes|fixed|crash|crashed|crashes|bug|typo)\b", re.I)
+COMMAND = re.compile(r"^- `lifeos [a-z-]+")
+NEW_THING = re.compile(r"\bnew (?:command|subcommand|flag|option|feature)s?\b", re.I)
+
+
+def is_feature(entry):
+    """A feature entry names a new command or says so in words. A fix, docs or tests entry never is one, whatever
+    other words it holds (the old test, the substring "new", read "New tests render..." in a fix as a feature)."""
+    if FIX_PREFIX.match(entry):
+        return False
+    if NEW_THING.search(entry):
+        return True
+    return bool(COMMAND.match(entry)) and not FIX_WORDS.search(entry[:120])
+
+
 def _version(text, pattern):
     m = re.search(pattern, text)
     return m.group(1) if m else None
@@ -28,7 +44,7 @@ def plan(repo):
     if not entries:
         problems.append("Nothing under [Unreleased]: there is nothing to release.")
     major, minor, patch = (int(x) for x in (a or "0.0.0").split("."))
-    feature = any(re.match(r"- `lifeos [a-z-]+", e) or "new" in e.lower() for e in entries)
+    feature = any(is_feature(e) for e in entries)
     proposed = f"{major}.{minor + 1}.0" if feature else f"{major}.{minor}.{patch + 1}"
     notes = f"## [{proposed}]\n\n" + "\n".join(entries) + "\n"
     return {"current": a, "proposed": proposed, "entries": len(entries), "problems": problems, "notes": notes}
