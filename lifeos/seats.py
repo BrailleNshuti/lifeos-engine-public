@@ -245,8 +245,10 @@ def _spend(records, now):
     window = (_aware(now).date() - dt.timedelta(days=SEVEN_DAYS)).isoformat()
     newest, tokens, calls = {}, {}, {}
     for rec in records or []:
-        if rec.get("command") not in ("ask", "review", "smoke"):
+        if rec.get("command") not in ("ask", "review", "smoke", "debate"):
             continue
+        if rec.get("command") == "debate" and rec.get("source") == "manual":
+            continue  # a pasted answer is not a call this machine made
         seat = seat_name(rec.get("model"))
         if not seat:
             continue

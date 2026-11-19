@@ -4,6 +4,7 @@ Dates are release dates. Newest first.
 
 ## [Unreleased]
 
+- `lifeos debate` (`start`, `next`, `record`, `run`, `score`): blind debate of two to four seats in three rounds (answer, object, defend). Each seat sees the others only as seeded labels A/B/C with provider names and 64-character hashes scrubbed, and at most 3 objections per answer. An objection needs a target, a claim, `kind: evidence` and a checkable pointer, or it is an opinion and does not count. `score` is rule-based, no model: every claim is SURVIVED (unchallenged or revised with evidence), FELL (conceded or unanswered) or OPEN (evidence on both sides, with the settle test). Agreement is logged, never used (rule 6). `debate.json`, the round 1 pack and every answer are hashed into the chained ledger and `score` refuses a changed one or a broken chain. Debate calls count toward the seat budget; pasted answers do not. `run` is a dry run unless `--run`. Protocol: `docs/DEBATE.md`.
 - Fix: `lifeos release` proposed a minor bump (0.5.0) for fix-only entries, because it read the substring "new" inside "New tests render ..." as a feature. Entries that start with Fix, Docs, Tests, Robustness, CI, Chore or Refactor are now patch-level; a feature is an entry that begins with a command name (without fix wording) or says "new command/flag/option/feature" in words. The version and the tag stay the owner's decision.
 
 ## [0.4.1] - 2026-11-19
