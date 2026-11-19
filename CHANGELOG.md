@@ -4,6 +4,7 @@ Dates are release dates. Newest first.
 
 ## [Unreleased]
 
+- `lifeos debate` (`start`, `next`, `record`, `run`, `score`): blind debate of two to four seats in three rounds (answer, object, defend). Each seat sees the others only as seeded labels A/B/C with provider names and 64-character hashes scrubbed, and at most 3 objections per answer. An objection needs a target, a claim, `kind: evidence` and a checkable pointer, or it is an opinion and does not count. `score` is rule-based, no model: every claim is SURVIVED (unchallenged or revised with evidence), FELL (conceded or unanswered) or OPEN (evidence on both sides, with the settle test). Agreement is logged, never used (rule 6). `debate.json`, the round 1 pack and every answer are hashed into the chained ledger and `score` refuses a changed one or a broken chain. Debate calls count toward the seat budget; pasted answers do not. `run` is a dry run unless `--run`. Protocol: `docs/DEBATE.md`.
 - Fix: `lifeos --help` crashed with `ValueError: unsupported format character` because the `predict` help text held a bare `%`. New tests render the top-level help and every parser's help at every depth, so no help string can break the front door again. Per-command `--help` was never affected.
 - Docs: the README command table is headed "What it does" (it said v0.1 over a v0.4 table); `STATE.md` brought up to date.
 

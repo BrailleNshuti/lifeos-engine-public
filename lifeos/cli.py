@@ -7,7 +7,7 @@ import subprocess
 import sys
 
 from . import __version__
-from . import backup, bakeoff, calibrate, arch, canary, completion, decision, demo, digest, earn, experiment, prove, savings, selftest, cockpit, exam, export, governor, history, hooks, learn, lint, mistakes, numbers, panel, pipeline, redact, release, today, vocab, kaizen, lab, log, mcp, replay, router, runs, seats, schema, showcase, sortcsv, stale, timeline, study, verify
+from . import backup, bakeoff, calibrate, arch, canary, completion, debate, decision, demo, digest, earn, experiment, prove, savings, selftest, cockpit, exam, export, governor, history, hooks, learn, lint, mistakes, numbers, panel, pipeline, redact, release, today, vocab, kaizen, lab, log, mcp, replay, router, runs, seats, schema, showcase, sortcsv, stale, timeline, study, verify
 from .delegate import run_delegate
 from .ask import ADAPTERS, MINIMAL, PROVIDERS, AskError, Blocked, ToolMissing, provider_status, run_ask, run_review
 from .context import build_pack, explain_pack, render_explanation
@@ -942,6 +942,7 @@ def build_parser():
     pl_p.add_argument("name")
     pl_p.add_argument("--run", action="store_true")
     pl_p.set_defaults(func=cmd_pipeline)
+    debate.register(sub, find_home)
     dc_p = sub.add_parser("decide", help="short decision records with a revisit date and an optional calibrated prediction")
     dc_sub = dc_p.add_subparsers(dest="dec_action", required=True)
     dc_add = dc_sub.add_parser("add")

@@ -12,7 +12,7 @@ LAYER = {
     "context": 1, "history": 1, "calibrate": 1, "savings": 1, "vocab": 1, "lab": 1, "log": 1, "runs": 1, "kaizen": 1, "bakeoff": 1, "seats": 1,
     "ask": 2, "learn": 2, "experiment": 3, "mistakes": 3, "exam": 2, "showcase": 2, "study": 2,
     "delegate": 3, "panel": 3, "governor": 2, "canary": 3, "replay": 3, "sortcsv": 3, "router": 3, "cockpit": 3,
-    "numbers": 4, "digest": 4, "demo": 4, "selftest": 4, "pipeline": 1, "decision": 2, "backup": 1, "redact": 1, "release": 0, "earn": 0, "today": 4, "lint": 1, "stale": 3, "completion": 0, "schema": 4, "timeline": 0, "export": 2, "arch": 0, "prove": 5, "mcp": 4,
+    "numbers": 4, "debate": 4, "digest": 4, "demo": 4, "selftest": 4, "pipeline": 1, "decision": 2, "backup": 1, "redact": 1, "release": 0, "earn": 0, "today": 4, "lint": 1, "stale": 3, "completion": 0, "schema": 4, "timeline": 0, "export": 2, "arch": 0, "prove": 5, "mcp": 4,
     "cli": 6,
 }
 
