@@ -15,7 +15,7 @@ Read this first. Keep it short; update it after meaningful merges.
 ## Open
 
 - The v0.4.0 tag still crashes on `lifeos --help` (a bare `%` in one help string; per-command `--help` works). Fixed in v0.4.1; use that release.
-- One full test run on Windows hit a `PermissionError` from `os.replace` in `store.atomic_write_bytes` (once; passes alone; cause not proven). Next: log the Windows error code and paths on failure before adding any retry.
+- Windows write flake (measured 2026-11-20): 2 of 3 full runs failed, 3 failed `os.replace` calls in all, each `PermissionError` winerror 5, single-threaded, not held by this process, no holder visible a moment later, always on a file just copied or written (`copytree` of the demo home, then `tasks/*.md`, `logs/runs.jsonl`, `logs/ledger.csv`). Consistent with a short handle taken by an outside scanner or indexer; not proven. The two tests once blamed on a temporary revert (`test_delegate`, `test_durable_kernel`) fail the same way. `lifeos/diag.py` now records every such failure (`LIFEOS_REPLACE_DIAG=<file>`). Next: a bounded retry on that error only, with its own tests.
 - `debate` scoring unit: a numbered item should be one claim; today an answer is split into sentences (5 items scored as 30 claims in the live run). Next improvement, tests first.
 - `debate` evidence gate checks for a pointer, not truth: a seat that says it ran a test is counted, one that says it could not is not. Documented in `docs/DEBATE.md`; seen live.
 - `lifeos delegate` (and probably `ask`) crash with `UnicodeEncodeError` when stdout is redirected to a file on Windows and the answer holds a character outside cp1252 (for example `≤`). The answer is still saved in the task file. Found 2026-11-19; not fixed yet.
