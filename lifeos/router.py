@@ -1,4 +1,4 @@
-"""6-Question Section 8.2 Model Router with 5-tier data policy and token/call budget guard.
+"""6-question model router with 5-tier data policy and token/call budget guard.
 
 The model choice is the same seat table `delegate` runs (`seats.choose`).
 """
@@ -30,7 +30,7 @@ def _pick_task_route(text, explicit_level=None):
 
 
 def evaluate_route(home, task_or_text, tier=None, full=False, token_budget=WEEKLY_TOKEN_BUDGET):
-    """Evaluate all 6 questions of Master Plan Section 8.2 for a task ID or free-text description."""
+    """Evaluate all 6 routing questions for a task ID or free-text description."""
     is_task_file = False
     rel_path = ""
     explicit_level = None
@@ -73,7 +73,7 @@ def evaluate_route(home, task_or_text, tier=None, full=False, token_budget=WEEKL
     # Question 4 & 5: Task type matrix and risk/autonomy level
     primary, reviewer, level, reason = _pick_task_route(text, explicit_level=explicit_level)
     if effective_tier == "SENSITIVE":
-        primary, reviewer, reason = "qwen", "none", "SENSITIVE data forced to local qwen (D22)"
+        primary, reviewer, reason = "qwen", "none", "SENSITIVE data forced to local qwen"
 
     allowed, policy_reason = check_provider_allowed(effective_tier, primary, full=full)
     q3 = {
@@ -83,7 +83,7 @@ def evaluate_route(home, task_or_text, tier=None, full=False, token_budget=WEEKL
         "detail": policy_reason,
     }
     q4 = {
-        "question": "4. Which model fits the task best (Section 8.3 matrix)?",
+        "question": "4. Which model fits the task best?",
         "primary": primary,
         "locality": provider_locality(primary),
         "reason": reason,
