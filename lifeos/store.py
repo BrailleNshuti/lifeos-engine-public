@@ -85,6 +85,36 @@ def _fsync_parent_dir(path):
         os.close(dfd)
 
 
+REPLACE_DELAYS = (0.02, 0.05, 0.1, 0.2, 0.4)  # seconds between tries: six tries, 0.77 s in all, then the error stands
+_pause = time.sleep
+
+
+def _transient(err):
+    """A Windows sharing violation (winerror 5 or 32): something else briefly holds the file open. Nothing else qualifies."""
+    return os.name == "nt" and getattr(err, "winerror", None) in (5, 32)
+
+
+def _replace(tmp, path):
+    """os.replace, tried again a few times only when Windows reports a sharing violation. A scanner or reader that takes a
+    fresh file for a few milliseconds must not fail a ledger write; a lasting lock still raises the original error, after
+    `diag` has said who holds the file. Measured cause: see STATE.md."""
+    attempts, last = 0, None
+    while True:
+        attempts += 1
+        try:
+            os.replace(tmp, path)
+        except PermissionError as err:
+            if not _transient(err) or attempts > len(REPLACE_DELAYS):
+                diag.report(err, tmp, path, attempts)
+                raise
+            last = err
+            _pause(REPLACE_DELAYS[attempts - 1])
+        else:
+            if last is not None:
+                diag.recovered(last, tmp, path, attempts)
+            return
+
+
 def atomic_write_bytes(path, data):
     """Write bytes to a sibling temp file via _write_all, fsync file, atomically replace target, and fsync parent dir."""
     path = Path(path)
@@ -97,11 +127,7 @@ def atomic_write_bytes(path, data):
             os.fsync(fd)
         finally:
             os.close(fd)
-        try:
-            os.replace(tmp, path)
-        except PermissionError as err:  # diagnose a sharing violation; never retry, never hide it
-            diag.report(err, tmp, path)
-            raise
+        _replace(tmp, path)
         _fsync_parent_dir(path)
     finally:
         if tmp.exists():
