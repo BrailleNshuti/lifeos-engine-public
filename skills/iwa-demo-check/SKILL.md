@@ -1,13 +1,13 @@
 ---
 name: iwa-demo-check
-description: Verify the iwa rental platform side project against its January landlord demo checklist, 2-3 h/wk timebox (D14), and synthetic-only data rules (Rule 9).
+description: Verify the iwa rental platform side project against its January landlord demo checklist, 2-3 h/wk timebox, and synthetic-only data rules (Rule 9).
 ---
 # iwa Landlord Demo Check
-1. **Timebox & State check (Rule 5, D14)**: Read `BUILD_STATUS.md` (or `STATE.md`) first. Keep work strictly inside the 2-3 h/wk side-project box; the LifeOS Engine flagship never waits.
+1. **Timebox & State check (Rule 5)**: Read `BUILD_STATUS.md` (or `STATE.md`) first. Keep work strictly inside the 2-3 h/wk side-project box; the LifeOS Engine flagship never waits.
 2. **Privacy & Synthetic Data check (Rule 9)**:
    - Run `lifeos guard` on all tracked files.
    - Verify that 100 % of tenant names, phone numbers, addresses, unit numbers, and payment rows are synthetic/fictional. Real tenant or landlord data must never enter Git or any AI tool.
-3. **Five Landlord Demo Flows (Section 14.2)**:
+3. **Five Landlord Demo Flows**:
    - Homes list (occupied vs. vacant status clear).
    - Landlord, tenant, and unit linking works end-to-end.
    - Rent schedule and instalments calculation passes tests.

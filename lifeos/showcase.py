@@ -1,4 +1,4 @@
-"""Build-in-Public Weekly Proof Post & Case Study Generator (Master Plan Section 14.4 / D12)."""
+"""Build-in-Public Weekly Proof Post & Case Study Generator."""
 import csv
 from pathlib import Path
 
@@ -13,7 +13,7 @@ def _recent_proofs(home, limit=6):
 
 
 def generate_weekly_post(home, week=None):
-    """Draft a 20-minute Build-in-Public LinkedIn & GitHub proof post (Section 14.4, D12)."""
+    """Draft a 20-minute Build-in-Public LinkedIn & GitHub proof post."""
     home = Path(home)
     w = week_numbers(home, week=week)
     r = summarize_runs(home, limit=50)
@@ -28,9 +28,9 @@ def generate_weekly_post(home, week=None):
         proof_bullets = ["- Shipped tested increments in lifeos-engine with green CI and privacy guard"]
 
     lines = [
-        f"# BUILD IN PUBLIC (D12) · Weekly Proof Draft · {w['week']} ({w['from']} to {w['to']})",
+        f"# BUILD IN PUBLIC · Weekly Proof Draft · {w['week']} ({w['from']} to {w['to']})",
         "",
-        "> **Rule (Section 14.4)**: What you built · the number that proves it · one engineering lesson.",
+        "> **Rule**: What you built · the number that proves it · one engineering lesson.",
         "> **Safety Check**: Public/synthetic metrics only (`Class A`). Never include work client data (`Class D`) or personal IDs (`Class C`).",
         "",
         "## Option A · Short LinkedIn / GitHub Build Post (<= 180 words)",
