@@ -1,4 +1,4 @@
-"""Tests for lifeos/router.py (6-question Section 8.2 routing engine)."""
+"""Tests for lifeos/router.py (6-question routing engine)."""
 import json
 import shutil
 

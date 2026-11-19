@@ -219,13 +219,13 @@ def _extract_now_facts(home):
 
 
 def build_redteam_pack(home, week=None, today=None):
-    """Build a facts-only Red-Team prompt pack (Section 10.2 item 6) from weekly log numbers and now.md."""
+    """Build a facts-only Red-Team prompt pack from weekly log numbers and now.md."""
     n = week_numbers(home, week=week, today=today)
     facts = _extract_now_facts(home)
     lines = [
         f"# Red-Team Pack · {n['week']} ({n['from']} to {n['to']}) · Facts Only",
         "",
-        "Instruction for reviewer (Rule 7 / Section 10.2 item 6):",
+        "Instruction for reviewer (Rule 7):",
         "Read only the measured weekly numbers and active commitments below.",
         "Do not flatter. Answer in two short sections:",
         "1. Weakest point in this week's execution or numbers.",

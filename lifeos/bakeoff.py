@@ -1,4 +1,4 @@
-"""Quarterly Blind Role Bake-Off Engine (Master Plan Section 10.4 & Appendix A8)."""
+"""Quarterly Blind Role Bake-Off Engine."""
 from datetime import date
 import hashlib
 import json
@@ -20,7 +20,7 @@ def blind_pair(quarter, task_type, model_a, model_b):
 
 
 def render_bakeoff_card(quarter, task_type, model_a="claude", model_b="chatgpt", scores=None):
-    """Render an Appendix A8 Role Bake-Off scorecard (keeping X/Y anonymized until scores are provided)."""
+    """Render a Role Bake-Off scorecard (keeping X/Y anonymized until scores are provided)."""
     mapping = blind_pair(quarter, task_type, model_a, model_b)
     lines = [
         f"# ROLE BAKE-OFF · {quarter} · task type: {task_type}",

@@ -1,4 +1,4 @@
-"""Tests for lifeos/kaizen.py (Monthly System Health & 4-week trial check, Section 10.3)."""
+"""Tests for lifeos/kaizen.py (Monthly System Health & 4-week trial check)."""
 import datetime as dt
 import json
 import shutil

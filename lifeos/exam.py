@@ -1,4 +1,4 @@
-"""Monthly No-AI Exam generator and strict rubric recorder (Master Plan Section 13.4 & Appendix B8)."""
+"""Monthly No-AI Exam generator and strict rubric recorder."""
 from datetime import date
 from pathlib import Path
 import re
@@ -57,7 +57,7 @@ def _read_skills_rows(home):
 
 
 def generate_monthly_exam(home, month=None, module="CSEBDSDSSE01 · Data Science Software Engineering"):
-    """Build a deterministic 60-90 min Monthly No-AI Exam (Section 13.4 & Appendix B8)."""
+    """Build a deterministic 60-90 min Monthly No-AI Exam."""
     home = Path(home)
     month_str = month or date.today().strftime("%Y-%m")
     skills_rows = _read_skills_rows(home)
@@ -74,7 +74,7 @@ def generate_monthly_exam(home, month=None, module="CSEBDSDSSE01 · Data Science
     lines = [
         f"# MONTHLY NO-AI EXAM · {month_str}",
         "",
-        "> **Protocol (Section 13.4 & Appendix B8)**: 60 to 90 minutes, **strictly offline / zero AI**.",
+        "> **Protocol**: 60 to 90 minutes, **strictly offline / zero AI**.",
         "> Write your answers in this file or on paper first. Any topic scoring **< 70%** automatically returns next month.",
         f"> **IU Focus Module**: `{module}`",
         "",
@@ -142,7 +142,7 @@ def record_exam_score(home, skill_name, score_pct, proof_link="reviews/exam.md")
     if not skills_path.exists():
         skills_path.parent.mkdir(parents=True, exist_ok=True)
         default_rows = [
-            "# Skills · Section 13",
+            "# Skills",
             "| skill | level 1-5 | target Nov 2027 | proof (link) | last deliberate practice | next small proof | last exam % |",
             "|---|---|---|---|---|---|---|",
             *[f"| {k} | 1 | 4 | | | | |" for k in EXAM_BANK],

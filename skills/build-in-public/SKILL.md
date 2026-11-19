@@ -1,9 +1,9 @@
 ---
 name: build-in-public
-description: Draft a 20-minute weekly Build-in-Public proof post (LinkedIn/GitHub) and monthly engineering case study from verified logs (Section 14.4 / D12).
+description: Draft a 20-minute weekly Build-in-Public proof post (LinkedIn/GitHub) and monthly engineering case study from verified logs.
 ---
 
-# Build in Public (Section 14.4 / D12)
+# Build in Public
 
 ## When to Use
 - Once a week (from Gate 2 or whenever shipping major portfolio milestones) to draft a 20-minute LinkedIn/GitHub post.

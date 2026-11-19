@@ -1,9 +1,9 @@
 ---
 name: no-ai-exam
-description: Run or grade the First-Sunday 60-to-90 minute Monthly No-AI Exam (Section 13.4 & Appendix B8) and update logs/skills.md.
+description: Run or grade the First-Sunday 60-to-90 minute Monthly No-AI Exam and update logs/skills.md.
 ---
 
-# Monthly No-AI Exam Protocol (Section 13.4 & Appendix B8)
+# Monthly No-AI Exam Protocol
 
 ## When to Use
 - On the **first Sunday of every month** (60 to 90 minutes, strictly offline / zero AI).
