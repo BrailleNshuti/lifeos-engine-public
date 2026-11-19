@@ -8,7 +8,7 @@ Read this first. Keep it short; update it after meaningful merges.
 - Seats: one table (`lifeos/seats.py`) with failover, one cloud budget and rest-until logic that reads absolute and relative reset times.
 - `lifeos doctor --smoke [--only a,b]` probes seats, prints why a probe failed and rests seats that hit a usage limit. A smoke record never counts as spend.
 - Prompt Lab runner (`lifeos lab check/pack/score`) is offline: no model, no network.
-- `lifeos debate` (branch `feat/debate`, PR open): blind three-round debate scored by rules; protocol in `docs/DEBATE.md`. `debate run` calls the seat adapters directly (not `delegate`) so the exact prompt is provable; not yet run on a real question.
+- `lifeos debate` (merged): blind three-round debate scored by rules; protocol in `docs/DEBATE.md`. `debate run` calls the seat adapters directly (not `delegate`) so the exact prompt is provable. One live run on 2026-11-19: see `docs/DEBATE-LIVE-RUN.md`.
 - Privacy guard (`lifeos guard`) blocks identifiers and keys; CI runs it on every tracked file.
 - No personal data in this repo; everything in `examples/` is made up.
 
@@ -16,6 +16,8 @@ Read this first. Keep it short; update it after meaningful merges.
 
 - The v0.4.0 tag still crashes on `lifeos --help` (a bare `%` in one help string; per-command `--help` works). Fixed in v0.4.1; use that release.
 - One full test run on Windows hit a `PermissionError` from `os.replace` in `store.atomic_write_bytes` (once; passes alone; cause not proven). Next: log the Windows error code and paths on failure before adding any retry.
+- `debate` scoring unit: a numbered item should be one claim; today an answer is split into sentences (5 items scored as 30 claims in the live run). Next improvement, tests first.
+- `debate` evidence gate checks for a pointer, not truth: a seat that says it ran a test is counted, one that says it could not is not. Documented in `docs/DEBATE.md`; seen live.
 - `lifeos delegate` (and probably `ask`) crash with `UnicodeEncodeError` when stdout is redirected to a file on Windows and the answer holds a character outside cp1252 (for example `≤`). The answer is still saved in the task file. Found 2026-11-19; not fixed yet.
 - Public docs still cite private plan sections ("Section 8.2", "Section 10.3") in README, CLI help, docstrings and MCP descriptions, and the README row for `route` says "work-lane check".
 - Live proof of the Grok seat flags is still to be recorded after its usage resets.
