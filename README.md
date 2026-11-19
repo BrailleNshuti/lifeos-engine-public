@@ -22,7 +22,7 @@ lifeos demo
 
 Why it is built this way, and what each choice costs: [docs/DESIGN.md](docs/DESIGN.md). What it promises and what it does not, with the test behind each promise: [docs/SECURITY.md](docs/SECURITY.md). File formats: [docs/LOGS.md](docs/LOGS.md). Every pull request also runs `lifeos prove` and `lifeos demo` in CI and attaches the proof as a build artifact.
 
-## What v0.1 does
+## What it does
 
 | Command | What it does | Why it matters |
 |---|---|---|
