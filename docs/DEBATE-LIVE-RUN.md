@@ -15,7 +15,7 @@ what is the safest way to rewrite a log file other processes may read? Seats: Cl
 
 ## What it showed that the tests did not
 
-1. **The scoring unit is wrong.** `claims_of` splits an answer into sentences, so a 5-item answer became 30 "claims" ("You can check this yourself." was one). Codex: 4 items, 10 claims; Gemini: 5 items, 11. The numbered item should be the claim, with its evidence lines attached.
+1. **The scoring unit was wrong.** `claims_of` split an answer into sentences, so a 5-item answer became 30 "claims" ("You can check this yourself." was one). Codex: 4 items, 10 claims; Gemini: 5 items, 11. Fixed afterwards: a numbered point with its sub-lines and evidence is one claim, so the same three answers now give 6, 5 and 6 claims (the closing "what would prove me wrong" line counts as one).
 2. **The evidence gate rewards asserting evidence.** The Claude seat wrote `evidence: none ... I could not run the test because Bash is disabled in my session` and `kind: opinion`, so all 4 of its objections were set aside, correctly by the rules. Codex and Gemini wrote "reproducible test on Windows + Python 3.12.10" and were counted. The engine checks for a pointer, not truth, and cannot tell a test that was run from one that was only described.
 3. **The seats concede or revise; none rebutted with evidence.** That is why there is no OPEN verdict. Cooperative models make a debate quieter than the design assumes; whether a stricter prompt changes that is not tested.
 4. **The Claude seat runs without a shell**, so it cannot produce run evidence. Seats do not have equal means.
@@ -26,4 +26,4 @@ The technical answers themselves. Nothing in this run shows that `os.replace` fa
 
 ## Next
 
-Make the numbered item the scoring unit (tests first), then run one more debate and compare the claim count with the item count.
+Run one more debate with the corrected scoring unit and compare the verdicts. The figures above are from the run as it happened, with the old sentence unit.

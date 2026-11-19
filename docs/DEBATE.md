@@ -26,7 +26,9 @@ agreeing is not evidence (rule 6, "evidence before confidence").
 ## The three rounds
 
 1. **Answer.** Every seat gets the identical pack. It writes short numbered claims, one per line, each with its evidence,
-   and a last line on what would prove it wrong. Only the first 40 claims are shown to others and scored.
+   and a last line on what would prove it wrong. A **claim** is one numbered point with its sub-bullets and evidence lines
+   (or one bullet, or one paragraph; prose with none of these is split into sentences), and the last line is a claim too.
+   Only the first 40 claims are shown to others and scored.
 2. **Object.** Each seat sees the OTHER answers, relabeled A, B, C in a seeded order, claims numbered (B1, B2). It writes at most
    3 objections per answer: stack several `OBJECTION` blocks in one reply. Blocks beyond 3 for one answer, and blocks that
    point at nothing (an unknown label or claim number), are ignored and reported; only real ones use up the 3.
