@@ -105,8 +105,46 @@ def make_labels(seat_list, seed):
     return {chr(65 + i): s for i, s in enumerate(order)}
 
 
+NUMBERED = re.compile(r"^ {0,3}\d+[.)]\s+")
+BULLET = re.compile(r"^ {0,3}[-*+•]\s+")
+MARKER = re.compile(r"^\s*(?:\d+[.)]|[-*+•])\s+")
+CLIP = 160
+
+
+def clip(text, limit=CLIP):
+    text = str(text)
+    return text if len(text) <= limit else text[:limit - 3].rstrip() + "..."
+
+
+def _items(answer):
+    """The points the seat wrote: a numbered item (or a bullet, or a paragraph) with its sub-lines and evidence attached."""
+    lines = str(answer).replace("\r\n", "\n").split("\n")
+    start = NUMBERED if any(NUMBERED.match(l) for l in lines) else BULLET
+    items, blank = [], True
+    for raw in lines:
+        if not raw.strip():
+            blank = True
+            continue
+        indented = raw.startswith((" ", "\t")) and not start.match(raw)
+        if start.match(raw) or (blank and not indented) or not items:
+            items.append([raw])
+        else:
+            items[-1].append(raw)
+        blank = False
+    return items, any(start.match(l) for l in lines)
+
+
 def claims_of(answer):
-    return [_scrub(c) for c in panel.claims(answer)][:MAX_CLAIMS]
+    """One claim per point of the answer, in order. Prose with no list and no paragraphs is split into sentences instead."""
+    items, marked = _items(answer)
+    texts = []
+    for item in items:
+        text = " ".join(MARKER.sub("", l.strip()) for l in item)
+        text = re.sub(r"[*`]+|^#+\s*", "", text)
+        texts.append(" ".join(text.split()))
+    if len(items) == 1 and not marked:
+        texts = panel.claims(answer)
+    return [_scrub(t) for t in texts if len(re.findall(r"\w+", t)) >= 3][:MAX_CLAIMS]
 
 
 def agreement(answers):
@@ -184,7 +222,7 @@ def r3_prompt(meta, own_claims, objections, set_aside):
     """objections: counted ones against this seat's answer, without authors."""
     lines = []
     for o in objections:
-        where = f"your claim {o['idx']}: \"{own_claims[o['idx'] - 1]}\"" if o["idx"] else "your answer as a whole"
+        where = f"your claim {o['idx']}: \"{clip(own_claims[o['idx'] - 1], 300)}\"" if o["idx"] else "your answer as a whole"
         lines += [f"[{o['id']}] against {where}", f"claim: {_scrub(o['says'])}",
                   f"evidence: {_scrub(o['evidence'])}"] + ([f"settle: {_scrub(o['settle'])}"] if o["settle"] else []) + [""]
     aside = f"{set_aside} objection(s) without evidence were set aside as opinion.\n" if set_aside else ""
@@ -469,7 +507,7 @@ def render_score(rep, reveal=False):
              f"Question: {rep['question']}", ""]
     lines.append("claim  verdict   objections  what")
     for c in rep["claims"]:
-        lines.append(f"{c['target']:6} {c['verdict']:9} {c['objections']:<11} \"{clean(c['text'])}\" · {clean(c['why'])}".rstrip(" ·"))
+        lines.append(f"{c['target']:6} {c['verdict']:9} {c['objections']:<11} \"{clean(clip(c['text']))}\" · {clean(c['why'])}".rstrip(" ·"))
         lines += [f"       settle with: {clean(s)}" for s in c["settle"]] if c["verdict"] == "OPEN" else []
     lines += ["", f"Unchallenged claims: {rep['unchallenged']} of {rep['claims_total']} (SURVIVED means nobody showed otherwise, "
                   f"not that it is true) · opinions set aside (no evidence): {rep['opinion_set_aside']} · "
