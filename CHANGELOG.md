@@ -4,6 +4,9 @@ Dates are release dates. Newest first.
 
 ## [Unreleased]
 
+- Fix: `lifeos --help` crashed with `ValueError: unsupported format character` because the `predict` help text held a bare `%`. New tests render the top-level help and every parser's help at every depth, so no help string can break the front door again. Per-command `--help` was never affected.
+- Docs: the README command table is headed "What it does" (it said v0.1 over a v0.4 table); `STATE.md` brought up to date.
+
 ## [0.4.0] - 2026-11-18
 
 - Tests: a made-up home shaped like the first real one (a level with a note, TODO placeholders, CRLF files, older unchained ledger records). The Sunday pipeline must fail only on the placeholders, pass once they are filled in, and `verify --seal` must pin the older records.

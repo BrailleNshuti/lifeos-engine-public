@@ -1015,7 +1015,7 @@ def build_parser():
     voc_ans.add_argument("result", choices=["good", "again"])
     voc_p.set_defaults(func=cmd_vocab)
 
-    pre_p = sub.add_parser("predict", help="write down what you expect and how sure you are (1-99 %), before you know")
+    pre_p = sub.add_parser("predict", help="write down what you expect and how sure you are (1-99 %%), before you know")
     pre_p.add_argument("claim")
     pre_p.add_argument("--p", type=int, required=True, help="probability in percent, 1 to 99")
     pre_p.set_defaults(func=cmd_predict)
