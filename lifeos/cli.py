@@ -7,7 +7,7 @@ import subprocess
 import sys
 
 from . import __version__
-from . import backup, bakeoff, calibrate, arch, canary, completion, debate, decision, demo, digest, earn, experiment, prove, savings, selftest, cockpit, exam, export, governor, history, hooks, learn, lint, mistakes, numbers, panel, pipeline, redact, release, today, vocab, kaizen, lab, log, mcp, replay, router, runs, seats, schema, showcase, sortcsv, stale, timeline, study, verify
+from . import backup, bakeoff, calibrate, arch, canary, completion, console, debate, decision, demo, digest, earn, experiment, prove, savings, selftest, cockpit, exam, export, governor, history, hooks, learn, lint, mistakes, numbers, panel, pipeline, redact, release, today, vocab, kaizen, lab, log, mcp, replay, router, runs, seats, schema, showcase, sortcsv, stale, timeline, study, verify
 from .delegate import run_delegate
 from .ask import ADAPTERS, MINIMAL, PROVIDERS, AskError, Blocked, ToolMissing, provider_status, run_ask, run_review
 from .context import build_pack, explain_pack, render_explanation
@@ -1218,6 +1218,7 @@ def build_parser():
 
 
 def main(argv=None):
+    console.tolerate_encoding()
     args = build_parser().parse_args(argv)
     try:
         return args.func(args)
