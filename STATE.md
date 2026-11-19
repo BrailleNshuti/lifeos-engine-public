@@ -1,4 +1,4 @@
-# State of lifeos-engine · 2026-11-17
+# State of lifeos-engine · 2026-11-19
 
 Read this first. Keep it short; update it after meaningful merges.
 
@@ -13,6 +13,9 @@ Read this first. Keep it short; update it after meaningful merges.
 
 ## Open
 
+- The published v0.4.0 tag crashes on `lifeos --help` (a bare `%` in one help string; per-command `--help` works). Fixed on `fix/top-level-help`, with tests; a patch release is the owner's call.
+- One full test run on Windows hit a `PermissionError` from `os.replace` in `store.atomic_write_bytes` (once; passes alone; cause not proven). Next: log the Windows error code and paths on failure before adding any retry.
+- Public docs still cite private plan sections ("Section 8.2", "Section 10.3") in README, CLI help, docstrings and MCP descriptions, and the README row for `route` says "work-lane check".
 - Live proof of the Grok seat flags is still to be recorded after its usage resets.
 - External CLIs need a periodic `--smoke` run; an empty working directory is not an operating-system sandbox.
 
