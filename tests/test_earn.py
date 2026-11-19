@@ -32,6 +32,26 @@ def test_runs_and_decisions_are_counted(tmp_path):
     assert rows["ask / delegate / panel"]["uses"] == 2 and rows["decide"]["uses"] == 1
 
 
+def test_debate_answers_earn_their_own_row_and_do_not_inflate_ask(tmp_path):
+    (tmp_path / "logs").mkdir()
+    records = [
+        {"command": "ask", "date": "2026-11-15"},
+        {"command": "debate", "date": "2026-11-16", "round": 0, "source": "start", "status": "ok"},        # a start is not a use
+        {"command": "debate", "date": "2026-11-16", "round": 1, "source": "run", "status": "ok"},
+        {"command": "debate", "date": "2026-11-16", "round": 1, "source": "run", "status": "tool_missing"},  # a skipped seat is not a use
+        {"command": "debate", "date": "2026-11-17", "round": 2, "source": "manual", "status": "ok"},
+    ]
+    (tmp_path / "logs" / "runs.jsonl").write_text("".join(json.dumps(r) + "\n" for r in records), encoding="utf-8")
+    rows = {r["part"]: r for r in earn.review(tmp_path, today=TODAY)}
+    assert rows["ask / delegate / panel"]["uses"] == 1
+    assert rows["debate"]["uses"] == 2 and rows["debate"]["last"] == "2026-11-17" and rows["debate"]["verdict"] == "earns its place"
+
+
+def test_a_debate_never_run_is_flagged(tmp_path):
+    rows = {r["part"]: r for r in earn.review(tmp_path, today=TODAY)}
+    assert rows["debate"]["uses"] == 0 and rows["debate"]["verdict"] == "never used: pause or remove?"
+
+
 def test_damaged_logs_do_not_crash(tmp_path):
     csv_log(tmp_path, "ledger.csv", "date,task,model,minutes_saved,note", ["garbage", ",,,,", "2026-11-17,T,m,5,"])
     assert {r["part"]: r for r in earn.review(tmp_path, today=TODAY)}["ledger"]["uses"] == 1

@@ -11,6 +11,7 @@ from .store import read_csv_rows, read_run_records
 
 PARTS = [  # name, kind, source, filter
     ("ask / delegate / panel", "runs", None),
+    ("debate", "debate", None),
     ("rate / learn", "csv", "ratings.csv"),
     ("predict / calibration", "csv", "predictions.csv"),
     ("vocab", "csv", "vocab.csv"),
@@ -24,8 +25,11 @@ PARTS = [  # name, kind, source, filter
 
 def _dates(home, kind, source):
     home = Path(home)
-    if kind == "runs":
-        raw = [r.get("date") or str(r.get("started_at") or "")[:10] for r in read_run_records(home)]
+    if kind in ("runs", "debate"):
+        # a debate use is a recorded answer (round 1 to 3); its start and its skipped or failed seats are not uses
+        mine = (lambda r: r.get("command") == "debate" and r.get("status") == "ok" and (r.get("round") or 0) >= 1)
+        wanted = mine if kind == "debate" else (lambda r: r.get("command") != "debate")
+        raw = [r.get("date") or str(r.get("started_at") or "")[:10] for r in read_run_records(home) if wanted(r)]
     elif kind == "csv":
         raw = [r.get("date") for r in read_csv_rows(home / "logs" / source, ("date",))]
     else:
