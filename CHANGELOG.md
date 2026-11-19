@@ -4,6 +4,8 @@ Dates are release dates. Newest first.
 
 ## [Unreleased]
 
+## [0.4.1] - 2026-11-19
+
 - Fix: `lifeos --help` crashed with `ValueError: unsupported format character` because the `predict` help text held a bare `%`. New tests render the top-level help and every parser's help at every depth, so no help string can break the front door again. Per-command `--help` was never affected.
 - Docs: the README command table is headed "What it does" (it said v0.1 over a v0.4 table); `STATE.md` brought up to date.
 
