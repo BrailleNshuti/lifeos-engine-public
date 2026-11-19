@@ -35,6 +35,42 @@ def test_only_fixes_propose_a_patch_bump(tmp_path):
     assert plan["proposed"] == "0.3.1"
 
 
+def bump(tmp_path, *entries):
+    log = "# Changelog\n\n## [Unreleased]\n\n" + "\n".join(entries) + "\n\n## [0.3.0] - 2026-11-18\n\n- old\n"
+    return release.plan(make(tmp_path, changelog=log))["proposed"]
+
+
+def test_the_word_new_inside_a_fix_does_not_make_a_feature(tmp_path):
+    # the real 0.4.1 entries: "New tests render ..." once made the tool propose 0.5.0
+    assert bump(tmp_path,
+                "- Fix: `lifeos --help` crashed because of a bare `%`. New tests render every help text.",
+                '- Docs: the README command table is headed "What it does".') == "0.3.1"
+
+
+@pytest.mark.parametrize("entry", [
+    "- Fixed the renewed token handling in `b`.",
+    "- Fix: `lifeos lint` crashed on a task without a due date.",
+    "- Tests: new property tests for the guard.",
+    "- Docs: a new example in the README.",
+    "- Robustness: a knewline in a log no longer crashes `lifeos runs`.",
+])
+def test_fixes_docs_and_tests_stay_patch(tmp_path, entry):
+    assert bump(tmp_path, entry) == "0.3.1"
+
+
+@pytest.mark.parametrize("entry", [
+    "- `lifeos debate`: blind multi-model debate.",
+    "- A new command that lists stale tasks.",
+    "- Adds a new flag `--json` to `lifeos runs`.",
+])
+def test_a_command_or_a_new_feature_proposes_a_minor_bump(tmp_path, entry):
+    assert bump(tmp_path, entry) == "0.4.0"
+
+
+def test_one_feature_among_fixes_is_enough_for_a_minor_bump(tmp_path):
+    assert bump(tmp_path, "- Fix: a typo.", "- `lifeos debate`: blind debate.", "- Docs: more.") == "0.4.0"
+
+
 def test_version_mismatch_is_a_problem(tmp_path):
     assert any("differ" in p for p in release.plan(make(tmp_path, init="0.2.9"))["problems"])
 
