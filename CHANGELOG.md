@@ -4,6 +4,8 @@ Dates are release dates. Newest first.
 
 ## [Unreleased]
 
+- Fix: `lifeos release` proposed a minor bump (0.5.0) for fix-only entries, because it read the substring "new" inside "New tests render ..." as a feature. Entries that start with Fix, Docs, Tests, Robustness, CI, Chore or Refactor are now patch-level; a feature is an entry that begins with a command name (without fix wording) or says "new command/flag/option/feature" in words. The version and the tag stay the owner's decision.
+
 ## [0.4.1] - 2026-11-19
 
 - Fix: `lifeos --help` crashed with `ValueError: unsupported format character` because the `predict` help text held a bare `%`. New tests render the top-level help and every parser's help at every depth, so no help string can break the front door again. Per-command `--help` was never affected.
