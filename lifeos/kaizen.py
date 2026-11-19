@@ -1,4 +1,4 @@
-"""Monthly System Health and Kaizen self-improving loop (Master Plan v2.3 Section 10.3).
+"""Monthly System Health and Kaizen self-improving loop.
 
 Reads the last 28 days of logs/runs.jsonl, logs/ledger.csv, logs/proofs.csv, logs/hours.csv, logs/health.csv,
 and system/changes.md to answer the five System Health questions with measured numbers and draft reviews/YYYY-MM.md.
@@ -165,7 +165,7 @@ def _pending_trials(home, end_date):
 
 
 def system_health(home, month=None, today=None):
-    """Compute the 5-question Monthly System Health report (Section 10.3) over a 28-day window."""
+    """Compute the 5-question Monthly System Health report over a 28-day window."""
     label, start, end = _parse_month_window(month=month, today=today)
     logs = Path(home) / "logs"
     ledger = _csv_rows_in_window(logs / "ledger.csv", start, end)

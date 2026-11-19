@@ -1135,13 +1135,13 @@ def build_parser():
     pan_p.add_argument("--json", action="store_true")
     pan_p.set_defaults(func=cmd_panel)
 
-    kzn_p = sub.add_parser("kaizen", help="monthly System Health check (Section 10.3) and 4-week trial audit")
+    kzn_p = sub.add_parser("kaizen", help="monthly System Health check and 4-week trial audit")
     kzn_p.add_argument("--month", help="YYYY-MM (default: current month)")
     kzn_p.add_argument("--draft", action="store_true", help="write reviews/<YYYY-MM>.md without overwriting")
     kzn_p.add_argument("--json", action="store_true", help="output structured JSON health report")
     kzn_p.set_defaults(func=cmd_kaizen)
 
-    rte_p = sub.add_parser("route", help="evaluate the 6-question Section 8.2 routing decision for a task or prompt")
+    rte_p = sub.add_parser("route", help="evaluate the 6-question routing decision for a task or prompt")
     rte_p.add_argument("target", nargs="+", help="task id (e.g. T-261116) or free-text task description")
     rte_p.add_argument("--tier", help="override 5-tier data classification (PUBLIC, INTERNAL, PERSONAL, SENSITIVE, SECRET)")
     rte_p.add_argument("--full", action="store_true", help="evaluate with me.md and now.md included")
@@ -1189,7 +1189,7 @@ def build_parser():
     std_exm.add_argument("--minutes", type=int, default=60)
     std_p.set_defaults(func=cmd_study)
 
-    exm_p = sub.add_parser("exam", help="generate or score a 60-90 min Monthly No-AI Exam (Section 13.4 & Appendix B8)")
+    exm_p = sub.add_parser("exam", help="generate or score a 60-90 min Monthly No-AI Exam")
     exm_p.add_argument("--month", help="YYYY-MM (default: current month)")
     exm_p.add_argument("--module", default="CSEBDSDSSE01 · Data Science Software Engineering", help="IU module focus")
     exm_p.add_argument("--draft", action="store_true", help="write reviews/exam-<YYYY-MM>.md")
@@ -1199,7 +1199,7 @@ def build_parser():
     exm_p.add_argument("--link", help="proof link for logs/proofs.csv")
     exm_p.set_defaults(func=cmd_exam)
 
-    bkf_p = sub.add_parser("bakeoff", help="generate or score a blind Role Bake-Off scorecard (Section 10.4 & Appendix A8)")
+    bkf_p = sub.add_parser("bakeoff", help="generate or score a blind Role Bake-Off scorecard")
     bkf_p.add_argument("--quarter", help="YYYY-Q1..Q4 (default: current quarter)")
     bkf_p.add_argument("--task-type", default="Decision Memo", help="task category being compared")
     bkf_p.add_argument("--model-a", default="claude")
@@ -1209,7 +1209,7 @@ def build_parser():
     bkf_p.add_argument("--overwrite", action="store_true")
     bkf_p.set_defaults(func=cmd_bakeoff)
 
-    shw_p = sub.add_parser("showcase", help="draft a 20-minute Build-in-Public weekly proof post & case study (Section 14.4 / D12)")
+    shw_p = sub.add_parser("showcase", help="draft a 20-minute Build-in-Public weekly proof post & case study")
     shw_p.add_argument("--week", help="ISO week such as 2026-W46")
     shw_p.add_argument("--draft", action="store_true", help="write reviews/post-<week>.md")
     shw_p.add_argument("--overwrite", action="store_true")

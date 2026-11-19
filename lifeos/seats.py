@@ -23,7 +23,7 @@ SEVEN_DAYS = 7
 REST_HOURS = 12
 
 # First match wins. Local work is first so "private" beats "python".
-# Levels match the recorded split: Claude writes code (D23), Codex checks,
+# Levels match the recorded split: Claude writes code, Codex checks,
 # Gemini reads, Qwen stays on the laptop.
 KINDS = [
     ("qwen", "none", "L1",

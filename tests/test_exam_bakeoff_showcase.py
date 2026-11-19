@@ -67,7 +67,7 @@ def test_showcase_generates_and_drafts_weekly_post(home, capsys):
     rel = capsys.readouterr().out.strip().replace("\\", "/")
     assert rel == "reviews/post-2026-W46.md"
     post_txt = (home / "reviews" / "post-2026-W46.md").read_text(encoding="utf-8")
-    assert "BUILD IN PUBLIC (D12)" in post_txt
+    assert "BUILD IN PUBLIC" in post_txt
     assert "#AIEngineering" in post_txt
 
 

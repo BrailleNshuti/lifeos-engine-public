@@ -582,7 +582,7 @@ function renderToday(){
       </div>
     </div>
     <div class="card" style="margin-top:16px">
-      <span class="eyebrow">Fixed External Deadlines (D20 — no fake self-set dates)</span>
+      <span class="eyebrow">Fixed External Deadlines (no fake self-set dates)</span>
       <ul class="list">${dls}</ul>
     </div>
   `;
@@ -746,7 +746,7 @@ function renderCareer(){
     <div class="card" style="margin-top:16px">
       <span class="eyebrow">High-ROI Certifications & Exam Roadmap (learning/career-mastery/certifications-and-prep.md)</span>
       <ul class="list">
-        <li><span><b>1. Goethe-Zertifikat B1 → B2 (D10 Language Gate)</b><br><span class="mono">B1 Target: May/Jun 2027 · B2 Target: Nov/Dec 2027 · Technical German (heise/golem) + 5-min monthly recordings</span></span><span class="pill copper">Priority 1</span></li>
+        <li><span><b>1. Goethe-Zertifikat B1 → B2</b><br><span class="mono">B1 Target: May/Jun 2027 · B2 Target: Nov/Dec 2027 · Technical German (heise/golem) + 5-min monthly recordings</span></span><span class="pill copper">Priority 1</span></li>
         <li><span><b>2. AWS Certified Solutions Architect – Associate (SAA-C03) / CLF-C02</b><br><span class="mono">Target: Apr/May 2027 (right after DLBDSCC01 Cloud Computing exam) · IAM, VPC, S3 OAC, RDS Multi-AZ, FinOps</span></span><span class="pill mint">Prep Pack Ready</span></li>
         <li><span><b>3. HashiCorp Certified: Terraform Associate (003)</b><br><span class="mono">Target: May/Jun 2027 · State locking (S3+DynamoDB), modules, lifecycle, validates AWS Terraform repo</span></span><span class="pill mint">Prep Pack Ready</span></li>
         <li><span><b>4. AWS Machine Learning Engineer Associate (MLA-C01) / Databricks Data Engineer Associate</b><br><span class="mono">Target: Aug/Sep 2027 (after P2 & P3) · Medallion Lakehouse, Delta Lake, Point-in-Time Feature Joins, PSI Drift</span></span><span class="pill steel">Prep Pack Ready</span></li>
@@ -1016,7 +1016,7 @@ function renderLoops(){
         </ul>
       </div>
       <div class="paper">
-        <span class="eyebrow" style="color:#7A4A1E">Section 2.3 · The Code</span>
+        <span class="eyebrow" style="color:#7A4A1E">The Code</span>
         <h2>The Twelve Laws of LifeOS</h2>
         <ol style="padding-left:20px;margin:0;display:grid;gap:6px">
           <li><b>Proof or it didn’t happen.</b> Links, passing tests, scores, recordings.</li>
