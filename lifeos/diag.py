@@ -4,7 +4,8 @@ On Windows, `os.replace` raises PermissionError (winerror 5 or 32) when another 
 delete sharing, and that includes short-lived readers such as a virus scanner or an indexer. This module runs ONLY after
 such a failure: it writes one line to stderr and, when LIFEOS_REPLACE_DIAG names a file, one JSON line there. It lists the
 processes that hold the paths (Windows Restart Manager, standard library `ctypes`) and says whether this process is one of them.
-It never retries and never raises: a bug here must not hide the real error. Nothing is sent anywhere.
+It never raises: a bug here must not hide the real error. The retry itself lives in `store` (a few short pauses, only for
+that Windows error); this module only reports how it went. Nothing is sent anywhere.
 """
 import datetime as dt
 import json
@@ -59,11 +60,31 @@ def _restart_manager(path):
         rm.RmEndSession(session)
 
 
-def describe(err, src, dst):
+def _now():
+    return dt.datetime.now(dt.timezone.utc).isoformat(timespec="milliseconds")
+
+
+def _append(rec):
+    target = os.environ.get(ENV)
+    if target:
+        with open(target, "a", encoding="utf-8") as out:
+            out.write(json.dumps(rec, sort_keys=True) + "\n")
+
+
+def recovered(err, src, dst, attempts):
+    """A replace that failed with a sharing violation and then worked. File only, no noise: it is how the retry is measured."""
+    try:
+        _append({"event": "os.replace recovered", "time": _now(), "errno": err.errno,
+                 "winerror": getattr(err, "winerror", None), "dst": str(dst), "attempts": attempts, "pid": os.getpid()})
+    except Exception:
+        return None
+
+
+def describe(err, src, dst, attempts=1):
     """Everything worth knowing about one failed replace, as a plain dict."""
     mine = os.getpid()
     on_dst, on_src = holders(dst), holders(src)
-    return {"event": "os.replace failed", "time": dt.datetime.now(dt.timezone.utc).isoformat(timespec="milliseconds"),
+    return {"event": "os.replace failed", "time": _now(), "attempts": attempts,
             "errno": err.errno, "winerror": getattr(err, "winerror", None), "message": str(err.strerror or err),
             "src": str(src), "dst": str(dst), "src_exists": os.path.exists(src), "dst_exists": os.path.exists(dst),
             "pid": mine, "thread": threading.current_thread().name, "threads": threading.active_count(),
@@ -71,16 +92,13 @@ def describe(err, src, dst):
             "own_pid_holds": any(h["pid"] == mine for h in on_dst + on_src)}
 
 
-def report(err, src, dst):
-    """Write the diagnostic line(s). Never raises, never retries."""
+def report(err, src, dst, attempts=1):
+    """Write the diagnostic line(s) for a replace that finally failed. Never raises, never retries."""
     try:
-        rec = describe(err, src, dst)
+        rec = describe(err, src, dst, attempts)
         names = ", ".join(f"{h['pid']} {h['name']}" for h in rec["holders_dst"] + rec["holders_src"]) or "none seen"
-        print(f"lifeos: os.replace failed (errno={rec['errno']} winerror={rec['winerror']}) dst={rec['dst']} "
-              f"holders: {names}; own process holds it: {rec['own_pid_holds']}", file=sys.stderr)
-        target = os.environ.get(ENV)
-        if target:
-            with open(target, "a", encoding="utf-8") as out:
-                out.write(json.dumps(rec, sort_keys=True) + "\n")
+        print(f"lifeos: os.replace failed after {attempts} attempt(s) (errno={rec['errno']} winerror={rec['winerror']}) "
+              f"dst={rec['dst']} holders: {names}; own process holds it: {rec['own_pid_holds']}", file=sys.stderr)
+        _append(rec)
     except Exception:
         return None
