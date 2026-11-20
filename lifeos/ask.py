@@ -149,8 +149,10 @@ def _run_cli(cmd, prompt, timeout=None, via_stdin=True, use_review_cwd=True):
                 timeout=timeout, encoding="utf-8", errors="replace", cwd=str(active_cwd), env=env,
             )
         else:
-            # An empty temp folder: the model sees the pack and nothing else on disk
-            with tempfile.TemporaryDirectory() as empty:
+            # An empty temp folder: the model sees the pack and nothing else on disk. A helper process of the CLI can still
+            # hold a file in it for a moment after the CLI has answered (Windows then refuses to delete it, WinError 32):
+            # that must not throw away the answer we already have, so a failed cleanup is ignored.
+            with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as empty:
                 done = subprocess.run(
                     [exe, *cmd[1:]], input=prompt if via_stdin else None,
                     stdin=None if via_stdin else subprocess.DEVNULL, capture_output=True, text=True,

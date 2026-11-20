@@ -4,6 +4,7 @@ Dates are release dates. Newest first.
 
 ## [Unreleased]
 
+- Fix: a model's answer is no longer lost when its temporary working folder cannot be deleted. On Windows a helper process of a model CLI can hold a file in that folder for a moment after the CLI has answered, and cleaning it up raised `WinError 32` after the answer had been received (seen live: a debate seat failed this way). The cleanup error is now ignored; at worst an empty folder stays in the temp directory. Applies to every command that calls a model CLI (`ask`, `delegate`, `panel`, `review`, `debate`).
 - `lifeos selftest` now runs 44 steps: a debate round trip with no model (start, two recorded answers, the next prompts, a score, a dry run, then the ledger chain) on the throwaway home. If the debate cannot start, its seven steps are reported as failures instead of vanishing. A test pins the README's step count to the code.
 - `lifeos earn` has a row for `debate`: a use is a recorded answer (round 1 to 3); a start, a skipped seat and a failed call are not. The "ask / delegate / panel" row no longer counts debate records.
 - Docs and help: references to a private plan (section numbers such as 10.3, appendix and decision ids, the phrase "work-lane") are removed from README rows, CLI help, MCP tool descriptions, docstrings, skills and two generated headings (`# Skills`, `# BUILD IN PUBLIC`). The router now says "confidential-work-data check". `tests/test_public_hygiene.py` fails if one comes back. Found by Gemini's docs review and checked against the code.
