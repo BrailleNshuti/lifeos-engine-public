@@ -15,7 +15,7 @@ import sys
 import uuid
 from pathlib import Path
 
-from . import ask, panel, seats, verify
+from . import ask, debatestats, panel, seats, verify
 from .home import estimate_tokens
 from .policy import TIERS, check_provider_allowed, classify_content
 from .store import append_run_record, atomic_write_bytes, read_run_records, run_lock
@@ -489,15 +489,18 @@ def _rows(meta, a1, groups, defences):
 def score(home, did):
     meta, recs = load(home, did), _records(home, did)
     a1, valid, ignored = _round2(home, meta, recs)
-    groups = {}
-    for o in _numbered(meta, valid):
+    numbered, groups = _numbered(meta, valid), {}
+    for o in numbered:
         groups.setdefault(o["tid"], []).append(o)
-    rows = _rows(meta, a1, groups, _defences(meta, _answers(home, meta, 3, recs)))
+    defences = _defences(meta, _answers(home, meta, 3, recs))
+    rows = _rows(meta, a1, groups, defences)
     total = sum(len(claims_of(t)) for t in a1.values())
     return {"debate": did, "question": meta["question"], "labels": meta["labels"], "claims_total": total,
             "answered": {r: len(_ok(recs, r)) for r in range(1, ROUNDS + 1)}, "claims": rows,
             "challenged": [r for r in rows if r["objections"]], "unchallenged": sum(not r["objections"] for r in rows),
-            "opinion_set_aside": sum(not o["counts"] for o in valid), "ignored": ignored, "agreement_logged": agreement(a1)}
+            "opinion_set_aside": sum(not o["counts"] for o in valid), "ignored": ignored, "agreement_logged": agreement(a1),
+            "seats": {seat: {**stats, "answered": seat in a1}
+                      for seat, stats in debatestats.scorecard(meta["labels"], valid, numbered, defences, rows).items()}}
 
 
 def render_score(rep, reveal=False):
@@ -514,7 +517,7 @@ def render_score(rep, reveal=False):
                   f"objections ignored (bad target or over the cap of {MAX_OBJECTIONS}): {rep['ignored']}",
               f"Agreement (logged, not used): {rep['agreement_logged']} claim(s) made by two or more seats."]
     if reveal:
-        lines.append("Labels: " + ", ".join(f"{l}={s}" for l, s in rep["labels"].items()))
+        lines += ["Labels: " + ", ".join(f"{l}={s}" for l, s in rep["labels"].items()), "", debatestats.render(rep["seats"])]
     return "\n".join(lines)
 
 
@@ -718,6 +721,6 @@ def _dispatch(args, home):
         print(render_run(run(home, args.id, execute=args.run), args.run))
     else:
         rep = score(home, args.id)
-        shown = rep if args.reveal else _scrub_all({k: v for k, v in rep.items() if k != "labels"})
+        shown = rep if args.reveal else _scrub_all({k: v for k, v in rep.items() if k not in ("labels", "seats")})
         print(json.dumps(shown, indent=2) if args.json else render_score(rep, reveal=args.reveal))
     return 0

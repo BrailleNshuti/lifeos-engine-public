@@ -19,7 +19,7 @@ agreeing is not evidence (rule 6, "evidence before confidence").
 | `lifeos debate next <id> [--round N] [--skip-missing]` | Round 1 prints the one pack every seat gets. Rounds 2 and 3 write one prompt file per seat in `debates/<id>/prompts/`. It waits for seats that have not answered unless `--skip-missing` |
 | `lifeos debate record <id> --round N --seat S --file F` | Stores an answer (UTF-8, up to 200 KB) with its sha256 and a chained ledger record. Never overwrites |
 | `lifeos debate run <id> [--run]` | Asks the seats round by round. A seat that is not installed, resting or not allowed to see the question is skipped and named, never replaced. A dry run shows only the next round |
-| `lifeos debate score <id> [--reveal] [--json]` | Rule-based table, no model. `--reveal` shows which seat wore which label: use it only after the debate |
+| `lifeos debate score <id> [--reveal] [--json]` | Rule-based table, no model. `--reveal` shows which seat wore which label and adds a per-seat scorecard (claims that fell or held, objections raised and landed, defences conceded, rebutted or revised): use it only after the debate, one debate is a small sample |
 
 `run` calls each seat directly instead of through `lifeos delegate`, so the exact text sent is the prompt file and nothing else.
 
