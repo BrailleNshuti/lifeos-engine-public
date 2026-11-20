@@ -4,7 +4,7 @@ Read this first. Keep it short; update it after meaningful merges.
 
 ## Now
 
-- Version **0.5.0** is on `main` once the release PR merges; the tag `v0.5.0` and the GitHub release are published from the owner's laptop (see the report). Previous release: v0.4.1.
+- Version **0.5.0** is prepared in the release PR; the tag `v0.5.0` and the GitHub release come after the merge. Previous release: v0.4.1.
 - Merged in 0.5.0 (all through pull requests with green CI on Linux and Windows): the new command `lifeos debate` (blind three-round debate scored by rules, protocol in `docs/DEBATE.md`) with a per-seat scorecard (`score --reveal`), a `debate` row in `lifeos earn`, a debate round trip in `lifeos selftest` (44 steps), a retry on short Windows sharing violations in `store._replace`, failure diagnostics for `os.replace` (`lifeos/diag.py`), output that no longer crashes on cp1252 (`lifeos/console.py`), answers that are no longer lost when a CLI's temp folder cannot be deleted, a release-bump proposal fixed, and private-plan references removed with a test that keeps them out.
 - Seats: one table (`lifeos/seats.py`) with failover, one cloud budget and rest-until logic. `debate` records count toward the budget; pasted answers do not.
 - `lifeos debate run` calls the seat adapters directly (not `delegate`) so the exact prompt sent is provable. Two live runs with Claude, Codex and Gemini: `docs/DEBATE-LIVE-RUN.md`.
@@ -23,7 +23,7 @@ Read this first. Keep it short; update it after meaningful merges.
 
 ## Release
 
-- v0.5.0 (minor: Unreleased held a new command). The roadmap now has v0.5 for debate and the model router moved to v0.6 (Jun 2027). Release steps: bump `pyproject.toml` and `lifeos/__init__.py`, move `[Unreleased]` under the new heading, tag the merge commit, publish the GitHub release with the notes.
+- v0.5.0 (minor: Unreleased held a new command). The roadmap now has v0.5 for debate and the model router moved to v0.6 (Jun 2027). Version bump and changelog move are in the release PR; what remains is the tag on the merge commit and the GitHub release with the notes.
 
 ## Next
 
