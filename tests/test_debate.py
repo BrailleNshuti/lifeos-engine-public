@@ -300,6 +300,22 @@ def test_every_verdict_is_rule_based(home, tmp_path):
     assert f"{lab['claude']}2" not in by  # an opinion alone never challenges a claim
 
 
+def test_the_seat_scorecard_is_in_the_report_and_only_shown_with_reveal(home, tmp_path, capsys):
+    meta, did, lab = scored_debate(home, tmp_path)
+    card = debate.score(home, did)["seats"]
+    assert (card["codex"]["raised"], card["codex"]["counted"], card["codex"]["landed"]) == (3, 2, 2)
+    assert (card["gemini"]["raised"], card["gemini"]["counted"], card["gemini"]["landed"]) == (3, 2, 2)
+    assert (card["claude"]["raised"], card["claude"]["counted"]) == (1, 0)
+    assert (card["claude"]["fell"], card["claude"]["unchallenged"], card["claude"]["unanswered"]) == (2, 1, 2)
+    assert main(["--home", str(home), "debate", "score", did]) == 0
+    assert "landed" not in capsys.readouterr().out
+    assert main(["--home", str(home), "debate", "score", did, "--reveal"]) == 0
+    shown = capsys.readouterr().out
+    assert "landed" in shown and "codex" in shown
+    assert main(["--home", str(home), "debate", "score", did, "--json"]) == 0
+    assert "landed" not in capsys.readouterr().out
+
+
 def test_survived_open_and_fell_after_the_defences(home, tmp_path):
     meta, did, lab = scored_debate(home, tmp_path)
     c, x = lab["claude"], lab["codex"]
@@ -605,7 +621,7 @@ def test_the_protocol_doc_matches_the_code():
     doc = (ROOT / "docs" / "DEBATE.md").read_text(encoding="utf-8")
     for word in ("OBJECTION", "DEFENCE", "concede", "rebut", "revise", "revised", "SURVIVED", "FELL", "OPEN", "evidence",
                  "opinion", "logged, not used", "settle", "B*", "unchallenged", "--skip-missing", "--seed", "--json",
-                 "--reveal", "--run", "rule 6", str(debate.MAX_OBJECTIONS), str(debate.MAX_CLAIMS)):
+                 "--reveal", "--run", "rule 6", "scorecard", str(debate.MAX_OBJECTIONS), str(debate.MAX_CLAIMS)):
         assert word in doc, f"docs/DEBATE.md does not mention {word}"
     for seat in sorted(ask.ADAPTERS):  # the seats the code accepts are the seats the page lists
         assert seat in doc
