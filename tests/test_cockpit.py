@@ -66,6 +66,33 @@ def test_cockpit_broken_config_falls_back_to_defaults(home):
     assert profile["targets"] == [] and [a["id"] for a in profile["areas"]] == ["study", "lab", "work"]
 
 
+def test_cockpit_areas_are_limited_to_loggable_ids(home):
+    from lifeos.log import VALID_HOURS_AREAS
+    (home / "cockpit.json").write_text(json.dumps({"areas": [
+        {"id": "Exercise", "label": "Exercise"}, {"id": " LAB ", "label": "side project"}, {"id": "work"}]}), encoding="utf-8")
+    areas = cockpit.build_cockpit_data(home)["profile"]["areas"]
+    assert areas == [{"id": "lab", "label": "side project"}, {"id": "work", "label": "work"}]
+    assert all(a["id"] in VALID_HOURS_AREAS for a in areas)
+    (home / "cockpit.json").write_text(json.dumps({"areas": [{"id": "exercise"}]}), encoding="utf-8")
+    assert [a["id"] for a in cockpit.build_cockpit_data(home)["profile"]["areas"]] == ["study", "lab", "work"]
+
+
+def test_cockpit_config_text_cannot_break_out_of_the_page(home):
+    evil = '</script><script>alert(1)</script><img src=x onerror=alert(2)>" and \'quote\''
+    (home / "cockpit.json").write_text(json.dumps({
+        "owner": evil, "focus": evil, "horizon": evil,
+        "targets": [{"title": evil, "when": evil, "detail": evil}],
+        "areas": [{"id": "study", "label": evil}]}), encoding="utf-8")
+    html = cockpit.render_cockpit_html(home)
+    assert "</script><script>alert(1)" not in html
+    data_block = html.split("const DATA =", 1)[1].split("const WRITE_NONCE", 1)[0]
+    assert "</" not in data_block.replace("<\/", "")  # every closing sequence in the data is escaped
+    template = cockpit.COCKPIT_HTML_TEMPLATE
+    for field in ("esc(pf.owner)", "esc(pf.focus ||", "esc(pf.horizon)", "esc(t.title)", "esc(t.when)", "esc(t.detail)",
+                  "esc(a.label)", "esc(a.id)"):
+        assert field in template, field
+
+
 def test_cockpit_export_creates_self_contained_html_and_passes_guard(home, capsys):
     assert main(["--home", str(home), "cockpit"]) == 0
     out_rel = capsys.readouterr().out.strip().replace("\\", "/")
