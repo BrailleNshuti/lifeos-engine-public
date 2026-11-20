@@ -4,6 +4,9 @@ Dates are release dates. Newest first.
 
 ## [Unreleased]
 
+- `scripts/soak.py` (standard library): runs the full suite N times with `LIFEOS_REPLACE_DIAG` set and prints, per run and in total, the exit code and the `os.replace` recovered and failed counts. Three runs on Windows: 829 passed each, recovered 0, failed 0, so the retry was still not exercised.
+- Docs: `docs/DEBATE.md` has a "Seats concede" section: the evidence gate checks that a pointer exists, not that it is true, and one trial (n=1, made-up question, not adopted) with a stricter round 3 prompt (rebut only with a command the seat ran) still gave zero OPEN verdicts; one of its three seats timed out in round 3 and the Claude seat has no shell.
+
 ## [0.5.0] - 2026-11-20
 
 - Fix: no personal data in the public tree. The cockpit no longer hardcodes a study provider, a language exam, certification dates, a private milestone or a side project: it reads an optional `cockpit.json` from the data home (`owner`, `focus`, `horizon`, `targets`, `areas`; a missing or broken file means neutral defaults; `examples/demo-home/cockpit.json` is made up). The exam generator and `lifeos exam --module` default to "Core module". The skill that named a private side project is now `demo-readiness-check` with made-up content. `tests/test_public_hygiene.py` fails if a short list of those terms returns in any tracked file. The old values still exist in git history; see the pull request.

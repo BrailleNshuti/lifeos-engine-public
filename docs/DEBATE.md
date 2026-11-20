@@ -93,6 +93,15 @@ The table ends with `Agreement (logged, not used)`: claims two or more seats mad
 - `debate.json`, the round 1 pack and each answer are hashed into the chained ledger. Every command refuses a broken chain or a
   changed `debate.json` or pack, and `next`, `run` and `score` refuse a changed answer file.
 
+## Seats concede
+
+The evidence gate checks that a pointer exists, not that it is true: a seat that writes "I ran this test" is counted, and one that
+says "I could not run it" is not. In live runs the seats mostly conceded or revised and rarely rebutted, and there were zero OPEN verdicts in the three live runs recorded so far (`docs/DEBATE-LIVE-RUN.md` covers the first two).
+One trial changed only the round 3 prompt to require a rebuttal to cite a command the seat had actually run (with its first output
+lines). Scoring was untouched. Result on a made-up benchmark question with three seats: zero OPEN verdicts, zero rebuttals; two seats
+revised or conceded every counted objection, and the third timed out in round 3, so the six objections raised against its answer stayed unanswered. The Claude
+seat has no shell and said so. One debate is a small sample; the stricter prompt was not adopted.
+
 ## What it cannot do
 
 It does not know who is right. Two seats can both bring real evidence: that is OPEN, and a test or a person settles it. Evidence that
