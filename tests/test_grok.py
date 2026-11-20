@@ -11,7 +11,7 @@ NOW = dt.datetime(2026, 11, 17, 12, 0, tzinfo=dt.timezone.utc)
 
 def test_live_facts_go_to_grok_and_long_reading_stays_with_gemini():
     assert seats.pick("What is the latest price of the laptop")[0] == "grok"
-    assert seats.pick("Any news on the IU exam dates today")[0] == "grok"
+    assert seats.pick("Any news on the exam dates today")[0] == "grok"
     assert seats.pick("Read all of this long pdf")[0] == "gemini"
 
 

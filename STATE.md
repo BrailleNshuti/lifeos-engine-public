@@ -12,10 +12,12 @@ Read this first. Keep it short; update it after meaningful merges.
 
 ## Open
 
+- The v0.4.0 tag still crashes on `lifeos --help` (a bare `%` in one help string; per-command `--help` works). Fixed in v0.4.1; use that release.
 - **Windows write flake:** before the retry, 2 of 3 full runs failed on `os.replace` (winerror 5, single thread, no holder visible, always a just-written file; most likely a scanner or indexer, not proven). After it: 3 of 3 clean, but the retry was never exercised, so that is suggestive only. Keep measuring: run the suite with `LIFEOS_REPLACE_DIAG=<file>` and count `recovered` against `failed` events.
 - **`debate` seats concede, they do not rebut:** two live runs, zero OPEN verdicts. The evidence gate checks that a pointer exists, not that it is true: a seat that says it ran a test is counted, one that says it could not is not. The Claude seat runs without a shell. Whether a different prompt changes this is untested.
 - **Local full test runs:** the system once killed a 5-minute run for low memory and asked me not to restart it, so I relied on CI for the full suite on the later changes. Focused local tests passed each time.
-- **Yours to decide, public already:** `lifeos/cockpit.py` hardcodes personal study targets (a language exam and its dates) and weekly bets; `skills/iwa-demo-check` names a personal side project; about 50 merged remote branches are not deleted.
+- Private plan references (section numbers, appendix and decision ids, "work-lane") are removed from code, help, MCP descriptions, skills and the README, and `tests/test_public_hygiene.py` keeps them out. Personal study targets, bets and the side-project skill were moved out in `fix/no-personal-data`: the cockpit reads `cockpit.json` from the data home (neutral defaults when absent), the skill is now `demo-readiness-check`, and the hygiene test keeps the old terms out.
+- **Still yours to decide:** about 50 merged remote branches are not deleted (list and command in the report).
 - Live proof of the Grok seat flags is still to be recorded after its usage resets. External CLIs need a periodic `--smoke` run; an empty working directory is not an operating-system sandbox.
 - I could not read `/usage` from inside the session, so the 75 % guard was not measurable; I used the seat table as a proxy, and my review calls ran from a throwaway home, so they are not in your real budget ledger.
 

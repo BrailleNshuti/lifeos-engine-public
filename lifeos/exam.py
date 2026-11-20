@@ -56,7 +56,7 @@ def _read_skills_rows(home):
     return rows
 
 
-def generate_monthly_exam(home, month=None, module="CSEBDSDSSE01 · Data Science Software Engineering"):
+def generate_monthly_exam(home, month=None, module="Core module"):
     """Build a deterministic 60-90 min Monthly No-AI Exam."""
     home = Path(home)
     month_str = month or date.today().strftime("%Y-%m")
@@ -76,7 +76,7 @@ def generate_monthly_exam(home, month=None, module="CSEBDSDSSE01 · Data Science
         "",
         "> **Protocol**: 60 to 90 minutes, **strictly offline / zero AI**.",
         "> Write your answers in this file or on paper first. Any topic scoring **< 70%** automatically returns next month.",
-        f"> **IU Focus Module**: `{module}`",
+        f"> **Focus Module**: `{module}`",
         "",
         "## Part 1 · Three Short-Answer Retrieval Questions (30 pts — 10 pts each)",
         f"1. **[{t1}]** {EXAM_BANK[t1]['short']}",
@@ -90,7 +90,7 @@ def generate_monthly_exam(home, month=None, module="CSEBDSDSSE01 · Data Science
         "## Part 3 · Timed From-Scratch Code Task (25 pts — No AI, No Autocomplete)",
         f"6. **[{t1}]** {EXAM_BANK[t1]['code']}",
         "",
-        "## Part 4 · Explain-It-Aloud / IU Oral Question (15 pts — 5-Minute Recording)",
+        "## Part 4 · Explain-It-Aloud / Oral Question (15 pts — 5-Minute Recording)",
         f"7. **[{t5}]** {EXAM_BANK[t5]['oral']}",
         "",
         "---",
@@ -101,7 +101,7 @@ def generate_monthly_exam(home, month=None, module="CSEBDSDSSE01 · Data Science
         "| Part 2 (Problems Q4–Q5) | 30 | __ | |",
         "| Part 3 (Code Task Q6) | 25 | __ | |",
         "| Part 4 (Oral Explanation Q7) | 15 | __ | |",
-        "| **Total Score (%)** | **100** | **__ %** | **Pass bar >= 70% (IU 1.0 bar >= 96%)** |",
+        "| **Total Score (%)** | **100** | **__ %** | **Pass bar >= 70% (top-grade bar >= 96%)** |",
         "",
         "## Three Weakest Points to Repeat Next Month",
         "1. ",
@@ -112,7 +112,7 @@ def generate_monthly_exam(home, month=None, module="CSEBDSDSSE01 · Data Science
     return "\n".join(lines)
 
 
-def write_exam_draft(home, month=None, module="CSEBDSDSSE01 · Data Science Software Engineering", overwrite=False):
+def write_exam_draft(home, month=None, module="Core module", overwrite=False):
     """Write the monthly no-AI exam paper to reviews/exam-YYYY-MM.md under the repo lock."""
     home = Path(home)
     month_str = month or date.today().strftime("%Y-%m")
