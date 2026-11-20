@@ -27,3 +27,13 @@ The technical answers themselves. Nothing in this run shows that `os.replace` fa
 ## Next
 
 Run one more debate with the corrected scoring unit and compare the verdicts. The figures above are from the run as it happened, with the old sentence unit.
+
+## Second live run (2026-11-20), with the corrected claim unit
+
+Question: the most likely way an append-only, hash-chained JSONL ledger on Windows silently loses or corrupts a record, and the cheapest test that catches it. Same three seats.
+
+- **The claim unit works:** answers of 5 or 6 numbered points gave 6 and 5 claims (the first run gave 30, 10 and 11 from similar answers).
+- **A seat was lost to a bug, not to the model:** Gemini's round 1 call failed with `WinError 32` while deleting its temporary working folder (a helper process of the CLI still held a file in it), after the CLI had answered. The answer was thrown away. Fixed in `ask._run_cli` (the cleanup error is ignored), with a test that reproduces the exact error. The debate ran on with two seats, as designed, and said which seat was down.
+- **Verdicts (2 seats, 11 claims):** FELL 3 (all conceded by the Claude seat), SURVIVED 8 (2 revised by Codex after an objection, 6 unchallenged), OPEN 0. 5 objections counted, 1 set aside as an opinion, 0 ignored. Agreement: 0 (two seats).
+- **Same pattern as the first run:** the seats conceded or revised and never rebutted with evidence, so no OPEN verdict in two runs. Whether a different prompt changes that is untested.
+- Ledger chain after the run: ok, 25 records.
