@@ -13,7 +13,7 @@ from urllib.parse import urlparse
 
 from .guard import private_patterns, scan_text
 from .kaizen import system_health
-from .log import log_health, log_hours, log_ledger, log_proof
+from .log import VALID_HOURS_AREAS, log_health, log_hours, log_ledger, log_proof
 from .runs import summarize_runs
 from .store import atomic_write_bytes
 from . import study
@@ -55,8 +55,9 @@ def _load_profile(home):
         ][:12]
     areas = raw.get("areas")
     if isinstance(areas, list):
-        clean = [{"id": a["id"], "label": str(a.get("label") or a["id"])[:40]}
-                 for a in areas if isinstance(a, dict) and isinstance(a.get("id"), str) and a["id"].strip()]
+        clean = [{"id": a["id"].strip().lower(), "label": str(a.get("label") or a["id"].strip().lower())[:40]}
+                 for a in areas if isinstance(a, dict) and isinstance(a.get("id"), str)
+                 and a["id"].strip().lower() in VALID_HOURS_AREAS]
         if clean:
             profile["areas"] = clean[:8]
     return profile
