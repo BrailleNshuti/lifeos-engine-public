@@ -77,6 +77,14 @@ def test_cockpit_areas_are_limited_to_loggable_ids(home):
     assert [a["id"] for a in cockpit.build_cockpit_data(home)["profile"]["areas"]] == ["study", "lab", "work"]
 
 
+def test_cockpit_areas_drop_duplicates_and_blank_labels(home):
+    (home / "cockpit.json").write_text(json.dumps({"areas": [
+        {"id": "study", "label": "A"}, {"id": "STUDY", "label": "B"}, {"id": "german", "label": "   "},
+        {"id": "lab", "label": True}]}), encoding="utf-8")
+    assert cockpit.build_cockpit_data(home)["profile"]["areas"] == [
+        {"id": "study", "label": "A"}, {"id": "german", "label": "german"}, {"id": "lab", "label": "lab"}]
+
+
 def test_cockpit_config_text_cannot_break_out_of_the_page(home):
     evil = '</script><script>alert(1)</script><img src=x onerror=alert(2)>" and \'quote\''
     (home / "cockpit.json").write_text(json.dumps({
@@ -86,7 +94,7 @@ def test_cockpit_config_text_cannot_break_out_of_the_page(home):
     html = cockpit.render_cockpit_html(home)
     assert "</script><script>alert(1)" not in html
     data_block = html.split("const DATA =", 1)[1].split("const WRITE_NONCE", 1)[0]
-    assert "</" not in data_block.replace("<\/", "")  # every closing sequence in the data is escaped
+    assert "</" not in data_block.replace(r"<\/", "")  # every closing sequence in the data is escaped
     template = cockpit.COCKPIT_HTML_TEMPLATE
     for field in ("esc(pf.owner)", "esc(pf.focus ||", "esc(pf.horizon)", "esc(t.title)", "esc(t.when)", "esc(t.detail)",
                   "esc(a.label)", "esc(a.id)"):

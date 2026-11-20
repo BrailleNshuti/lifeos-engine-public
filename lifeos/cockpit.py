@@ -55,11 +55,15 @@ def _load_profile(home):
         ][:12]
     areas = raw.get("areas")
     if isinstance(areas, list):
-        clean = [{"id": a["id"].strip().lower(), "label": str(a.get("label") or a["id"].strip().lower())[:40]}
-                 for a in areas if isinstance(a, dict) and isinstance(a.get("id"), str)
-                 and a["id"].strip().lower() in VALID_HOURS_AREAS]
+        clean, seen = [], set()
+        for a in areas:
+            aid = a["id"].strip().lower() if isinstance(a, dict) and isinstance(a.get("id"), str) else ""
+            if aid in VALID_HOURS_AREAS and aid not in seen:
+                seen.add(aid)
+                label = a.get("label").strip() if isinstance(a.get("label"), str) else ""
+                clean.append({"id": aid, "label": (label or aid)[:40]})
         if clean:
-            profile["areas"] = clean[:8]
+            profile["areas"] = clean
     return profile
 
 
