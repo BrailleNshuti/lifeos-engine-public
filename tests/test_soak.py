@@ -26,6 +26,41 @@ def test_summary_line_reports_totals_and_exit_codes():
     assert "3 runs" in text and "2 passed" in text and "recovered 3" in text and "failed 1" in text
 
 
-def test_main_runs_the_given_command_n_times(tmp_path):
-    rc = soak.main(["--runs", "2", "--cmd", "python -c pass", "--diag", str(tmp_path / "d.jsonl")])
-    assert rc == 0
+def test_main_runs_the_command_n_times_and_counts_new_events_per_run(tmp_path, monkeypatch, capsys):
+    diag = tmp_path / "d.jsonl"
+    calls = []
+    codes = iter([0, 1])
+
+    def fake_run(cmd, shell, env):
+        calls.append((cmd, env["LIFEOS_REPLACE_DIAG"]))
+        with open(diag, "a", encoding="utf-8") as fh:
+            fh.write(json.dumps({"event": "os.replace recovered"}) + "\n")
+        return type("R", (), {"returncode": next(codes)})()
+
+    monkeypatch.setattr(soak.subprocess, "run", fake_run)
+    rc = soak.main(["--runs", "2", "--cmd", "suite", "--diag", str(diag)])
+    out = capsys.readouterr().out
+    assert rc == 1 and len(calls) == 2 and calls[0] == ("suite", str(diag))
+    assert "run 1: exit 0, recovered 1, failed 0" in out and "run 2: exit 1, recovered 1, failed 0" in out
+    assert "2 runs, 1 passed, os.replace recovered 2" in out
+
+
+def test_zero_or_negative_runs_are_refused():
+    import pytest
+    for bad in ("0", "-1"):
+        with pytest.raises(SystemExit):
+            soak.main(["--runs", bad])
+
+
+def test_unusable_diag_path_exits_nonzero_instead_of_reporting_zero(tmp_path, capsys):
+    blocker = tmp_path / "file"
+    blocker.write_text("x", encoding="utf-8")
+    assert soak.main(["--runs", "1", "--cmd", "suite", "--diag", str(blocker / "sub" / "d.jsonl")]) == 2
+    assert "cannot use the diagnostics file" in capsys.readouterr().err
+
+
+def test_default_diag_log_is_removed_afterwards(monkeypatch):
+    seen = []
+    monkeypatch.setattr(soak.subprocess, "run", lambda cmd, shell, env: seen.append(env["LIFEOS_REPLACE_DIAG"]) or type("R", (), {"returncode": 0})())
+    assert soak.main(["--runs", "1", "--cmd", "suite"]) == 0
+    assert not Path(seen[0]).exists()
