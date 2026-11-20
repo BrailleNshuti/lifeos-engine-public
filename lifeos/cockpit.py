@@ -25,11 +25,41 @@ def _classify_lane(task_id, goal):
     combined = f"{task_id} {goal}".lower()
     if any(k in combined for k in ("prompt", "lab", "card", "console")):
         return "work"
-    if any(k in combined for k in ("study", "exam", "german", "iu", "course", "math", "stats", "python")):
+    if any(k in combined for k in ("study", "exam", "language", "course", "math", "stats", "python")):
         return "study"
-    if any(k in combined for k in ("engine", "kernel", "ask", "mcp", "iwa", "github", "plugin")):
+    if any(k in combined for k in ("engine", "kernel", "ask", "mcp", "github", "plugin")):
         return "lab"
     return "personal"
+
+
+DEFAULT_AREAS = [{"id": "study", "label": "study"}, {"id": "lab", "label": "lab"}, {"id": "work", "label": "work"}]
+
+
+def _load_profile(home):
+    """Read the owner's own labels and targets from `cockpit.json` in the data home; a missing or bad file means neutral defaults."""
+    profile = {"owner": "", "focus": "", "horizon": "", "targets": [], "areas": [dict(a) for a in DEFAULT_AREAS]}
+    try:
+        raw = json.loads((Path(home) / "cockpit.json").read_text(encoding="utf-8"))
+    except (OSError, UnicodeDecodeError, json.JSONDecodeError):
+        return profile
+    if not isinstance(raw, dict):
+        return profile
+    for key in ("owner", "focus", "horizon"):
+        if isinstance(raw.get(key), str):
+            profile[key] = raw[key][:200]
+    targets = raw.get("targets")
+    if isinstance(targets, list):
+        profile["targets"] = [
+            {k: str(t.get(k, ""))[:300] for k in ("title", "when", "detail")}
+            for t in targets if isinstance(t, dict) and t.get("title")
+        ][:12]
+    areas = raw.get("areas")
+    if isinstance(areas, list):
+        clean = [{"id": a["id"], "label": str(a.get("label") or a["id"])[:40]}
+                 for a in areas if isinstance(a, dict) and isinstance(a.get("id"), str) and a["id"].strip()]
+        if clean:
+            profile["areas"] = clean[:8]
+    return profile
 
 
 def _parse_task_detail(path):
@@ -280,6 +310,7 @@ def build_cockpit_data(home, week=None, month=None):
     skills = _parse_skills(home)
     return {
         "now": _parse_now_sections(home),
+        "profile": _load_profile(home),
         "week": week_data,
         "kaizen": system_health(home, month=month),
         "runs": summarize_runs(home, limit=15),
@@ -496,7 +527,7 @@ function renderLearning(){
         <span class="eyebrow">Evidence margin</span>
         <div class="margin-note"><b>Exam weather</b>${esc(weather)}</div>
         <div class="margin-note"><b>Question trust</b>${verified} verified · ${s.trust_counts.grounded || 0} waiting for review</div>
-        <div class="margin-note"><b>Learning rhythm</b>${l.study_hours} h technical · ${l.german_hours} h German this week</div>
+        <div class="margin-note"><b>Learning rhythm</b>${l.study_hours} h study · ${l.german_hours} h language this week</div>
         <div class="margin-note"><b>Proof shelf</b>${l.mastery_pct}% re-proved after the reset</div>
         <div class="margin-note"><b>Study streak</b>${streak.current} day${streak.current===1?'':'s'} · best ${streak.longest}</div>
         <p class="mono">Ctrl+K opens the source library. Escape leaves focus mode.</p>
@@ -504,7 +535,7 @@ function renderLearning(){
     </div>
     <div class="grid c3" style="margin-top:22px">
       <section class="card streak-card"><span class="eyebrow">Evidence streak</span><div class="streak-number">${streak.current}</div><h3>${streak.active_days_7}/7 active days this week</h3><p>${esc(streak.nudge)}</p><button class="btn" onclick="setTab('practice')">Protect the chain</button></section>
-      <section class="card soft"><span class="eyebrow">Quick evidence log</span><select id="q-area" class="input"><option value="study">IU / technical study</option><option value="german">German</option><option value="lab">learning project</option></select><input id="q-hours" class="input" type="number" step="0.25" placeholder="Focused hours"><input id="q-note" class="input" placeholder="What can you now reproduce without help?"><button class="btn primary" onclick="submitHours()">Place proof on the shelf</button></section>
+      <section class="card soft"><span class="eyebrow">Quick evidence log</span><select id="q-area" class="input">${areaOptions()}</select><input id="q-hours" class="input" type="number" step="0.25" placeholder="Focused hours"><input id="q-note" class="input" placeholder="What can you now reproduce without help?"><button class="btn primary" onclick="submitHours()">Place proof on the shelf</button></section>
       <section class="card"><span class="eyebrow">A useful ending</span><ul class="list"><li><span>Retrieve before rereading</span><span class="pill mint">Memory</span></li><li><span>Check against an exact source</span><span class="pill steel">Truth</span></li><li><span>Name the error, not your mood</span><span class="pill clay">Reflect</span></li><li><span>Choose the next smallest proof</span><span class="pill copper">Return</span></li></ul></section>
     </div>
   `;
@@ -532,17 +563,21 @@ function renderPractice(){
 
 function renderRecall(){ return renderPractice(); }
 
+function areaOptions(){
+  return ((DATA.profile || {}).areas || []).map(a => `<option value="${esc(a.id)}">${esc(a.label)}</option>`).join('');
+}
 function renderToday(){
   const w = DATA.week;
+  const pf = DATA.profile || {};
   const h = w.health || {};
   const top3 = (DATA.now.top3 || []).map(x => `<li><span>${x}</span><span class="pill copper">Top 3</span></li>`).join('');
-  const bets = (DATA.now.bets || []).map(x => `<li><span>${x}</span><span class="pill mint">Gate 2 Bet</span></li>`).join('');
+  const bets = (DATA.now.bets || []).map(x => `<li><span>${x}</span><span class="pill mint">Bet</span></li>`).join('');
   const dls = (DATA.now.deadlines || []).map(x => `<li><span>${x}</span><span class="pill clay">Deadline</span></li>`).join('');
   return `
     <section class="hero">
       <div class="eyebrow">Law 1 · Proof or it didn’t happen · Law 4 · Hard thing first</div>
-      <h1>Are you in at 100 % on your hardest block today, Braille?</h1>
-      <p class="mono">Personal · IU Applied AI (6 modules) · German B2 track · LifeOS Engine & iwa · Prompt Lab (synthetic only)</p>
+      <h1>Are you in at 100 % on your hardest block today${pf.owner ? ', ' + esc(pf.owner) : ''}?</h1>
+      <p class="mono">${esc(pf.focus || 'Set a focus line in cockpit.json in your data home')}</p>
       <div class="chips">
         <button class="btn ${state.checkin==='100%'?'primary':''}" onclick="saveCheckin('100%')">Yes — 100 % locked in</button>
         <button class="btn ${state.checkin==='low-energy'?'primary':''}" onclick="saveCheckin('low-energy')">Low energy — protect base & sleep</button>
@@ -557,17 +592,17 @@ function renderToday(){
     </div>
     <div class="grid c2" style="margin-top:16px">
       <div class="card">
-        <span class="eyebrow">This Week's Top 3 (Gate 0 / Gate 1)</span>
+        <span class="eyebrow">This Week's Top 3</span>
         <h3>Hard Thing First</h3>
         <ul class="list">${top3}</ul>
-        <span class="eyebrow" style="margin-top:10px">Quarterly Bets until Gate 2 (17 Jan 2027)</span>
+        <span class="eyebrow" style="margin-top:10px">Bets${pf.horizon ? ' until ' + esc(pf.horizon) : ''}</span>
         <ul class="list">${bets}</ul>
       </div>
       <div class="card">
         <span class="eyebrow">Quick Daily Logger (store-locked & guard-checked)</span>
         <h3>Log Hours, Health or Proof</h3>
         <div class="grid c2">
-          <select id="q-area" class="input"><option value="study">study (IU)</option><option value="german">german (A1→B2)</option><option value="lab">lab (Engine / iwa)</option><option value="work">work (hrs)</option></select>
+          <select id="q-area" class="input">${areaOptions()}</select>
           <input id="q-hours" class="input" type="number" step="0.5" placeholder="Hours (e.g. 1.5)">
         </div>
         <input id="q-note" class="input" placeholder="What did you prove or practice? (max 200 chars)">
@@ -697,7 +732,7 @@ function renderExam(){
     <div class="atelier">
       <aside class="syllabus"><span class="eyebrow">Blueprint coverage</span>${subjects.map(subject=>`<div class="margin-note"><b>${esc(subject)}</b>${(s.sources||[]).filter(x=>x.subject===subject).length} source(s)</div>`).join('')||'<p class="mono">Capture sources first.</p>'}</aside>
       <section class="desk-paper work-surface"><span class="eyebrow">Test now or freeze a paper</span><h2>Exam Blueprint</h2><label class="mono">Name</label><input id="exam-title" class="input" value="Practice Exam"><label class="mono">Subject or module</label><select id="exam-subject" class="input"><option value="">Mixed verified questions</option>${subjects.map(x=>`<option value="${esc(x)}">${esc(x)}</option>`).join('')}</select><div class="grid c2"><div><label class="mono">Questions</label><input id="exam-count" class="input" type="number" min="1" max="50" value="10"></div><div><label class="mono">Minutes</label><input id="exam-minutes" class="input" type="number" min="5" max="240" value="60"></div></div><div class="exam-seal">${verified} verified questions currently available. The engine refuses an exam larger than verified coverage.</div><div class="chips"><button class="btn primary" onclick="startQuickExam()">Start interactive test</button><button class="btn" onclick="forgeExam()">Create printable paper & key</button></div></section>
-      <aside class="evidence-margin"><span class="eyebrow">Exam weather</span><div class="margin-note"><b>${verified>=10?'Ready for a mixed mock':'Coverage still building'}</b>${verified>=10?'You have enough verified items for a ten-question paper.':'Verify grounded questions in Recall Studio first.'}</div><div class="margin-note"><b>Realism rule</b>Match the IU format, points, allowed aids and time before treating a score as evidence.</div><button class="btn" onclick="setTab('practice')">Review question trust</button></aside>
+      <aside class="evidence-margin"><span class="eyebrow">Exam weather</span><div class="margin-note"><b>${verified>=10?'Ready for a mixed mock':'Coverage still building'}</b>${verified>=10?'You have enough verified items for a ten-question paper.':'Verify grounded questions in Recall Studio first.'}</div><div class="margin-note"><b>Realism rule</b>Match the real exam format, points, allowed aids and time before treating a score as evidence.</div><button class="btn" onclick="setTab('practice')">Review question trust</button></aside>
     </div>
     <section class="card" style="margin-top:20px"><span class="eyebrow">Frozen exam papers</span><ul class="list">${exams||'<li>No frozen source-grounded exam yet.</li>'}</ul></section>`;
 }
@@ -744,12 +779,8 @@ function renderCareer(){
       </div>
     </div>
     <div class="card" style="margin-top:16px">
-      <span class="eyebrow">High-ROI Certifications & Exam Roadmap (learning/career-mastery/certifications-and-prep.md)</span>
-      <ul class="list">
-        <li><span><b>1. Goethe-Zertifikat B1 → B2</b><br><span class="mono">B1 Target: May/Jun 2027 · B2 Target: Nov/Dec 2027 · Technical German (heise/golem) + 5-min monthly recordings</span></span><span class="pill copper">Priority 1</span></li>
-        <li><span><b>2. AWS Certified Solutions Architect – Associate (SAA-C03) / CLF-C02</b><br><span class="mono">Target: Apr/May 2027 (right after DLBDSCC01 Cloud Computing exam) · IAM, VPC, S3 OAC, RDS Multi-AZ, FinOps</span></span><span class="pill mint">Prep Pack Ready</span></li>
-        <li><span><b>3. HashiCorp Certified: Terraform Associate (003)</b><br><span class="mono">Target: May/Jun 2027 · State locking (S3+DynamoDB), modules, lifecycle, validates AWS Terraform repo</span></span><span class="pill mint">Prep Pack Ready</span></li>
-        <li><span><b>4. AWS Machine Learning Engineer Associate (MLA-C01) / Databricks Data Engineer Associate</b><br><span class="mono">Target: Aug/Sep 2027 (after P2 & P3) · Medallion Lakehouse, Delta Lake, Point-in-Time Feature Joins, PSI Drift</span></span><span class="pill steel">Prep Pack Ready</span></li>
+      <span class="eyebrow">Exam and certification targets (cockpit.json in your data home)</span>
+      <ul class="list">${(DATA.profile.targets || []).map((t, n) => `<li><span><b>${n + 1}. ${esc(t.title)}</b><br><span class="mono">${esc(t.when)}${t.detail ? ' · ' + esc(t.detail) : ''}</span></span></li>`).join('') || '<li><span class="mono">No targets yet. Add them under "targets" in cockpit.json.</span></li>'}
       </ul>
     </div>
     <h2 style="margin:22px 0 12px">19-Skill Reset Ledger (Level 0 = fresh baseline · Level 3 = timed no-AI · Level 4 = shipped)</h2>

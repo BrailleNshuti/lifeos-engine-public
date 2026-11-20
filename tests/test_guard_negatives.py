@@ -18,7 +18,7 @@ HARMLESS = [
     "pytest -q passed 643 tests in 40.05s",
     "model claude-sonnet-5-5 at 80 % of the weekly limit",
     "cd C:\\Users\\Admin\\lifeos-engine-public",
-    "B2 Zertifikat bis Ende 2027, telc oder Goethe",
+    "Language certificate by end of next year, provider A or B",
     "x = 1000000 * 3600",
 ]
 

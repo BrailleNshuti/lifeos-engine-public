@@ -33,7 +33,37 @@ def home(tmp_path, demo):
         "interview_rubric": ["Problem", "Ownership", "Metric", "Trade-off", "Learning"],
         "sources": [{"label": "Example careers page", "url": "https://example.com/jobs"}],
     }), encoding="utf-8")
+    (target / "cockpit.json").write_text(json.dumps({
+        "targets": [{"title": "Example Cloud Practitioner (made up)", "when": "Spring 2030", "detail": "Invented notes"}],
+    }), encoding="utf-8")
     return target
+
+
+def test_cockpit_without_config_shows_neutral_defaults(home):
+    (home / "cockpit.json").unlink()
+    profile = cockpit.build_cockpit_data(home)["profile"]
+    assert profile["targets"] == [] and profile["owner"] == "" and profile["horizon"] == ""
+    assert [a["id"] for a in profile["areas"]] == ["study", "lab", "work"]
+
+
+def test_cockpit_reads_targets_and_labels_from_the_data_home(home):
+    (home / "cockpit.json").write_text(json.dumps({
+        "owner": "Sam", "focus": "Made-up focus line", "horizon": "Demo milestone (2030-01-01)",
+        "targets": [{"title": "Example Cloud Practitioner (made up)", "when": "Spring 2030", "detail": "Invented notes"}],
+        "areas": [{"id": "study", "label": "made-up study"}],
+    }), encoding="utf-8")
+    data = cockpit.build_cockpit_data(home)
+    assert data["profile"]["targets"][0]["title"] == "Example Cloud Practitioner (made up)"
+    assert data["profile"]["areas"] == [{"id": "study", "label": "made-up study"}]
+    assert "Example Cloud Practitioner (made up)" in cockpit.render_cockpit_html(home)
+
+
+def test_cockpit_broken_config_falls_back_to_defaults(home):
+    (home / "cockpit.json").write_text("{not json", encoding="utf-8")
+    assert cockpit.build_cockpit_data(home)["profile"]["targets"] == []
+    (home / "cockpit.json").write_text(json.dumps({"targets": "nope", "areas": [1, {"label": "no id"}]}), encoding="utf-8")
+    profile = cockpit.build_cockpit_data(home)["profile"]
+    assert profile["targets"] == [] and [a["id"] for a in profile["areas"]] == ["study", "lab", "work"]
 
 
 def test_cockpit_export_creates_self_contained_html_and_passes_guard(home, capsys):
@@ -56,7 +86,7 @@ def test_cockpit_export_creates_self_contained_html_and_passes_guard(home, capsy
     assert "Capture → Learn → Recall → Exam → Reflect" in html
     assert "fonts.googleapis.com" not in html and "fonts.gstatic.com" not in html
     assert "T-261116-demo-cli" in html
-    assert "AWS Certified Solutions Architect" in html
+    assert "Example Cloud Practitioner (made up)" in html
     data = cockpit.build_cockpit_data(home)
     assert "learning" in data
     assert {"focus_tasks", "due_skills", "mastery_pct", "pack_groups"} <= set(data["learning"])

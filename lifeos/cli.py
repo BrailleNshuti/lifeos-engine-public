@@ -1191,7 +1191,7 @@ def build_parser():
 
     exm_p = sub.add_parser("exam", help="generate or score a 60-90 min Monthly No-AI Exam")
     exm_p.add_argument("--month", help="YYYY-MM (default: current month)")
-    exm_p.add_argument("--module", default="CSEBDSDSSE01 · Data Science Software Engineering", help="IU module focus")
+    exm_p.add_argument("--module", default="Core module", help="module or course focus")
     exm_p.add_argument("--draft", action="store_true", help="write reviews/exam-<YYYY-MM>.md")
     exm_p.add_argument("--overwrite", action="store_true", help="overwrite existing exam draft")
     exm_p.add_argument("--score-skill", help="skill name in logs/skills.md to record a graded no-AI exam score")
