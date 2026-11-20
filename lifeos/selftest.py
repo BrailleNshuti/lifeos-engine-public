@@ -5,6 +5,7 @@ goes through the same entry point you use. Output of each step is captured; a fa
 """
 import contextlib
 import io
+import re
 import shutil
 import tempfile
 from pathlib import Path
@@ -55,6 +56,56 @@ def _example():
     return Path(__file__).resolve().parent.parent / "examples" / "demo-home"
 
 
+DEBATE_NAMES = ["debate start", "debate record claude", "debate record codex", "debate next", "debate score", "debate run dry",
+                "ledger verify after debate"]
+DEBATE_STEPS = len(DEBATE_NAMES)
+QUESTION = "Is a short bounded retry safe when a file is briefly held open by another program?"
+ANSWER = "1. A short bounded retry is safe when only a brief sharing violation is retried.\n2. A lasting lock must still raise the original error."
+
+
+def _exec(runner, argv):
+    """Run one command through the runner. Returns (exit code, captured output); a crash is code 1 with its type."""
+    sink = io.StringIO()
+    try:
+        with contextlib.redirect_stdout(sink), contextlib.redirect_stderr(sink):
+            code = runner(argv)
+    except SystemExit as exit_:
+        code = exit_.code if isinstance(exit_.code, int) else 1
+    except Exception as err:  # a crash is a FAIL with its type, not a traceback wall
+        code, sink = 1, io.StringIO(f"{type(err).__name__}: {err}")
+    return code, sink.getvalue()
+
+
+def _row(name, code, text):
+    return {"name": name, "ok": code == 0, "code": code, "tail": text.strip().splitlines()[-1:] or [""]}
+
+
+def _debate(runner, home, root):
+    """A debate round trip with no model: start, two recorded answers, the next prompts, a score, a dry run, then the ledger
+    chain. If it cannot start, every step is still reported as a failure so the count never shrinks in silence."""
+    rows = []
+
+    def step(name, argv):
+        code, text = _exec(runner, ["--home", str(home)] + argv)
+        rows.append(_row(name, code, text))
+        return text
+
+    started = step("debate start", ["debate", "start", QUESTION, "--seats", "claude,codex", "--seed", "selftest"])
+    found = re.search(r"D-\d{6}-[0-9a-f]{6}", started)
+    if not rows[0]["ok"] or not found:
+        return rows + [_row(name, 1, "skipped: the debate did not start") for name in DEBATE_NAMES[1:]]
+    did = found.group(0)
+    for seat in ("claude", "codex"):
+        answer = root / f"{seat}-answer.txt"
+        answer.write_text(ANSWER, encoding="utf-8")
+        step(f"debate record {seat}", ["debate", "record", did, "--round", "1", "--seat", seat, "--file", str(answer)])
+    step("debate next", ["debate", "next", did])
+    step("debate score", ["debate", "score", did])
+    step("debate run dry", ["debate", "run", did])
+    step("ledger verify after debate", ["verify"])
+    return rows
+
+
 def run(runner, example=None):
     example = Path(example or _example())
     root = Path(tempfile.mkdtemp(prefix="lifeos-selftest-"))
@@ -72,16 +123,8 @@ def run(runner, example=None):
                     argv += files
                 else:
                     argv.append(part.replace("{out}", str(root)))
-            sink = io.StringIO()
-            try:
-                with contextlib.redirect_stdout(sink), contextlib.redirect_stderr(sink):
-                    code = runner(argv)
-            except SystemExit as exit_:
-                code = exit_.code if isinstance(exit_.code, int) else 1
-            except Exception as err:  # a crash is a FAIL with its type, not a traceback wall
-                code, sink = 1, io.StringIO(f"{type(err).__name__}: {err}")
-            rows.append({"name": name, "ok": code == 0, "code": code, "tail": sink.getvalue().strip().splitlines()[-1:] or [""]})
-        return rows
+            rows.append(_row(name, *_exec(runner, argv)))
+        return rows + _debate(runner, home, root)
     finally:
         shutil.rmtree(root, ignore_errors=True)
 
