@@ -33,7 +33,7 @@ Why it is built this way, and what each choice costs: [docs/DESIGN.md](docs/DESI
 | `lifeos runs [--status S] [--model M] [--task ID] [--limit N] [--json]` | Inspects the execution audit trail in `logs/runs.jsonl`: filters by status (`ok`, `failed`, `timeout`, `blocked`, `tool_missing`, `partial`), model or task prefix, and summarizes status counts, average duration and token usage | Immediate visibility into every model call, failure and blind review without opening raw JSONL |
 | `lifeos kaizen [--month YYYY-MM] [--draft] [--json]` | Monthly System Health & Kaizen loop: analyzes the last 28 days of logs and `system/changes.md` to answer the 5 System Health questions and optionally draft `reviews/<YYYY-MM>.md` | Self-improving rules backed by measured 4-week trials |
 | `lifeos route <task_or_text> [--tier T] [--full] [--json]` | Evaluates all 6 routing questions (confidential-work-data check, Tier-0 script check, 5-tier data policy, model matrix, L0–L3 blind review requirement, and weekly token/call budget guard) | Deterministic routing decisions before spending tokens |
-| `lifeos cockpit [--export FILE] [--serve] [--port 8765]` | Exports or serves the private **Study Atelier** (`#learning`, `#study`, `#practice`, `#exam`, `#mastery`) with a focus contract, source library, verified recall queue, exam forge, recovery mode and evidence shelf | Makes learning the default experience; project and agent machinery stay secondary |
+| `lifeos cockpit [--export FILE] [--serve] [--port 8765]` | Exports or serves the private **Study Atelier** (`#learning`, `#study`, `#practice`, `#exam`, `#mastery`) with a focus contract, source library, verified recall queue, exam forge, recovery mode and evidence shelf | Makes learning the default experience; project and agent machinery stay secondary. Your own focus line, bets horizon, exam targets and log-area labels (valid ids: `study`, `lab`, `work`, `german`; the defaults show the first three) come from an optional `cockpit.json` in the data home (see `examples/demo-home/cockpit.json`); without it the cockpit shows neutral defaults |
 | `lifeos study {sources,import,bank,verify,attempt,exam}` | Imports guarded notes, generates source-grounded question candidates, records human verification and retrieval intervals, and freezes printable mock papers with separate answer keys | Turns notes into trustworthy practice without sending study content to a model or hiding fabricated answers in the static Cockpit |
 | `lifeos context [TASK] [--budget 6000] [--explain]` | Prints rules, the task, now and me in priority order, trimmed to a token budget; `--explain` shows which files were included, trimmed or excluded, their token cost and SHA-256 fingerprint | Paste once, pay little; shows the token cost and provenance before you send |
 | `lifeos ask <model> <task> [--budget N] [--full] [--run-id ID] [--dry-run] [--force]` | Generates a pre-execution `run_id`, guards the context pack, sends it to that model (codex, claude, ollama, qwen, or gemini through Antigravity `agy`), and commits the task result, ledger row and run record (`logs/runs.jsonl`) in one locked, journal-recoverable transaction. Also logs blocked, failed, timed-out and missing-tool runs with secret redaction | Work moves between models with retry idempotency, crash recovery and a complete audit trail. Notes listed under `## Context` (`.md` or `.txt` inside the data repository, up to four, never under `logs/` or `.git`, never outside it) are attached to the pack and shown by `--dry-run`. The budget governor checks the week's cloud token and call caps, the seat's share and any usage-limit rest before sending, prints one line, and holds the call (exit 4, nothing sent) unless `--force`; local seats are never held |
@@ -86,7 +86,7 @@ The `Delegation:` line of `lifeos week` judges models by numbers: it counts this
 
 Two options go before the command name: `--home <path>` picks the data repo (default: `LIFEOS_HOME`, else the current folder, which must hold `now.md`); `--version` prints the version.
 
-Eight portable skills (open Agent Skills format, read by Claude, Codex and Gemini) live in `skills/`: `lifeos-task`, `weekly-review`, `decision-memo`, `usage-handoff`, `work-prompt`, `german-tech-reader`, `iwa-demo-check` and `system-health`.
+Eight portable skills (open Agent Skills format, read by Claude, Codex and Gemini) live in `skills/`: `lifeos-task`, `weekly-review`, `decision-memo`, `usage-handoff`, `work-prompt`, `german-tech-reader`, `demo-readiness-check` and `system-health`.
 
 ## Quick start (Windows PowerShell or any shell)
 
@@ -94,7 +94,7 @@ Eight portable skills (open Agent Skills format, read by Claude, Codex and Gemin
 pip install -e .                      # from this folder; standard library only
 $env:LIFEOS_HOME = "C:\path\to\lifeos" # bash: export LIFEOS_HOME=~/lifeos
 lifeos doctor
-lifeos task new "Draft the iwa demo checklist"
+lifeos task new "Draft the demo checklist"
 lifeos week
 lifeos context T-261116 --budget 4000
 ```
@@ -131,7 +131,7 @@ CI runs both on every push and pull request.
 |---|---|---|
 | v0.1 | Nov 2026 | Task files, weekly numbers, context packs, privacy guard, doctor, five skills, CI |
 | v0.2 | Gate 1, 6 Dec 2026 | Scoreboard from all logs, context packs per tool, the scheduled weekly review using these commands |
-| v0.3 | Gate 2, 17 Jan 2027 | Prompt Lab runner (`lifeos lab check/pack/score`): prompt cards validated, packed for the work console and scored offline with proof logging; repo goes public |
+| v0.3 | 17 Jan 2027 | Prompt Lab runner (`lifeos lab check/pack/score`): prompt cards validated, packed for the work console and scored offline with proof logging; repo goes public |
 | v0.4 | Gate 3, 28 Mar 2027 | Dashboard from the logs; GitHub Actions pipeline |
 | v0.5 | Jun 2027 | Model router (LangGraph, LiteLLM budgets) evaluated on 50 real tasks |
 | v1.0 | Nov 2027 | Hardening, evaluation report and public case study |

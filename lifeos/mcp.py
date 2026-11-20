@@ -145,9 +145,9 @@ def _run_tool(home, name, a):
             res = exam.record_exam_score(home, a["score_skill"], a.get("score_pct", 0))
             return json.dumps(res)
         if a.get("draft"):
-            out = exam.write_exam_draft(home, month=a.get("month"), module=a.get("module") or "CSEBDSDSSE01", overwrite=True)
+            out = exam.write_exam_draft(home, month=a.get("month"), module=a.get("module") or "Core module", overwrite=True)
             return f"drafted {out.relative_to(home)}"
-        return exam.generate_monthly_exam(home, month=a.get("month"), module=a.get("module") or "CSEBDSDSSE01")
+        return exam.generate_monthly_exam(home, month=a.get("month"), module=a.get("module") or "Core module")
     if name == "lifeos_bakeoff":
         if a.get("draft"):
             out = bakeoff.write_bakeoff(

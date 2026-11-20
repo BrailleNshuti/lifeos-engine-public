@@ -123,7 +123,7 @@ def _weakest_area(proof_rows, hours_rows, health_rows):
     experiments = {
         "german": "Schedule five 30-minute attempt-first A1 blocks this week and log each with `lifeos log hours --area german`.",
         "study": "Complete one closed-book 10-question unit self-test in `learning/units/` before opening any AI chat.",
-        "lab": "Ship one small tested PR on `lifeos-engine` or `iwa` and log the proof link.",
+        "lab": "Ship one small tested PR on `lifeos-engine` or a side project and log the proof link.",
         "work": "Run one Prompt Lab card (`lifeos lab check/pack/score`) on synthetic data before copying to Console.",
     }
     return {
