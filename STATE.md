@@ -4,8 +4,8 @@ Read this first. Keep it short; update it after meaningful merges.
 
 ## Now
 
-- Released: **v0.4.1** (tag and GitHub release; it fixes the `lifeos --help` crash that v0.4.0 has). `main` is ahead of it, unreleased.
-- Merged since 0.4.1 (all through pull requests with green CI on Linux and Windows): the new command `lifeos debate` (blind three-round debate scored by rules, protocol in `docs/DEBATE.md`) with a per-seat scorecard (`score --reveal`), a `debate` row in `lifeos earn`, a debate round trip in `lifeos selftest` (44 steps), a retry on short Windows sharing violations in `store._replace`, failure diagnostics for `os.replace` (`lifeos/diag.py`), output that no longer crashes on cp1252 (`lifeos/console.py`), answers that are no longer lost when a CLI's temp folder cannot be deleted, a release-bump proposal fixed, and private-plan references removed with a test that keeps them out.
+- Version **0.5.0** is prepared in the release PR; the tag `v0.5.0` and the GitHub release come after the merge. Previous release: v0.4.1.
+- Merged in 0.5.0 (all through pull requests with green CI on Linux and Windows): the new command `lifeos debate` (blind three-round debate scored by rules, protocol in `docs/DEBATE.md`) with a per-seat scorecard (`score --reveal`), a `debate` row in `lifeos earn`, a debate round trip in `lifeos selftest` (44 steps), a retry on short Windows sharing violations in `store._replace`, failure diagnostics for `os.replace` (`lifeos/diag.py`), output that no longer crashes on cp1252 (`lifeos/console.py`), answers that are no longer lost when a CLI's temp folder cannot be deleted, a release-bump proposal fixed, and private-plan references removed with a test that keeps them out.
 - Seats: one table (`lifeos/seats.py`) with failover, one cloud budget and rest-until logic. `debate` records count toward the budget; pasted answers do not.
 - `lifeos debate run` calls the seat adapters directly (not `delegate`) so the exact prompt sent is provable. Two live runs with Claude, Codex and Gemini: `docs/DEBATE-LIVE-RUN.md`.
 - Privacy guard blocks identifiers and keys; CI runs it on every tracked file. No personal data in this repo; `examples/` is made up.
@@ -21,10 +21,9 @@ Read this first. Keep it short; update it after meaningful merges.
 - Live proof of the Grok seat flags is still to be recorded after its usage resets. External CLIs need a periodic `--smoke` run; an empty working directory is not an operating-system sandbox.
 - I could not read `/usage` from inside the session, so the 75 % guard was not measurable; I used the seat table as a proxy, and my review calls ran from a throwaway home, so they are not in your real budget ledger.
 
-## Decision for the owner: the next release
+## Release
 
-- Unreleased: the new command `lifeos debate` and the fixes above. `lifeos release` proposes **0.5.0** (a new command means minor).
-- That collides with the roadmap, where v0.5 is the model router (Jun 2027). Options: **0.5.0** and move the router to a later row; or **0.4.2** and accept that a patch holds a new command. I did not publish either: the number and the roadmap are yours (rule 8). To release: bump `pyproject.toml` and `lifeos/__init__.py`, move `[Unreleased]` under the new heading in CHANGELOG, tag the merge commit, publish the GitHub release with the notes.
+- v0.5.0 (minor: Unreleased held a new command). The roadmap now has v0.5 for debate and the model router moved to v0.6 (Jun 2027). Version bump and changelog move are in the release PR; what remains is the tag on the merge commit and the GitHub release with the notes.
 
 ## Next
 

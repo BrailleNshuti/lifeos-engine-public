@@ -133,7 +133,8 @@ CI runs both on every push and pull request.
 | v0.2 | Gate 1, 6 Dec 2026 | Scoreboard from all logs, context packs per tool, the scheduled weekly review using these commands |
 | v0.3 | 17 Jan 2027 | Prompt Lab runner (`lifeos lab check/pack/score`): prompt cards validated, packed for the work console and scored offline with proof logging; repo goes public |
 | v0.4 | Gate 3, 28 Mar 2027 | Dashboard from the logs; GitHub Actions pipeline |
-| v0.5 | Jun 2027 | Model router (LangGraph, LiteLLM budgets) evaluated on 50 real tasks |
+| v0.5 | Nov 2026 | `lifeos debate`: blind three-round debate scored by rules, with a per-seat scorecard; write-retry on Windows sharing violations; personal study targets and project names moved out of the public tree |
+| v0.6 | Jun 2027 | Model router (LangGraph, LiteLLM budgets) evaluated on 50 real tasks |
 | v1.0 | Nov 2027 | Hardening, evaluation report and public case study |
 
 ## Rules for this repo
