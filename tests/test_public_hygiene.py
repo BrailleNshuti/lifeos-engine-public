@@ -59,3 +59,30 @@ def test_no_employer_name_or_private_decision_id_in_any_tracked_file(word):
         if word.lower() in text.lower():
             found.append(name)
     assert not found, f"remove '{word}' from: {found}"
+
+
+# Personal study targets, a private side project and a private milestone must not appear in the public repo.
+# Terms are built from pieces so this file does not contain what it forbids; the list stays short and generic.
+PERSONAL_TERMS = [
+    "i" + "wa",                        # a private side project
+    "goe" + "the",                     # a named language exam
+    "DLB" + "D",                       # a private course-module code prefix
+    "CSEB" + "DS",                     # a private course-module code prefix
+    "Gate" + " 2",                     # a private milestone name
+    r"\bI" + r"U\b",                   # a private study provider
+]
+
+
+@pytest.mark.parametrize("term", PERSONAL_TERMS)
+def test_no_personal_study_target_or_project_in_any_tracked_file(term):
+    import re
+    root, names = tracked_files()
+    found = []
+    for name in names:
+        try:
+            text = open(f"{root}/{name}", encoding="utf-8").read()
+        except (OSError, UnicodeDecodeError):
+            continue
+        if re.search(term, text, flags=re.I if term != PERSONAL_TERMS[-1] else 0):
+            found.append(name)
+    assert not found, f"'{term}' still appears in: {found}"
