@@ -4,6 +4,7 @@ Dates are release dates. Newest first.
 
 ## [Unreleased]
 
+- `lifeos selftest` now runs 44 steps: a debate round trip with no model (start, two recorded answers, the next prompts, a score, a dry run, then the ledger chain) on the throwaway home. If the debate cannot start, its seven steps are reported as failures instead of vanishing. A test pins the README's step count to the code.
 - `lifeos earn` has a row for `debate`: a use is a recorded answer (round 1 to 3); a start, a skipped seat and a failed call are not. The "ask / delegate / panel" row no longer counts debate records.
 - Docs and help: references to a private plan (section numbers such as 10.3, appendix and decision ids, the phrase "work-lane") are removed from README rows, CLI help, MCP tool descriptions, docstrings, skills and two generated headings (`# Skills`, `# BUILD IN PUBLIC`). The router now says "confidential-work-data check". `tests/test_public_hygiene.py` fails if one comes back. Found by Gemini's docs review and checked against the code.
 - Fix: a command no longer crashes with `UnicodeEncodeError` after its work is done. On Windows a console or redirected file in cp1252 cannot show a character such as `≤` or an arrow, and `lifeos delegate` died while printing a model's answer (the answer was already saved). `main` now switches stdout and stderr to print `?` for such a character; the encoding and the exit code are unchanged, and a stream that cannot be switched is left alone. New module `lifeos/console.py`.
