@@ -4,6 +4,7 @@ Dates are release dates. Newest first.
 
 ## [Unreleased]
 
+- Fix: the roadmap table and a guard test no longer name private milestones ("Gate 1", "Gate 3"); the dates stay. The hygiene test now rejects any "Gate <digit>".
 - `scripts/soak.py` (standard library): runs the full suite N times with `LIFEOS_REPLACE_DIAG` set and prints, per run and in total, the exit code and the `os.replace` recovered and failed counts. Three runs on Windows: 829 passed each, recovered 0, failed 0, so the retry was still not exercised.
 - Docs: `docs/DEBATE.md` has a "Seats concede" section: the evidence gate checks that a pointer exists, not that it is true, and one trial (n=1, made-up question, not adopted) with a stricter round 3 prompt (rebut only with a command the seat ran) still gave zero OPEN verdicts; one of its three seats timed out in round 3 and the Claude seat has no shell.
 

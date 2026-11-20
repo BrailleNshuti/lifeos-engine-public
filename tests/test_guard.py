@@ -38,7 +38,7 @@ def test_warns_but_does_not_block():
 
 
 def test_clean_text_and_ordinary_numbers_pass():
-    text = "Gate 1 on 2026-12-06; 154 to 172 hours; version 2.3; 1,129 skills; ISO week 2026-W47"
+    text = "Milestone on 2026-12-06; 154 to 172 hours; version 2.3; 1,129 skills; ISO week 2026-W47"
     assert kinds(text) == set()
     # Hexadecimal Git/SHA-256 digests containing a Luhn-valid digit run adjacent to hex letters must not trip Card number
     luhn_digits = CARD.replace(" ", "")

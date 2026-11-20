@@ -68,7 +68,7 @@ PERSONAL_TERMS = [
     "goe" + "the",                     # a named language exam
     "DLB" + "D",                       # a private course-module code prefix
     "CSEB" + "DS",                     # a private course-module code prefix
-    "Gate" + " 2",                     # a private milestone name
+    "Gate" + r" \d",                  # a private milestone name
     r"\bI" + r"U\b",                   # a private study provider
 ]
 
