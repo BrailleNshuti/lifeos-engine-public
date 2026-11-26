@@ -597,6 +597,14 @@ def cmd_ask(args):
         print(f"[dry run: about {result[1]} tokens, nothing sent]", file=sys.stderr)
     else:
         print(f"{args.model} answered; result appended to {result.relative_to(home)}")
+        try:  # the same free check as delegate: where to look first, no model call
+            from .check import check_answer, task_check_inputs
+            from .delegate import last_result
+            found = check_answer(last_result(result), *task_check_inputs(result))
+            if found:
+                print("CHECK (free, no model): " + "; ".join(found))
+        except Exception:
+            pass
     return 0
 
 

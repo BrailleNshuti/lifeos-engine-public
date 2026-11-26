@@ -13,7 +13,7 @@ import re
 
 from . import ask, learn, seats
 from .ask import ADAPTERS, run_ask  # noqa: F401  (ADAPTERS is patched in tests)
-from .check import check_answer
+from .check import check_answer, task_check_inputs
 from .context import task_file, visible_task
 from .store import append_task_note, read_run_records
 
@@ -118,6 +118,6 @@ def run_delegate(home, task_id, model=None, budget=6000, full=False, adapters=No
         _mark_route(home, path, failed, name, day, notes)
         return {
             "model": name, "reason": reason, "tried": tried, "failed": failed, "chain": chain,
-            "path": path, "text": last_result(path), "flags": check_answer(last_result(path)), "notes": notes,
+            "path": path, "text": last_result(path), "flags": check_answer(last_result(path), *task_check_inputs(path)), "notes": notes,
         }
     raise ask.AskError("no seat answered.")

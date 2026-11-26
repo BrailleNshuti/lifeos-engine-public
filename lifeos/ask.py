@@ -19,7 +19,7 @@ import urllib.error
 import urllib.parse
 import urllib.request
 
-from .check import check_answer
+from .check import check_answer, task_check_inputs
 from .context import build_pack, build_review_pack, explain_pack, inspect_repo_commit, pack_hash, task_file, visible_task
 from .seats import failure_kind, focus_error
 from .guard import (
@@ -822,7 +822,7 @@ def run_ask(home, model, task_id, budget=6000, dry_run=False, adapters=None, tod
             })
             raise
 
-        flags = check_answer(text)
+        flags = check_answer(text, *task_check_inputs(path))
         note = model_call_note(len(flags))  # the count only: never the answer or the flag texts
         run_rec = {
             **base_rec, "finished_at": utc_now_iso(), "duration_ms": elapsed_ms,
@@ -1013,7 +1013,7 @@ def run_review(home, task_id, reviewers=("codex", "claude"), budget=6000, dry_ru
                     first_err = AskError(f"{r} failed: {redacted}")
                 continue
 
-            flags = check_answer(text)
+            flags = check_answer(text, *task_check_inputs(path))
             child_rec = {
                 **base_child, "finished_at": utc_now_iso(), "duration_ms": elapsed_ms,
                 "status": "ok", "flags": len(flags),
