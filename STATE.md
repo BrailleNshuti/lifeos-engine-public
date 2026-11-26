@@ -1,4 +1,4 @@
-# State of lifeos-engine · 2026-11-25
+# State of lifeos-engine · 2026-11-26
 
 Read this first. Keep it short; update it after meaningful merges.
 
@@ -6,6 +6,7 @@ Read this first. Keep it short; update it after meaningful merges.
 
 - Version **0.5.0** is merged; the tag `v0.5.0` is pushed (merge commit 8c0f71e) and the GitHub release with the notes is published (2026-11-20). Previous release: v0.4.1.
 - Merged in 0.5.0 (all through pull requests with green CI on Linux and Windows): the new command `lifeos debate` (blind three-round debate scored by rules, protocol in `docs/DEBATE.md`) with a per-seat scorecard (`score --reveal`), a `debate` row in `lifeos earn`, a debate round trip in `lifeos selftest` (44 steps), a retry on short Windows sharing violations in `store._replace`, failure diagnostics for `os.replace` (`lifeos/diag.py`), output that no longer crashes on cp1252 (`lifeos/console.py`), answers that are no longer lost when a CLI's temp folder cannot be deleted, a release-bump proposal fixed, and private-plan references removed with a test that keeps them out.
+- **2026-11-26:** the owner is the only contributor on every repo (public engine, private notes, archived engine, iwa-rentals). History of the two private repos was rewritten (no model author, no `Co-Authored-By` or session trailers; backups kept outside the repos), model-named branches were renamed to `archive/...`, PR footers were removed, and commit and PR attribution is off in the tool settings. Model names that remain in code and docs are the product (seats), not credits. One instruction file in this repo: `AGENTS.md`. The guard no longer mistakes a run id (`R-YYMMDD-########`) for a card number, and `history-scan` has a reviewed exception for the made-up key in the first draft of `demo.py`, so the `proof` check is green. Fresh proof in `docs/proof.md` (832 passed, 1 skipped, one full local run of 413 s); numbers in `docs/numbers.html`.
 - Seats: one table (`lifeos/seats.py`) with failover, one cloud budget and rest-until logic. `debate` records count toward the budget; pasted answers do not.
 - `lifeos debate run` calls the seat adapters directly (not `delegate`) so the exact prompt sent is provable. Two live runs with Claude, Codex and Gemini: `docs/DEBATE-LIVE-RUN.md`.
 - Privacy guard blocks identifiers and keys; CI runs it on every tracked file. No personal data in this repo; `examples/` is made up.
@@ -27,5 +28,6 @@ Read this first. Keep it short; update it after meaningful merges.
 
 ## Next
 
-- Use the engine on real tasks, record corrections and failed calls, then choose the next feature from those numbers.
+- Use the engine on real tasks, record corrections and failed calls, then choose the next feature from those numbers. In the last 30 days `ask`/`delegate`/`panel` (46 uses), the ledger, `prove` and tasks earned their place; `debate`, `rate`/`learn`, `vocab` and `decide` had 0 uses (see `lifeos earn`).
+- Before heavy use: `lifeos doctor --smoke` once per seat (it makes one small authenticated call each), `scripts/soak.py --runs 3` to keep measuring the Windows write flake, and decide the three old open tasks (`lifeos stale`).
 - Ideas I have not built: a `lifeos_debate` MCP tool so a chat can run a debate; a prompt experiment to see whether seats ever rebut with evidence; an `earn`-style soak script for the write flake.
