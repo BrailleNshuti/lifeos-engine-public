@@ -11,6 +11,7 @@ HARMLESS = [
     "version 3.12.1 build 20261118",
     "the run took 12.5 s and cost 0.0042",
     "task T-261116-demo-cli, run R-261118-1a2b3c4d",
+    "run R-261116-60279634 timed out",  # an all-digit suffix can pass the card checksum by chance
     "see https://example.org/path/to/page?x=1&y=2",
     "sha256 " + "ab" * 32,
     "range 100-200 and 300-400-500",
