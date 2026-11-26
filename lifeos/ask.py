@@ -33,6 +33,7 @@ from .store import (
 )
 
 TIMEOUT = 600
+LOCAL_TIMEOUT = 240  # a local model that has not answered in 4 minutes will not in 10; fail fast and let another seat try
 PROBE_TIMEOUT = 3
 MINIMAL = ("TASK", "rules.md")  # now.md and me.md only go out with --full
 INSTRUCTION = ("You are helping with the task below. Use only the context given. Answer with the result only: "
@@ -132,6 +133,14 @@ def timeout_seconds():
     """LIFEOS_TIMEOUT (whole seconds, 1 to 3600) shortens a call for a live check; anything else keeps TIMEOUT."""
     raw = os.environ.get("LIFEOS_TIMEOUT", "")
     return int(raw) if raw.isdecimal() and raw.isascii() and 1 <= int(raw) <= 3600 else TIMEOUT
+
+
+def call_timeout(name):
+    """Seconds to wait for a seat's call: LIFEOS_TIMEOUT if set, else LOCAL_TIMEOUT for local models and TIMEOUT for the rest."""
+    raw = os.environ.get("LIFEOS_TIMEOUT", "")
+    if raw.isdecimal() and raw.isascii() and 1 <= int(raw) <= 3600:
+        return int(raw)
+    return LOCAL_TIMEOUT if name in ("ollama", "qwen") else TIMEOUT
 
 
 def _run_cli(cmd, prompt, timeout=None, via_stdin=True, use_review_cwd=True):
@@ -316,14 +325,14 @@ def ollama_generate(prompt, model, options=None):
     body = json.dumps(payload).encode()
     req = urllib.request.Request(f"{host}/api/generate", data=body, headers={"Content-Type": "application/json"})
     try:
-        with _open_local(req, TIMEOUT) as resp:
+        with _open_local(req, call_timeout("ollama")) as resp:
             text = json.loads(resp.read())["response"]
     except urllib.error.HTTPError as error:
         if error.code == 404:
             raise ToolMissing(f"ollama has no model '{model}'. Run: ollama pull {model}") from None
         raise AskError(f"ollama returned HTTP {error.code}.") from None
     except TimeoutError:
-        raise AskError(f"ollama did not answer within {TIMEOUT} s (a slow or busy model, not a missing tool).") from None
+        raise AskError(f"ollama did not answer within {call_timeout('ollama')} s (a slow or busy model, not a missing tool). Try another seat.") from None
     except OSError as error:
         raise ToolMissing(f"ollama is not reachable at {host}: {redact_error(error)}") from None
     return re.sub(r"<think>.*?</think>", "", text, flags=re.S).strip()  # reasoning models: keep the answer only

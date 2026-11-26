@@ -2,6 +2,7 @@
 import argparse
 import datetime as dt
 import json
+import re
 from pathlib import Path
 import subprocess
 import sys
@@ -121,12 +122,19 @@ def cmd_rate(args):
     try:
         from .context import task_file
         from .delegate import task_text
-        text = task_text(task_file(home, args.task))
-        row = learn.add_rating(home, args.task, args.model, args.score, text, note=args.note)
+        path = task_file(home, args.task)
+        text = task_text(path)
+        raw = path.read_text(encoding="utf-8")
+        explicit = re.search(r"^kind:[ \t]*(.+)$", raw, re.M)  # a `kind:` line in the task file beats keyword routing
+        row = learn.add_rating(home, args.task, args.model, args.score, text, note=args.note,
+                               kind=explicit.group(1) if explicit else None)
     except (learn.LearnError, ValueError, FileNotFoundError) as err:
         print(f"lifeos: {err}", file=sys.stderr)
         return 2
     print(f"rated {row['model']} {row['score']}/5 for: {row['kind']}")
+    missing_review = learn.review_note(raw)
+    if missing_review:
+        print(f"note: {missing_review}", file=sys.stderr)
     return 0
 
 
@@ -573,6 +581,14 @@ def cmd_ask(args):
         gate = governor.check(home, args.model, estimate)
     except (ValueError, FileNotFoundError, OSError):
         gate = None  # the real run below reports a bad task or budget with its own message
+    try:  # a hint, never a block
+        from .context import task_file as _tf
+        from .delegate import task_text as _tt
+        hint = seats.seat_warning(args.model, _tt(_tf(home, args.task)))
+        if hint:
+            print("note: " + hint, file=sys.stderr)
+    except Exception:
+        pass
     if gate is not None:
         print(governor.render(gate), file=sys.stderr)
         if not gate["allowed"] and not args.dry_run and not getattr(args, "force", False):
