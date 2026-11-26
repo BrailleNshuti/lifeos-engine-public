@@ -7,6 +7,7 @@ Otherwise the default stands (rule 2: numbers decide, but only enough numbers).
 """
 import csv
 import datetime as dt
+import re
 from pathlib import Path
 
 from . import guard, seats
@@ -35,7 +36,34 @@ def read_ratings(home):
     return rows
 
 
-def add_rating(home, task_id, model, score, text, today=None, note=""):
+def clean_kind(kind):
+    """An explicit `kind:` label from the task file: one short line, no commas, so the CSV and the report stay tidy."""
+    return " ".join(str(kind or "").replace(",", " ").split())[:80]
+
+
+def explicit_kind(raw):
+    """The task file's own `kind:` line, or None."""
+    found = re.search(r"^kind:[ 	]*(.+)$", (raw or "").replace(chr(13) + chr(10), chr(10)), re.M)
+    return found.group(1) if found else None
+
+
+def explicit_kind(raw):
+    """The task file's own `kind:` line, or None."""
+    found = re.search(r"^kind:[ 	]*(.+)$", (raw or "").replace(chr(13) + chr(10), chr(10)), re.M)
+    return found.group(1) if found else None
+
+
+def review_note(task_text):
+    """Say so when the route names a review step and no review result is in the file (found in week one: a rated answer
+    whose Codex review never ran)."""
+    text = (task_text or "").replace(chr(13) + chr(10), chr(10))
+    route = re.search(r"^route:[ 	]*(.*)$", text, re.M)
+    if route and "review" in route.group(1).lower() and not re.search(r"^## Result · review", text, re.M):
+        return "the route names a review step and no review result is recorded in this task"
+    return ""
+
+
+def add_rating(home, task_id, model, score, text, today=None, note="", kind=None):
     all_models = set(seats.CHAINS)
     if model not in all_models:
         raise LearnError(f"Unknown model '{model}'. Choose from: {', '.join(sorted(all_models))}.")
@@ -53,7 +81,7 @@ def add_rating(home, task_id, model, score, text, today=None, note=""):
         path.parent.mkdir(parents=True, exist_ok=True)
         atomic_write_bytes(path, (",".join(HEADER) + "\n").encode("utf-8"))
     row = {"date": (today or dt.date.today()).isoformat(), "task": task_id, "model": model, "score": score,
-           "kind": seats.kind(text)[3], "note": note}
+           "kind": clean_kind(kind) or seats.kind(text)[3], "note": note}
     append_csv_row(path, [row[k] for k in HEADER])
     return row
 

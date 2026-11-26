@@ -98,6 +98,17 @@ def kind(text):
     return DEFAULT
 
 
+SHOP = r"price|prices|cheapest|in stock|availability|buy\b|shop|offer"
+
+
+def seat_warning(model, text):
+    """A hint, never a block: Grok only has web_fetch, and shop and price-comparison sites refuse automated fetches."""
+    if model == "grok" and re.search(rf"\b({SHOP})", text or "", re.I):
+        return ("grok cannot read shop or price-comparison sites (they block automated fetches, live check 2026-11-26). "
+                "Name pages that allow it, or look it up yourself.")
+    return ""
+
+
 def pick(text):
     """Return (model, reason). The reviewer and level stay with `kind`."""
     model, _reviewer, _level, reason = kind(text)
