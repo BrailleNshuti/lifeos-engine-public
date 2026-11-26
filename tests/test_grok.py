@@ -62,7 +62,8 @@ def test_the_seat_is_locked(monkeypatch):
     for missing in ("--no-memory", "--no-auto-update", "--always-approve"):
         assert missing not in cmd
     assert "-p" not in cmd and "latest price?" not in cmd  # the prompt never travels in argv
-    assert seen["body"] == "latest price?"  # it travels in a private temp file
+    assert seen["body"] == ask.GROK_RULE + "latest price?"  # it travels in a private temp file, after one fixed rule
+    assert "cannot save" in ask.GROK_RULE  # live use 2026-11-26: the seat promised to "save" and returned no answer
     assert not os.path.exists(seen["path"])  # and the file is gone afterwards
     assert seen["kwargs"].get("use_review_cwd") is False and seen["kwargs"].get("via_stdin") is False
 
@@ -73,7 +74,7 @@ def test_a_long_prompt_is_fine_and_the_temp_file_is_removed_even_on_failure(monk
 
     def fake(cmd, prompt, **kwargs):
         paths.append(cmd[cmd.index("--prompt-file") + 1])
-        assert len(open(paths[0], encoding="utf-8").read()) == 60_000
+        assert len(open(paths[0], encoding="utf-8").read()) == 60_000 + len(ask.GROK_RULE)
         raise ask.AskError("grok failed: boom")
 
     monkeypatch.setattr(ask, "_run_cli", fake)
