@@ -13,6 +13,7 @@ import io
 import hashlib
 import json
 import os
+import stat
 import re
 import threading
 import time
@@ -115,6 +116,14 @@ def _replace(tmp, path):
             return
 
 
+def _keep_mode(path, tmp):
+    """A rewrite keeps the permission bits of the file it replaces (a 0600 ledger must not become 0644). Best effort."""
+    try:
+        os.chmod(str(tmp), stat.S_IMODE(os.stat(str(path)).st_mode))
+    except OSError:
+        pass
+
+
 def atomic_write_bytes(path, data):
     """Write bytes to a sibling temp file via _write_all, fsync file, atomically replace target, and fsync parent dir."""
     path = Path(path)
@@ -127,11 +136,15 @@ def atomic_write_bytes(path, data):
             os.fsync(fd)
         finally:
             os.close(fd)
+        _keep_mode(path, tmp)
         _replace(tmp, path)
         _fsync_parent_dir(path)
     finally:
-        if tmp.exists():
-            tmp.unlink(missing_ok=True)
+        try:  # best effort: a scanner holding the temp file must not hide the error that is already on its way
+            if tmp.exists():
+                tmp.unlink(missing_ok=True)
+        except OSError:
+            pass
 
 
 _atomic_write_bytes = atomic_write_bytes
