@@ -223,6 +223,10 @@ def ask_gemini(prompt):
     return _parse_agy_stream_json(raw)
 
 
+GROK_RULE = ("Put the whole answer in your reply, in plain text with the source URL and date for every fact. "
+             "You cannot save, write or record anything; never say you will. If a page could not be read, say so.\n\n")
+
+
 def ask_grok(prompt):
     """Grok Build in a locked headless call: live facts only.
 
@@ -237,7 +241,10 @@ def ask_grok(prompt):
     shell, file or edit tools) and `--allow web_fetch` lets it run headless.
     Grok still lists the user's MCP servers; their calls are refused under
     dontAsk ("was not run"). Live facts are what this seat is for.
+    Live use 2026-11-26: two of two answers were only "I'll save the result", with no content, because the seat has no
+    write tool and tried to record it. GROK_RULE tells it to put the whole answer in the reply.
     """
+    prompt = GROK_RULE + prompt
     handle, path = tempfile.mkstemp(prefix="lifeos-grok-", suffix=".txt")
     try:
         with os.fdopen(handle, "w", encoding="utf-8") as fh:
