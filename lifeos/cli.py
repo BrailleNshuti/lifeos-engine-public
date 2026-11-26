@@ -10,6 +10,7 @@ import sys
 from . import __version__
 from . import backup, bakeoff, calibrate, arch, canary, completion, console, debate, decision, demo, digest, earn, experiment, prove, savings, selftest, cockpit, exam, export, governor, history, hooks, learn, lint, mistakes, numbers, panel, pipeline, redact, release, today, vocab, kaizen, lab, log, mcp, replay, router, runs, seats, schema, showcase, sortcsv, stale, timeline, study, verify
 from .delegate import run_delegate
+from .notes import post_notes, pre_notes
 from .ask import ADAPTERS, MINIMAL, PROVIDERS, AskError, Blocked, ToolMissing, provider_status, run_ask, run_review
 from .context import build_pack, explain_pack, render_explanation
 from .guard import scan_paths, scan_staged, staged_files
@@ -123,18 +124,15 @@ def cmd_rate(args):
         from .context import task_file
         from .delegate import task_text
         path = task_file(home, args.task)
-        text = task_text(path)
         raw = path.read_text(encoding="utf-8")
-        explicit = re.search(r"^kind:[ \t]*(.+)$", raw, re.M)  # a `kind:` line in the task file beats keyword routing
-        row = learn.add_rating(home, args.task, args.model, args.score, text, note=args.note,
-                               kind=explicit.group(1) if explicit else None)
+        row = learn.add_rating(home, args.task, args.model, args.score, task_text(path), note=args.note,
+                               kind=learn.explicit_kind(raw))
     except (learn.LearnError, ValueError, FileNotFoundError) as err:
         print(f"lifeos: {err}", file=sys.stderr)
         return 2
     print(f"rated {row['model']} {row['score']}/5 for: {row['kind']}")
-    missing_review = learn.review_note(raw)
-    if missing_review:
-        print(f"note: {missing_review}", file=sys.stderr)
+    if learn.review_note(raw):
+        print("note: " + learn.review_note(raw), file=sys.stderr)
     return 0
 
 
@@ -581,14 +579,8 @@ def cmd_ask(args):
         gate = governor.check(home, args.model, estimate)
     except (ValueError, FileNotFoundError, OSError):
         gate = None  # the real run below reports a bad task or budget with its own message
-    try:  # a hint, never a block
-        from .context import task_file as _tf
-        from .delegate import task_text as _tt
-        hint = seats.seat_warning(args.model, _tt(_tf(home, args.task)))
-        if hint:
-            print("note: " + hint, file=sys.stderr)
-    except Exception:
-        pass
+    for note in pre_notes(home, args.model, args.task):  # hints, never blocks
+        print("note: " + note, file=sys.stderr)
     if gate is not None:
         print(governor.render(gate), file=sys.stderr)
         if not gate["allowed"] and not args.dry_run and not getattr(args, "force", False):
@@ -613,14 +605,8 @@ def cmd_ask(args):
         print(f"[dry run: about {result[1]} tokens, nothing sent]", file=sys.stderr)
     else:
         print(f"{args.model} answered; result appended to {result.relative_to(home)}")
-        try:  # the same free check as delegate: where to look first, no model call
-            from .check import check_answer, task_check_inputs
-            from .delegate import last_result
-            found = check_answer(last_result(result), *task_check_inputs(result))
-            if found:
-                print("CHECK (free, no model): " + "; ".join(found))
-        except Exception:
-            pass
+        for line in post_notes(result):
+            print(line)
     return 0
 
 

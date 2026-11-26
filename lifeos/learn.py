@@ -41,6 +41,18 @@ def clean_kind(kind):
     return " ".join(str(kind or "").replace(",", " ").split())[:80]
 
 
+def explicit_kind(raw):
+    """The task file's own `kind:` line, or None."""
+    found = re.search(r"^kind:[ 	]*(.+)$", (raw or "").replace(chr(13) + chr(10), chr(10)), re.M)
+    return found.group(1) if found else None
+
+
+def explicit_kind(raw):
+    """The task file's own `kind:` line, or None."""
+    found = re.search(r"^kind:[ 	]*(.+)$", (raw or "").replace(chr(13) + chr(10), chr(10)), re.M)
+    return found.group(1) if found else None
+
+
 def review_note(task_text):
     """Say so when the route names a review step and no review result is in the file (found in week one: a rated answer
     whose Codex review never ran)."""
