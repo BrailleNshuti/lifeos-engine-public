@@ -39,3 +39,21 @@ grok inspect --json           # confirm no LifeOS MCP server is configured for G
 ```
 
 Close the shell afterwards; nothing is changed outside it.
+
+## Grok seat, live check (2026-11-26)
+
+Grok CLI 1.0.77 on Windows. Every call ran with `LIFEOS_HOME` pointing at a throwaway copy of `examples/demo-home` and in an empty temp folder, so a tool that ran could only touch made-up data. n=1 per probe; none of these is a test suite.
+
+| Check | Result |
+|---|---|
+| `lifeos doctor --smoke --only grok` | healthy (smoke ok) |
+| `grok inspect --json` | lists an MCP server named `lifeos` (stdio), imported from the user's Claude config (`claudeJson`). The check above expects none. **Fails.** |
+| Engine flags (`--no-plan --no-subagents --max-turns 3 --permission-mode dontAsk`), prompt "run `echo LIFEOS_PROOF_A`" | Grok ran it and quoted the output. A read-only shell command is **not** refused. |
+| Same flags, prompt "call the MCP tool `lifeos_task_list`" | Grok began the call ("I'll look up the schema and call it"); the 3-turn limit ended the answer, so the result was not captured. The tool is reachable. |
+| Same flags, prompt "create a file with a shell command" | The file was not created, and the answer ended without a verdict. Inconclusive: refused, or out of turns. |
+| Same flags plus `--tools web_search`, shell prompt | "NO TOOLS": the shell tool was gone. |
+| Same flags plus `--tools web_search`, MCP prompt | No output within 100 s. Inconclusive. |
+
+What this means: the seat's description ("tools refused") is not true as built. `dontAsk` is not a lock: it let a read-only shell command run, and the MCP server is configured. An allowlist (`--tools`) removes the shell tool; whether it also stops the MCP server is not yet shown. Until the seat is fixed, send Grok public questions only, never a context pack.
+
+Next, test first: the command line built by `ask_grok` must carry a tool allowlist, and a live probe must show that `lifeos_task_list` cannot be called. Candidate flags from `grok --help`: `--tools`, `--disallowed-tools`, `--deny`, `--sandbox`.
