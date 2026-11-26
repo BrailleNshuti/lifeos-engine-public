@@ -1,0 +1,21 @@
+name: no-attribution
+on:
+  pull_request:
+permissions:
+  contents: read
+jobs:
+  trailers:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Fail on AI co-author, session or generated-with lines in new commits
+        env:
+          BASE: ${{ github.event.pull_request.base.sha }}
+          HEAD: ${{ github.event.pull_request.head.sha }}
+        run: |
+          if git log --format=%B "$BASE..$HEAD" | grep -Eiq "^co-authored-by:.*(anthropic|claude)|^claude-session:|generated with .*claude"; then
+            echo "A commit in this pull request carries an AI attribution line. Remove it (git rebase, edit the message) before merging."
+            exit 1
+          fi
