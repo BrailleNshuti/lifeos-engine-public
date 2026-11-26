@@ -4,6 +4,7 @@ Dates are release dates. Newest first.
 
 ## [Unreleased]
 
+- Fix: the Grok seat is now locked for real. A live check showed that `--permission-mode dontAsk` alone let a read-only shell command run and refused `web_fetch`, so the seat could not answer live-facts questions. `ask_grok` now passes `--tools web_fetch --allow web_fetch`: shell and file probes get no tool, a live fact is answered with its source. Test first in `tests/test_grok.py`; the probes and what is not shown are in `docs/LIVE-CHECK.md`.
 - Fix: the card-number check no longer fires on a run id such as `R-261116-60279634` (an all-digit suffix can pass the checksum by chance). `history-scan` has a reviewed exception for the made-up key in the first draft of `lifeos/demo.py`, so the `proof` check is green again.
 - Fix: the roadmap table and a guard test no longer name private milestones; the dates stay. The hygiene test now rejects any numbered private-milestone label.
 - `scripts/soak.py` (standard library): runs the full suite N times with `LIFEOS_REPLACE_DIAG` set and prints, per run and in total, the exit code and the `os.replace` recovered and failed counts. Three runs on Windows: 829 passed each, recovered 0, failed 0, so the retry was still not exercised.

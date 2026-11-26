@@ -54,6 +54,11 @@ def test_the_seat_is_locked(monkeypatch):
     assert "--no-plan" in cmd and "--no-subagents" in cmd
     assert cmd[cmd.index("--max-turns") + 1] == "3"
     assert cmd[cmd.index("--permission-mode") + 1] == "dontAsk"  # an unapproved tool is refused, never waited on
+    # Live check 2026-11-26 (docs/LIVE-CHECK.md): under dontAsk alone a read-only shell command ran. An allowlist of built-in
+    # tools removes shell, file and edit tools; web_fetch is allowed explicitly because a headless run cannot ask for it.
+    assert cmd[cmd.index("--tools") + 1] == "web_fetch"
+    assert cmd[cmd.index("--allow") + 1] == "web_fetch"
+    assert "run_terminal_command" not in " ".join(cmd) and "write" not in cmd[cmd.index("--tools") + 1].split(",")
     for missing in ("--no-memory", "--no-auto-update", "--always-approve"):
         assert missing not in cmd
     assert "-p" not in cmd and "latest price?" not in cmd  # the prompt never travels in argv

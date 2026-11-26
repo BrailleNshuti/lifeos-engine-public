@@ -226,13 +226,17 @@ def ask_gemini(prompt):
 def ask_grok(prompt):
     """Grok Build in a locked headless call: live facts only.
 
-    Flags checked against `grok --help` of version 1.0.77 (2026-11-17): an empty
-    temp folder, no plan mode, no subagents, at most 3 agent turns (a search and
-    an answer), permission mode dontAsk (an unapproved tool is refused, not
-    waited on), one JSON object back. The prompt travels in a private temp file,
-    not on the command line, so other users cannot read it from the process list.
-    Web search stays on because live facts are what this seat is for. Whether
-    dontAsk really refuses tools is not yet proven by a live call.
+    Flags checked against `grok --help` of version 1.0.77: an empty temp folder,
+    no plan mode, no subagents, at most 3 agent turns (a search and an answer),
+    permission mode dontAsk (an unapproved tool is refused, not waited on), one
+    JSON object back. The prompt travels in a private temp file, not on the
+    command line, so other users cannot read it from the process list.
+    Live check 2026-11-26 (docs/LIVE-CHECK.md): dontAsk alone is not a lock, it
+    let a read-only shell command run, and it also refused web_fetch, so the seat
+    could not answer. `--tools web_fetch` keeps only that built-in tool (no
+    shell, file or edit tools) and `--allow web_fetch` lets it run headless.
+    Grok still lists the user's MCP servers; their calls are refused under
+    dontAsk ("was not run"). Live facts are what this seat is for.
     """
     handle, path = tempfile.mkstemp(prefix="lifeos-grok-", suffix=".txt")
     try:
@@ -240,6 +244,7 @@ def ask_grok(prompt):
             fh.write(prompt)
         raw = _run_cli(
             ["grok", "--no-plan", "--no-subagents", "--max-turns", "3", "--permission-mode", "dontAsk",
+             "--tools", "web_fetch", "--allow", "web_fetch",
              "--output-format", "json", "--prompt-file", path],
             "", via_stdin=False, use_review_cwd=False,
         )
