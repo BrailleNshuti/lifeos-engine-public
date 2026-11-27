@@ -95,6 +95,20 @@ def _transient(err):
     return os.name == "nt" and getattr(err, "winerror", None) in (5, 32)
 
 
+def read_bytes_retry(path):
+    """The bytes of a file that another process may be replacing right now. On Windows a reader that meets the swap gets a
+    sharing violation; it waits a few short pauses and tries again (same delays as `_replace`). Anything else, and a lasting
+    lock, raises the original error. Reading only: nothing is written."""
+    path = Path(path)
+    for attempt in range(len(REPLACE_DELAYS) + 1):
+        try:
+            return path.read_bytes()
+        except PermissionError as err:
+            if not _transient(err) or attempt == len(REPLACE_DELAYS):
+                raise
+            _pause(REPLACE_DELAYS[attempt])
+
+
 def _replace(tmp, path):
     """os.replace, tried again a few times only when Windows reports a sharing violation. A scanner or reader that takes a
     fresh file for a few milliseconds must not fail a ledger write; a lasting lock still raises the original error, after
@@ -671,11 +685,11 @@ def read_csv_rows(path, required=()):
         return []
     rows = []
     try:
-        with p.open(encoding="utf-8-sig", errors="replace", newline="") as fh:
-            for row in csv.DictReader(line.replace("\0", "") for line in fh):
-                if None in row or any(row.get(k) in (None, "") for k in required):
-                    continue
-                rows.append({k: ("" if v is None else v) for k, v in row.items()})
+        text = read_bytes_retry(p).decode("utf-8-sig", errors="replace")
+        for row in csv.DictReader(line.replace("\0", "") for line in io.StringIO(text, newline="")):
+            if None in row or any(row.get(k) in (None, "") for k in required):
+                continue
+            rows.append({k: ("" if v is None else v) for k, v in row.items()})
     except (OSError, csv.Error):
         pass
     return rows
