@@ -99,13 +99,27 @@ def kind(text):
 
 
 SHOP = r"price|prices|cheapest|in stock|availability|buy\b|shop|offer"
+LIVE = r"latest|news|today|current|right now|price|prices|weather|score"
+# What a seat has no tool for, as a hint before the call (never a block). Found in the first week of real use.
+CANNOT = {
+    "grok": [
+        (rf"\b({SHOP})", "grok cannot read shop or price-comparison sites (they block automated fetches, live check "
+                          "2026-11-26). Name pages that allow it, or look it up yourself."),
+        (r"\b(edit|modify|rename|commit|create a file|write to|save to)\b", "grok has no tools for files (only web_fetch): "
+                          "it can answer in the reply, not change or save anything."),
+        (r"\b(run|execute)\b.{0,30}\b(test|tests|suite|command|script)", "grok has no shell (only web_fetch): "
+                          "it cannot run anything."),
+    ],
+    "qwen": [(rf"\b({LIVE})\b", "qwen runs on this laptop with no web access: a live fact needs grok, with public questions only.")],
+    "ollama": [(rf"\b({LIVE})\b", "ollama runs on this laptop with no web access: a live fact needs grok, with public questions only.")],
+}
 
 
 def seat_warning(model, text):
-    """A hint, never a block: Grok only has web_fetch, and shop and price-comparison sites refuse automated fetches."""
-    if model == "grok" and re.search(rf"\b({SHOP})", text or "", re.I):
-        return ("grok cannot read shop or price-comparison sites (they block automated fetches, live check 2026-11-26). "
-                "Name pages that allow it, or look it up yourself.")
+    """A hint, never a block: the first thing in the task this seat has no tool for."""
+    for pattern, message in CANNOT.get(model, []):
+        if re.search(pattern, text or "", re.I):
+            return message
     return ""
 
 
