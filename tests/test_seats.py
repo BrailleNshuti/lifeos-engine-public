@@ -191,6 +191,20 @@ def test_the_seat_table_shows_share_rest_and_replacement():
     assert "codex" in text and "resting" in text and "gemini" in text
 
 
+def test_the_seat_table_shows_the_age_of_the_last_real_success():
+    records = [
+        _run("claude", "ok", finished_at="2026-10-27T10:00:00Z"),
+        _run("claude", "ok", finished_at="2026-11-14T10:00:00Z"),
+        _run("claude", "failed", finished_at="2026-11-16T10:00:00Z"),
+        _run("qwen", "ok", command="debate", source="manual"),
+    ]
+    rows = {row["seat"]: row for row in seats.table(records, NOW)}
+    assert rows["claude"]["last_good_days"] == 2
+    assert rows["qwen"]["last_good_days"] is None
+    text = seats.render_table(rows.values())
+    assert "last good" in text and "2d" in text and "never" in text
+
+
 AGY = "Individual quota reached. Please upgrade your subscription to increase your limits. Resets in {t}."
 
 

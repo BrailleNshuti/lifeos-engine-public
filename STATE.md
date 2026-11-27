@@ -20,6 +20,7 @@ Read this first. Keep it short; every bullet stays under 400 characters (a test 
 
 - Round 4 (pull requests 117 to 127): `selfcheck`, `backup --restore`, all-or-none `dash-export`, a write-retry tally in `doctor`, unrated answers in `today`, failure causes in `earn`, `sunday --save`, a guard mutation test, seeded property tests, a canary test, and more (see CHANGELOG).
 - Round 7: HTTP 402 rests a seat without retry (PR 155); CI installs the built wheel in a clean environment and runs its demo and selftest. The blind review of `next`, `rate --walk`, read retries and rating coverage found four real fault groups, now fixed with regressions.
+- Seat health includes the age of every seat's last successful real call across the full ledger, so an open but stale or never-used seat is visible instead of looking healthy by omission.
 
 ## Open
 
