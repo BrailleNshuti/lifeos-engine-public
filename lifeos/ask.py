@@ -29,7 +29,7 @@ from .guard import (
 from .policy import check_provider_allowed, classify_content
 from .store import (
     RUN_SCHEMA_VERSION, append_run_record, get_run_record, has_run_id, is_valid_git_oid,
-    model_call_note, new_run_id, record_result, run_lock, utc_now_iso, validate_run_id,
+    model_call_note, new_run_id, record_result, run_lock, store_lock, utc_now_iso, validate_run_id,
 )
 
 TIMEOUT = 600
@@ -74,9 +74,9 @@ def task_data_tier(path):
     return classify_content(facts, f"tasks/{Path(path).name}")
 
 
-def enforce_task_policy(path, model, full=False):
+def enforce_task_policy(path, model, full=False, tier=None):
     """Return the task tier or block a provider that is unsafe for that tier."""
-    tier = task_data_tier(path)
+    tier = task_data_tier(path) if tier is None else tier
     if model not in PROVIDERS:  # injected test/private adapters have no declared locality contract
         return tier
     allowed, reason = check_provider_allowed(tier, model, full=full)
@@ -746,23 +746,27 @@ def run_ask(home, model, task_id, budget=6000, dry_run=False, adapters=None, tod
                     return path
                 raise _reconstruct_persisted_error(home, existing)
 
-        started_iso = utc_now_iso()
-        pack, tokens = build_pack(home, task_id, budget, task_first=True, names=None if full else MINIMAL,
-                                  task_limit=task_limit)
-        digest = pack_hash(pack)
+        with store_lock(home):
+            started_iso = utc_now_iso()
+            pack, tokens = build_pack(home, task_id, budget, task_first=True, names=None if full else MINIMAL,
+                                      task_limit=task_limit)
+            digest = pack_hash(pack)
+            context_files = [
+                {"name": i["name"], "sha256": i["sha256"], "status": i["status"]}
+                for i in explain_pack(home, task_id, budget, task_first=True, names=None if full else MINIMAL,
+                                      task_limit=task_limit)["items"]
+                if i["status"] in ("included", "trimmed")
+            ]
+            task_chars = task_limit if task_limit is not None else len(path.read_text(encoding="utf-8"))
+            data_tier = task_data_tier(path)
+            check_inputs = task_check_inputs(path)
         locality = PROVIDERS.get(model, {}).get("locality", "remote")
         base_rec = {
             "schema_version": RUN_SCHEMA_VERSION, "run_id": rid, "parent_run_id": parent_run_id,
             "date": day.isoformat(), "started_at": started_iso, "command": "ask",
             "task_id": path.stem, "model": expected_model, "locality": locality,
             "context_sha256": digest, "tokens": tokens, "budget": budget, "full": bool(full), "terminal": True,
-            "context_files": [
-                {"name": i["name"], "sha256": i["sha256"], "status": i["status"]}
-                for i in explain_pack(home, task_id, budget, task_first=True, names=None if full else MINIMAL,
-                                      task_limit=task_limit)["items"]
-                if i["status"] in ("included", "trimmed")
-            ],
-            "task_chars": task_limit if task_limit is not None else len(path.read_text(encoding="utf-8")),
+            "context_files": context_files, "task_chars": task_chars,
         }
         try:
             check_text(pack, "the context pack", "Nothing was sent.")
@@ -774,7 +778,7 @@ def run_ask(home, model, task_id, budget=6000, dry_run=False, adapters=None, tod
                 })
             raise
         try:
-            base_rec["data_tier"] = enforce_task_policy(path, model, full=full)
+            base_rec["data_tier"] = enforce_task_policy(path, model, full=full, tier=data_tier)
         except Blocked as err:
             if not dry_run:
                 append_run_record(home, {
@@ -832,7 +836,7 @@ def run_ask(home, model, task_id, budget=6000, dry_run=False, adapters=None, tod
             })
             raise
 
-        flags = check_answer(text, *task_check_inputs(path))
+        flags = check_answer(text, *check_inputs)
         note = model_call_note(len(flags))  # the count only: never the answer or the flag texts
         run_rec = {
             **base_rec, "finished_at": utc_now_iso(), "duration_ms": elapsed_ms,
