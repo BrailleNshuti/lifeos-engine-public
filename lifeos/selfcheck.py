@@ -7,7 +7,8 @@ import io
 import json
 from pathlib import Path
 
-from . import lint, verify
+from . import lint, verify
+from .store import read_bytes_retry
 
 RATING_HEAD = ["date", "task", "model", "score"]
 
@@ -62,7 +63,7 @@ def check_waiting(home):
     if not path.exists():
         return []
     try:
-        rows = json.loads(path.read_text(encoding="utf-8-sig"))
+        rows = json.loads(read_bytes_retry(path).decode("utf-8-sig"))
     except (OSError, ValueError) as err:
         return [_problem("waiting", "waiting.json", f"the file is not valid JSON: {err}")]
     if not isinstance(rows, list):

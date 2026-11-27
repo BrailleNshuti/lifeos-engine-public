@@ -6,7 +6,8 @@ from pathlib import Path
 
 from . import learn, today
 from .context import task_file
-from .delegate import task_text
+from .delegate import task_text
+from .store import read_text_retry
 
 SHOW = 300
 
@@ -14,7 +15,7 @@ SHOW = 300
 def _answer_of(path, seat):
     """The start of the last result written by this seat (any `## Result · <seat>...` block), or ''."""
     try:
-        raw = Path(path).read_text(encoding="utf-8", errors="replace").replace("\r\n", "\n")
+        raw = read_text_retry(path, errors="replace")
     except OSError:
         return ""
     blocks = [body for who, body in re.findall(r"^## Result · (\S+) · \d{4}-\d{2}-\d{2}\n(.*?)(?=^## |\Z)", raw, re.M | re.S)
@@ -35,7 +36,7 @@ def walk(home, ask=input, say=print, day=None):
         except (ValueError, FileNotFoundError):
             continue
         say(f"[{n}/{len(items)}] {item['task']}  seat: {item['seat']}  answered {item['date']}")
-        goal = learn.explicit_kind(path.read_text(encoding="utf-8", errors="replace"))
+        goal = learn.explicit_kind(read_text_retry(path, errors="replace"))
         shown = _answer_of(path, item["seat"])
         say("  answer starts: " + (shown or "(no answer text found)") + ("..." if len(shown) >= SHOW else ""))
         while True:

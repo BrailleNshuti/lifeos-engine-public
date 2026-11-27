@@ -15,21 +15,21 @@ from . import ask, learn, seats
 from .ask import ADAPTERS, run_ask  # noqa: F401  (ADAPTERS is patched in tests)
 from .check import check_answer, task_check_inputs
 from .context import task_file, visible_task
-from .store import append_task_note, read_run_records
+from .store import append_task_note, read_run_records, read_text_retry
 
 pick = seats.pick  # tests and older callers: (model, reason) from the task text
 
 
 def task_text(path):
     """Goal, context and task only: not the route line, route notes, or earlier results."""
-    raw = visible_task(path.read_text(encoding="utf-8"))
+    raw = visible_task(read_text_retry(path))
     goal = re.search(r"^goal:\s*(.+)$", raw, re.M)
     body = raw.split("## Result", 1)[0].split("---", 2)[-1]
     return f"{goal.group(1) if goal else ''}\n{body}"
 
 
 def last_result(path):
-    raw = visible_task(path.read_text(encoding="utf-8"))
+    raw = visible_task(read_text_retry(path))
     parts = re.split(r"^## Result · .*$", raw, flags=re.M)
     return parts[-1].strip() if len(parts) > 1 else ""
 

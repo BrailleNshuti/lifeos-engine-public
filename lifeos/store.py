@@ -86,13 +86,19 @@ def _fsync_parent_dir(path):
         os.close(dfd)
 
 
-REPLACE_DELAYS = (0.02, 0.05, 0.1, 0.2, 0.4)  # seconds between tries: six tries, 0.77 s in all, then the error stands
+REPLACE_DELAYS = (0.02, 0.05, 0.1, 0.2, 0.4, 0.6)  # seconds between tries: seven tries, 1.37 s in all, then the error stands
 _pause = time.sleep
 
 
 def _transient(err):
     """A Windows sharing violation (winerror 5 or 32): something else briefly holds the file open. Nothing else qualifies."""
     return os.name == "nt" and getattr(err, "winerror", None) in (5, 32)
+
+
+def _read_transient(err):
+    """On Windows, opening a file for reading while another process replaces it fails with a plain PermissionError (errno 13,
+    often with no winerror at all). For a read that is always worth a short wait."""
+    return os.name == "nt" and isinstance(err, PermissionError)
 
 
 def read_bytes_retry(path):
@@ -104,9 +110,16 @@ def read_bytes_retry(path):
         try:
             return path.read_bytes()
         except PermissionError as err:
-            if not _transient(err) or attempt == len(REPLACE_DELAYS):
+            if not _read_transient(err) or attempt == len(REPLACE_DELAYS):
                 raise
             _pause(REPLACE_DELAYS[attempt])
+
+
+def read_text_retry(path, encoding="utf-8", errors="strict"):
+    """`Path.read_text` for a file another process may be replacing: it waits out a Windows sharing violation (see
+    `read_bytes_retry`) and, like `read_text`, turns CRLF and CR into LF."""
+    text = read_bytes_retry(path).decode(encoding, errors)
+    return text.replace(chr(13) + chr(10), chr(10)).replace(chr(13), chr(10))
 
 
 def _replace(tmp, path):

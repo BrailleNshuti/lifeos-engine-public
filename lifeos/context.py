@@ -4,7 +4,8 @@ import re
 import subprocess
 from pathlib import Path
 
-from .home import estimate_tokens
+from .home import estimate_tokens
+from .store import read_text_retry
 
 PRIORITY = ("rules.md", "TASK", "now.md", "me.md")
 TASK_FIRST = ("TASK", "rules.md", "now.md", "me.md")
@@ -75,7 +76,7 @@ def context_attachments(home, task_id):
         return []
     home = Path(home).resolve()
     out, seen = [], set()
-    for raw in _context_section(task_file(home, task_id).read_text(encoding="utf-8")):
+    for raw in _context_section(read_text_retry(task_file(home, task_id))):
         line = raw.strip().lstrip("-*+ ").strip().strip("`").lstrip("@").strip().replace("\\", "/")
         if not line or line.startswith("/") or ":" in line or ".." in line.split("/"):
             continue
@@ -90,7 +91,7 @@ def context_attachments(home, task_id):
         if not real.is_file() or rel in seen or rel.split("/")[0].lower() in ATTACH_BLOCKED or rel in PRIORITY:
             continue
         seen.add(rel)
-        text = real.read_text(encoding="utf-8", errors="replace")
+        text = read_text_retry(real, errors="replace")
         limit = ATTACH_MAX_TOKENS * 4
         if len(text) > limit:
             text = text[:limit]
@@ -111,9 +112,9 @@ def build_pack(home, task_id=None, budget=6000, task_first=False, names=None, ta
         if name == "TASK":
             if task_id:
                 path = task_file(home, task_id)
-                files.append((f"tasks/{path.name}", visible_task(path.read_text(encoding="utf-8")[:task_limit])))
+                files.append((f"tasks/{path.name}", visible_task(read_text_retry(path)[:task_limit])))
         elif (home / name).exists():
-            files.append((name, (home / name).read_text(encoding="utf-8")))
+            files.append((name, read_text_retry(home / name)))
     if task_id:
         files.extend(context_attachments(home, task_id))
 
@@ -156,7 +157,7 @@ def explain_pack(home, task_id=None, budget=6000, task_first=False, names=None, 
         if not path.exists():
             items.append({"name": label, "status": "missing", "tokens": 0, "sha256": "-"})
             continue
-        text = path.read_text(encoding="utf-8")
+        text = read_text_retry(path)
         if name == "TASK":
             text = visible_task(text[:task_limit])
         digest = pack_hash(text)
@@ -268,10 +269,10 @@ def build_review_pack(home, task_id, budget=6000, diff_text="", repo_info=None):
     has_diff = bool((repo_info and repo_info.get("diff_text", "").strip()) or diff_text.strip())
     home = Path(home)
     path = task_file(home, task_id)
-    facts = re.split(r"\n## Result\s*·", visible_task(path.read_text(encoding="utf-8")), maxsplit=1)[0].strip()
+    facts = re.split(r"\n## Result\s*·", visible_task(read_text_retry(path)), maxsplit=1)[0].strip()
     parts = [(f"tasks/{path.name} (facts only)", facts)]
     if (home / "rules.md").exists():
-        parts.append(("rules.md", (home / "rules.md").read_text(encoding="utf-8").strip()))
+        parts.append(("rules.md", read_text_retry(home / "rules.md").strip()))
     if repo_info:
         parts.append((f"repo_commit ({repo_info['commit_sha'][:12]})", repo_info["meta_text"].strip()))
         if repo_info.get("diff_text", "").strip():

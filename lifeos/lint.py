@@ -9,6 +9,8 @@ from pathlib import Path
 
 from .tasks import read_frontmatter
 
+from .store import read_text_retry
+
 STATUSES = {"inbox", "todo", "doing", "blocked", "done"}
 REQUIRED = ("id", "goal", "done_when", "route", "level", "status")
 
@@ -21,7 +23,7 @@ def has_proof(text):
 def check(home):
     out = []
     for path in sorted((Path(home) / "tasks").glob("T-*.md")):
-        text = path.read_text(encoding="utf-8", errors="replace")
+        text = read_text_retry(path, errors="replace")
         name = path.stem
 
         def bad(problem):
