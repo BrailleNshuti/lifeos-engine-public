@@ -88,6 +88,26 @@ def test_a_failure_while_staging_leaves_the_old_files_untouched_and_no_debris(ho
     assert {p.name: p.read_bytes() for p in out.iterdir()} == before
 
 
+def test_a_failure_while_replacing_rolls_back_every_file(home, tmp_path, monkeypatch):
+    out = tmp_path / "out"
+    dashdata.export(home, out, commands=56)
+    before = {p.name: p.read_bytes() for p in out.iterdir()}
+    real = dashdata.os.replace
+    calls = {"n": 0}
+
+    def flaky(src, dest):
+        calls["n"] += 1
+        if calls["n"] == 4:
+            raise OSError("file held open")
+        return real(src, dest)
+
+    monkeypatch.setattr(dashdata.os, "replace", flaky)
+    with pytest.raises(OSError):
+        dashdata.export(home, out, commands=57)
+    monkeypatch.undo()
+    assert {p.name: p.read_bytes() for p in out.iterdir()} == before
+
+
 def test_egress_and_latency_files_hold_counts_only(home, tmp_path):
     out = tmp_path / "out"
     dashdata.export(home, out, commands=56)

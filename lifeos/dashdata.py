@@ -62,8 +62,25 @@ def export(home, out_dir, commands=None):
     try:
         for name, data in payloads.items():
             (stage / name).write_bytes(data)
+        old = {}
         for name in payloads:
-            os.replace(stage / name, out / name)
+            target = out / name
+            if target.exists():
+                old[name] = stage / f".old-{name}"
+                shutil.copy2(target, old[name])
+        installed = []
+        try:
+            for name in payloads:
+                os.replace(stage / name, out / name)
+                installed.append(name)
+        except OSError:
+            for name in reversed(installed):
+                target = out / name
+                if name in old:
+                    os.replace(old[name], target)
+                else:
+                    target.unlink(missing_ok=True)
+            raise
     finally:
         shutil.rmtree(stage, ignore_errors=True)
     return [out / name for name in payloads]
