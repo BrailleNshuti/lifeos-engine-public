@@ -147,6 +147,7 @@ def _split_tokens(text, allow_mark):
             for m in pattern.finditer(joined):
                 if m.start() < len(first) < m.end():
                     found.append((index + 1, "BLOCK", kind, _mask(m.group(0))))
+                    found.append((index + 2, "BLOCK", kind, _mask(m.group(0))))  # both halves, so `redact` removes both lines
     return found
 
 
