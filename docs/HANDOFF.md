@@ -308,7 +308,7 @@ What the scan looked at: the installed package in a clean virtual environment, e
 ### B. Review the new code (rule 7, blind)
 6. Done: Gemini and Claude blind-reviewed `nextup`, `ratewalk`, the read retries in `store` and `today.coverage`; each finding was checked by hand. The real findings have regression tests and fixes. The bounded Windows read retry was deliberate and stayed unchanged.
 7. Blind review of the `dash-export` rollback, `backup --restore` and `selfcheck`.
-8. `lifeos review` prints a plain summary when one reviewer fails and the others answer ("2 asked, 1 answered, codex rested") and uses an exit code that says partial, not failed.
+8. Done: `lifeos review` prints a plain summary when one reviewer fails and the others answer ("2 asked, 1 answered, codex rested"), keeps the usable answers and exits 4 for partial instead of 3 for failed.
 
 ### C. Seat health
 9. Done: "out of credits" (HTTP 402) is a resting reason in `seats`, `doctor` and the `delegate` chain, with the message and no retry (pull request 155).

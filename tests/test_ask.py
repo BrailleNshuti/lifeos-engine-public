@@ -432,6 +432,17 @@ def test_blind_multi_model_review_hides_earlier_answers_and_logs_parent_run(home
     assert runs[-1]["run_id"] == out["group_run_id"] and runs[-1]["command"] == "review_group"
 
 
+def test_partial_review_prints_the_usable_result_and_has_its_own_exit_code(home, monkeypatch, capsys):
+    monkeypatch.setitem(ask.ADAPTERS, "codex", lambda _prompt: "Checked the change. Next step: merge.")
+    monkeypatch.setitem(ask.ADAPTERS, "claude", lambda _prompt: (_ for _ in ()).throw(ask.AskError("usage limit reached")))
+    code = main(["--home", str(home), "review", "T-261116", "--reviewers", "codex,claude",
+                 "--run-id", "R-261120-partial1"])
+    out = capsys.readouterr().out
+    assert code == 4
+    assert "review summary: 2 asked, 1 answered, claude rested" in out
+    assert "review:codex" in out
+
+
 def test_execution_policy_blocks_sensitive_task_on_remote_but_allows_local(home):
     import json as _json
 

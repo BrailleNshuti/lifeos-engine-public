@@ -109,7 +109,10 @@ def _run_tool(home, name, a):
             repo=a.get("repo"), commit=a.get("commit", "HEAD") if "commit" in a else "HEAD",
             run_id=rid,
         )
-        parts = [f"Blind review ({out['group_run_id']}, pack {out['sha256']}) appended to {out['path'].relative_to(home)}:"]
+        failed = ", ".join(f"{r['model']} {r['summary']}" for r in out.get("failures", []))
+        summary = f"{len(revs)} asked, {len(out['results'])} answered" + (f", {failed}" if failed else "")
+        parts = [f"Blind review ({out['group_run_id']}, pack {out['sha256']}) appended to {out['path'].relative_to(home)}:",
+                 f"Summary: {summary}"]
         for r in out["results"]:
             parts.append(f"\n--- {r['label']} ({r['run_id']}) ---\n{r['text']}")
         return "\n".join(parts)
