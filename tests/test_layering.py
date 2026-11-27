@@ -13,7 +13,7 @@ LAYER = {
     "ask": 2, "learn": 2, "experiment": 3, "mistakes": 3, "exam": 2, "showcase": 2, "study": 2,
     "delegate": 3, "panel": 3, "governor": 2, "canary": 3, "replay": 3, "sortcsv": 3, "router": 3, "cockpit": 3,
     "numbers": 4, "debate": 4, "debatestats": 3, "digest": 4, "demo": 4, "selftest": 4, "pipeline": 1, "decision": 2, "backup": 1, "redact": 1, "release": 0, "earn": 0, "today": 4, "lint": 1, "stale": 3, "completion": 0, "console": 0, "schema": 4, "timeline": 0, "export": 2, "arch": 0, "prove": 5, "mcp": 4,
-    "notes": 4, "cmds_misc": 5, "egress": 2, "dashdata": 5, "cli": 6,
+    "notes": 4, "cmds_misc": 5, "sunday": 5, "egress": 2, "dashdata": 5, "cli": 6,
 }
 
 FORBIDDEN_IN_LAB = {"ask", "delegate", "mcp", "subprocess", "socket", "urllib", "http"}
