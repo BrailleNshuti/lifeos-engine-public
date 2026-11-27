@@ -8,7 +8,7 @@ import datetime as dt
 import hashlib
 import json
 import shutil
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 
 from . import verify
 
@@ -52,22 +52,38 @@ def make(home, out, today=None):
 
 
 def check(folder):
-    folder = Path(folder)
+    folder = Path(folder).resolve()
     path = folder / MANIFEST
     if not path.exists():
         return {"ok": False, "files": 0, "errors": [f"no {MANIFEST} in {folder}"]}
-    man = json.loads(path.read_text(encoding="utf-8"))
+    try:
+        man = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, ValueError) as err:
+        return {"ok": False, "files": 0, "errors": [f"manifest cannot be read: {err}"]}
+    files = man.get("files") if isinstance(man, dict) else None
+    if not isinstance(files, dict):
+        return {"ok": False, "files": 0, "errors": ["manifest must contain a files object"]}
     errors = []
-    for rel, digest in man["files"].items():
-        f = folder / rel
-        if not f.exists():
+    known = set()
+    for rel, digest in files.items():
+        parts = PurePosixPath(rel.replace("\\", "/")) if isinstance(rel, str) else PurePosixPath()
+        f = (folder / Path(*parts.parts)).resolve()
+        if (not parts.parts or parts.is_absolute() or parts.parts[0] != "logs" or ".." in parts.parts
+                or folder not in f.parents):
+            errors.append(f"{rel}: unsafe path in manifest")
+            continue
+        known.add(parts.as_posix())
+        if not f.is_file():
             errors.append(f"{rel}: missing")
-        elif _sha(f) != digest:
-            errors.append(f"{rel}: changed since the backup")
-    known = set(man["files"])
+        else:
+            try:
+                if _sha(f) != digest:
+                    errors.append(f"{rel}: changed since the backup")
+            except OSError as err:
+                errors.append(f"{rel}: cannot be read: {err}")
     errors += [f"{p.relative_to(folder).as_posix()}: not in the manifest" for p in _files(folder)
                if p.relative_to(folder).as_posix() not in known]
-    return {"ok": not errors, "files": len(man["files"]), "head": man.get("head"), "errors": errors}
+    return {"ok": not errors, "files": len(files), "head": man.get("head"), "errors": errors}
 
 
 def restore(home, folder, now=None):
