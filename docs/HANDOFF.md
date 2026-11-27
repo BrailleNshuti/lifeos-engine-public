@@ -3,6 +3,8 @@
 The previous model ran out of usage. You take over now. The owner wants 8 to 9 hours of continuous, careful work, no idle gaps,
 and every step saved to GitHub so the next model can see exactly where you stopped. Read this whole file before you touch anything.
 
+**Newest first: section 14 at the end of this file is the latest hand-off (2026-11-28): what is done, what is open and what to do next. Read it before the rest.**
+
 ## 1. Rules that cannot be broken
 
 1. **No attribution, ever.** Never add `Co-Authored-By`, `Claude-Session`, "Generated with" or any model name as author or
@@ -337,3 +339,47 @@ What the scan looked at: the installed package in a clean virtual environment, e
 28. (owner) Rate the three old unrated answers with `rate --walk`, or decide to leave them.
 29. (owner) Ignore `.last-backup` in the notes repo and add `lifeos next` to the morning routine.
 30. Keep the shuffled-order run (from a separate worktree) as a routine after every ten merged pull requests, and log the seed in `STATE.md`.
+
+
+## 14. Hand-off to Codex (written 2026-11-28 by Claude, who is resting; read this first, it is the newest)
+
+Run `git pull`, then `gh pr list` and `lifeos selfcheck` and `lifeos today` in the notes repo. They show the true state; this section says what it was when Claude stopped.
+
+### Done (all merged on `main` unless a pull request is named under "Open")
+- **v0.5.1 is released**: tag `v0.5.1` on commit `60d6c53` (the merge of pull request 132), GitHub release published 2026-11-27. `main` has moved on since; the later work is under `Unreleased` in `CHANGELOG.md` for v0.5.2.
+- **Round 4** (30 items): 26 built or already present. **Round 5**: all but the owner's items. **Round 6**: items 1 to 4 built. Details and status lines are in sections 10 to 12.
+- New commands: `selfcheck`, `next`, `waiting add|list|done`, `task close`, `task block`, `rate --walk`, `backup --restore`, `sunday --save`, `python -m lifeos`; `today` shows unrated answers, days left on waiting items, an overdue backup; `earn` shows why calls failed and the days a seat hit a usage limit.
+- Safety: a break-the-guard test (every privacy pattern proven to matter), a canary test (private files never reach a cloud seat), a four-process race test, seeded property tests, typed text is guarded with the owner's private patterns and the `lifeos-guard: allow` marker cannot exempt it.
+- Windows: readers wait out a short file lock (`store.read_bytes_retry`, `read_text_retry`); the write retry has seven tries. This may be the cause of the old unexplained write error; the weekly soak will show.
+- Packaging: after a plain `pip install` the demo and `selftest` work (the demo home is bundled in `lifeos/_demo_home`, kept identical to `examples/demo-home` by a test).
+- Blind review (rule 7) of the new code: Gemini and Codex each reviewed `task close` and `waiting`; 10 of 10 findings were real and are fixed.
+- The cockpit page (a private page, not in this repo) was redesigned and its data refreshed; refresh it with `python scripts/refresh_cockpit.py`.
+- Round 7 (section 13): the 30-item list from a full scan is written; items 1, 2 and the guard fix for git diff headers are done.
+
+### Open at the time of writing
+- Pull requests still in review: **#145** (rating coverage per seat in `sunday`, the soak runs the helper commands) and **#150** (deadlines from `now.md` in `today` and `next`; its first CI run failed because it sat on an older base, it needs `main` merged in, the changelog and graph conflicts resolved, and a fresh run). Check `gh pr list`; merge each with a plain merge once all 12 checks pass.
+- Notes repo pull request **#64** (the closed blind-review task with its checked verdicts): the notes repo needs the owner's review; do not use the admin bypass without his word.
+
+### Not done (in order of value)
+1. Finish #145 and #150 as above.
+2. Round 7 item 9: treat "out of credits" (HTTP 402, Grok on 2026-11-27) as a resting reason in `seats`, `doctor` and the `delegate` chain. A branch name `feat/seat-no-credits` was started and has no changes.
+3. Blind review of `nextup`, `ratewalk`, the read retries and `today.coverage`: the task `T-261127-blind-review-nextup-ratewalk` is in the notes repo as todo. Use Gemini and Claude (or Codex when it is open); check each finding by hand; write a failing test first.
+4. Round 7 items 3, 4, 14, 15 and 17 to 23 (see section 13).
+5. Run real tasks across the seats and rate them (`rate --walk`); `sunday` shows how few answers are rated.
+
+### Owner's items (never do these without his word)
+- Install the RAM, then retest Qwen and Ollama and decide the warm-up (round 4 items 13 and 14).
+- Grok has no credits (402): he must check the subscription.
+- Decide about the 44 old commits on public `main` that carry a session link in the message (a force push would be needed; never do it yourself), the `dependabot[bot]` entry on the paused side project, and the 50 merged remote branches.
+- Ignore `.last-backup` in the notes repo; rate or drop the three old unrated answers.
+- Publish v0.5.2 later: cut it from the Unreleased section once the round 5 to 7 work is merged.
+
+### Traps learned on 2026-11-27 and 28 (each cost a CI round or nearly a leak)
+- **Never put the owner's real dates, permits, exams or any personal fact in the public repo**, not in tests, the changelog or this file. Use made-up examples ("pay the invoice"). A line of this kind was nearly merged and had to be removed.
+- A new module needs an entry in `LAYER` (`tests/test_layering.py`); regenerate `docs/ARCHITECTURE-GRAPH.md` (`lifeos arch --write ...`) and `docs/COMMANDS.md` (`lifeos commands --out ...`) after any import or command change, or CI fails.
+- `CHANGELOG.md` conflicts on nearly every pull request; keep both sides and make sure no conflict marker is left (`git grep "^<<<<<<< "`).
+- Do not run the shuffled full test run while switching branches; use a separate worktree (`git worktree add --detach ../tmp origin/main`) and set `PYTHONPATH` to it.
+- When a test asserts an exact phrase in output, the temp folder name of the test can contain words that match; assert on a longer unique prefix.
+- Generated text with backslashes written through a shell here-document can be mangled; edit with the editor tool or build the characters with `chr(92)`.
+- A pull request whose base was merged under it needs `git merge origin/main` before its checks mean anything.
+- Seats: Codex had a usage limit on 2026-11-27 (it said to try again at 17:14), Grok returned 402 (no credits), local models are slow until the RAM arrives. `lifeos seats` and `lifeos doctor` show the state.
