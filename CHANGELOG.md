@@ -4,6 +4,7 @@ Dates are release dates. Newest first.
 
 ## [Unreleased]
 
+- Test: T7 to T10 of the handoff backlog (test-only): the six handlers moved to `cmds_misc.py` each run through `main([...])`; the dashboard export survives awkward notes, a missing or broken waiting file, and never carries a task body; atomic writes on POSIX keep a read-only mode, replace a symlink and give a new file the normal mode (those three run on the Linux CI jobs only).
 - Tests: the `lifeos ask` CLI path now has an end-to-end fake-adapter check for its seat hint, free CHECK line and successful exit code.
 - Tests: direct coverage for the pre-call seat hint and post-call answer check, including missing task files that must never raise.
 - Docs: `docs/HANDOFF.md`, the document for the next model to continue the build: rules, workflow, traps, a test and feature backlog with a done-when for each, and how to log progress. `AGENTS.md` points to it.

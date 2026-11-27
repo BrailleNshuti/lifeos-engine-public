@@ -48,3 +48,35 @@ def test_a_failed_cleanup_never_hides_the_real_error(tmp_path, monkeypatch):
     with pytest.raises(PermissionError, match="replace denied"):
         store.atomic_write_bytes(path, b"new")
     assert path.read_bytes() == b"old"
+
+
+@pytest.mark.skipif(os.name == "nt", reason="POSIX permission bits")
+def test_a_read_only_file_is_replaced_and_stays_read_only(tmp_path):
+    path = tmp_path / "ledger.csv"
+    path.write_bytes(b"old")
+    os.chmod(path, 0o444)
+    store.atomic_write_bytes(path, b"new")
+    assert path.read_bytes() == b"new"
+    assert stat.S_IMODE(path.stat().st_mode) == 0o444
+
+
+@pytest.mark.skipif(os.name == "nt", reason="symbolic links need extra rights on Windows")
+def test_a_symlink_is_replaced_by_a_regular_file_and_its_target_is_left_alone(tmp_path):
+    target = tmp_path / "real.csv"
+    target.write_bytes(b"original")
+    link = tmp_path / "link.csv"
+    link.symlink_to(target)
+    store.atomic_write_bytes(link, b"new")
+    assert not link.is_symlink() and link.read_bytes() == b"new"
+    assert target.read_bytes() == b"original"
+
+
+@pytest.mark.skipif(os.name == "nt", reason="POSIX permission bits")
+def test_a_new_file_gets_the_normal_mode_not_a_private_one(tmp_path):
+    old_umask = os.umask(0o022)
+    try:
+        path = tmp_path / "fresh.csv"
+        store.atomic_write_bytes(path, b"x")
+    finally:
+        os.umask(old_umask)
+    assert stat.S_IMODE(path.stat().st_mode) == 0o644
