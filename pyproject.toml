@@ -16,5 +16,8 @@ build-backend = "setuptools.build_meta"
 [tool.setuptools.packages.find]
 include = ["lifeos*"]
 
+[tool.setuptools.package-data]
+lifeos = ["_demo_home/*", "_demo_home/**/*"]
+
 [tool.pytest.ini_options]
 testpaths = ["tests"]

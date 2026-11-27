@@ -10,6 +10,7 @@ import tempfile
 from pathlib import Path
 
 from . import ask, guard, panel, replay, verify
+from .home import default_example
 
 DAY = dt.date(2026, 11, 20)
 TASK = "T-261116"
@@ -23,7 +24,7 @@ def _home(example):
 
 
 def run(example=None):
-    example = Path(example or Path(__file__).resolve().parent.parent / "examples" / "demo-home")
+    example = Path(example or default_example())
     root, home = _home(example)
     steps = []
 

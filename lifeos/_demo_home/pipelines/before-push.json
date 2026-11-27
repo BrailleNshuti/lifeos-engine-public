@@ -1,0 +1,5 @@
+{"steps": [
+  {"name": "guard the notes", "argv": ["guard", "now.md", "me.md"]},
+  {"name": "task files", "argv": ["lint"]},
+  {"name": "ledger intact", "argv": ["verify"]}
+]}
