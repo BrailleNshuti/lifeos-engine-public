@@ -22,7 +22,7 @@ def _imports(tree, names):
 
 
 def graph():
-    trees = {p.stem: ast.parse(p.read_text(encoding="utf-8")) for p in sorted(PKG.glob("*.py")) if p.stem != "__init__"}
+    trees = {p.stem: ast.parse(p.read_text(encoding="utf-8")) for p in sorted(PKG.glob("*.py")) if p.stem not in ("__init__", "__main__")}  # __main__ is the entry point, not a layer
     names = set(trees)
     imports = {n: [i for i in _imports(t, names) if i != n] for n, t in trees.items()}
     depth = {}
