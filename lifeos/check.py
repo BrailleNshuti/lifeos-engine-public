@@ -1,3 +1,4 @@
+
 """A free sanity check for model answers: plain text rules, no model call, no tokens.
 
 It catches the usual nonsense (empty, refusals, echoed prompt, success without proof, undated links, guessing, no next step).
@@ -7,6 +8,8 @@ and the text the seat was given (are the quoted lines really there?), and flags 
 """
 import re
 from pathlib import Path
+
+from .store import read_text_retry
 
 REFUSAL = r"can'?t access|cannot|can not|as an ai\b|unable to|don'?t have access|no access"
 SUCCESS = r"\b(done|completed?|fixed|works?|verified|all tests pass(ed)?|resolved)\b"
@@ -30,7 +33,7 @@ def _squash(text):
 def task_check_inputs(path):
     """(done_when, context) of a task file: what the answer must carry and the text the seat was given. Never raises."""
     try:
-        raw = Path(path).read_text(encoding="utf-8")
+        raw = read_text_retry(path)
     except (OSError, UnicodeError):
         return "", ""
     raw = raw.replace("\r\n", "\n")

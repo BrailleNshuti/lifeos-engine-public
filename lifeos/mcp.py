@@ -5,7 +5,7 @@ Everything stays inside the data repo: tasks/ and logs/ledger.csv. Every write g
 """
 import json
 
-from . import __version__, ask, bakeoff, cockpit, delegate, exam, kaizen, log, router, runs, showcase
+from . import __version__, ask, bakeoff, cockpit, delegate, exam, kaizen, log, router, runs, selfcheck, showcase, waiting
 from .context import build_pack, explain_pack, render_explanation, task_file
 from .store import new_run_id, validate_run_id
 from .tasks import list_tasks, new_task
@@ -21,6 +21,10 @@ def _schema(props, required):
 TOOLS = [
     ("lifeos_task_list", "List LifeOS task files with status and due date.",
      _schema({"status": {"type": "string", "enum": ["inbox", "doing", "done"]}}, [])),
+    ("lifeos_selfcheck", "Check the owner's own files (ledger chain, task files, ratings log, waiting list). Reads only; names each problem, never repairs.",
+     _schema({}, [])),
+    ("lifeos_waiting_list", "List what is waiting on the owner or on Claude (waiting.json), numbered. Reads only.",
+     _schema({}, [])),
     ("lifeos_task_new", "Create a task file from one sentence. The owner writes the done_when line.",
      _schema({"sentence": STR}, ["sentence"])),
     ("lifeos_context", "Read a task with the rules (and, with full=true, now.md and me.md) as a context pack, or explain=true for provenance.",
@@ -71,6 +75,10 @@ def _run_tool(home, name, a):
     if name == "lifeos_task_list":
         rows = list_tasks(home, a.get("status"))
         return "\n".join(f"{t['id']}  {t['status']}  {t['due']}  {t['goal']}" for t in rows) or "No tasks."
+    if name == "lifeos_selfcheck":
+        return selfcheck.render(selfcheck.run(home))
+    if name == "lifeos_waiting_list":
+        return waiting.render(waiting.read(home))
     if name == "lifeos_task_new":
         ask.check_text(a["sentence"], "the task sentence", "No task file was created.")
         return str(new_task(home, a["sentence"]).relative_to(home))

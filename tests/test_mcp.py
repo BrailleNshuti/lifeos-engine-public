@@ -35,6 +35,7 @@ def test_initialize_and_tool_list(home):
         "lifeos_week", "lifeos_log", "lifeos_runs", "lifeos_kaizen",
         "lifeos_route", "lifeos_cockpit",
         "lifeos_exam", "lifeos_bakeoff", "lifeos_showcase",
+        "lifeos_selfcheck", "lifeos_waiting_list",
     }
 
 
@@ -347,3 +348,16 @@ def test_mcp_week_log_runs_and_kaizen_tools(home):
 
 
 
+
+
+def test_selfcheck_and_waiting_list_are_read_only_tools(tmp_path):
+    from lifeos import mcp
+    names = [t[0] for t in mcp.TOOLS]
+    assert "lifeos_selfcheck" in names and "lifeos_waiting_list" in names
+    (tmp_path / "logs").mkdir()
+    (tmp_path / "now.md").write_text("# now", encoding="utf-8")
+    (tmp_path / "waiting.json").write_text('[{"item": "one thing", "who": "you", "when": "soon"}]', encoding="utf-8")
+    before = (tmp_path / "waiting.json").read_bytes()
+    assert "one thing" in mcp._run_tool(tmp_path, "lifeos_waiting_list", {})
+    assert "sound" in mcp._run_tool(tmp_path, "lifeos_selfcheck", {})
+    assert (tmp_path / "waiting.json").read_bytes() == before

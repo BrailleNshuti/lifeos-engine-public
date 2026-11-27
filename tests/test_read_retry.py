@@ -25,7 +25,7 @@ def flaky(monkeypatch):
             raise sharing_violation()
         return real(self)
     monkeypatch.setattr(Path, "read_bytes", read_bytes)
-    monkeypatch.setattr(store, "_transient", lambda err: True)  # the retry is Windows-only; force it so this runs everywhere
+    monkeypatch.setattr(store, "_read_transient", lambda err: True)  # the retry is Windows-only; force it so this runs everywhere
     monkeypatch.setattr(store, "_pause", lambda s: None)
     return seen
 
@@ -37,7 +37,7 @@ def test_a_read_that_meets_a_swap_tries_again(tmp_path, flaky):
 
 
 def test_a_lasting_lock_still_raises(tmp_path, monkeypatch):
-    monkeypatch.setattr(store, "_transient", lambda err: True)
+    monkeypatch.setattr(store, "_read_transient", lambda err: True)
     monkeypatch.setattr(store, "_pause", lambda s: None)
     monkeypatch.setattr(Path, "read_bytes", lambda self: (_ for _ in ()).throw(sharing_violation()))
     with pytest.raises(PermissionError):
@@ -46,10 +46,20 @@ def test_a_lasting_lock_still_raises(tmp_path, monkeypatch):
 
 def test_other_errors_are_not_retried(tmp_path, monkeypatch):
     calls = []
+    monkeypatch.setattr(Path, "read_bytes", lambda self: calls.append(1) or (_ for _ in ()).throw(FileNotFoundError(2, "gone")))
+    with pytest.raises(FileNotFoundError):
+        store.read_bytes_retry(tmp_path / "x.txt")
+    assert len(calls) == 1
+
+
+def test_a_plain_permission_error_is_retried_only_on_windows(tmp_path, monkeypatch):
+    calls = []
+    monkeypatch.setattr(store, "_pause", lambda s: None)
     monkeypatch.setattr(Path, "read_bytes", lambda self: calls.append(1) or (_ for _ in ()).throw(PermissionError(13, "denied")))
     with pytest.raises(PermissionError):
         store.read_bytes_retry(tmp_path / "x.txt")
-    assert len(calls) == 1  # off Windows (or without a sharing violation) there is no retry
+    import os
+    assert len(calls) == (len(store.REPLACE_DELAYS) + 1 if os.name == "nt" else 1)
 
 
 def test_task_files_ratings_and_the_waiting_list_survive_a_swap(tmp_path, flaky):
