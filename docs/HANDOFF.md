@@ -235,6 +235,43 @@ Same workflow and rules as above. Order matters: A first, because every later gr
 ### Where to continue (written for the next model)
 1. `git pull`, read `STATE.md`, then this file's sections 1 to 5 (rules, workflow, traps).
 2. Run `lifeos selfcheck`, `lifeos today` and `lifeos sunday` in the notes repo: they show what needs attention now.
-3. Write round 5 as section 11 of this file (30 items, each with a "done when"), from what real use showed. Start with trust and data safety, then seats, then daily use.
+3. Continue from section 11 below. Every item there comes from something that really happened; do not invent a speculative round.
 4. The cockpit (a private page) is refreshed with `python scripts/refresh_cockpit.py`; the owner or Claude uploads the files.
 5. Never touch the paused side project. Never force-push. The owner publishes releases.
+
+
+## 11. Round 5: twenty items from what really happened (written 2026-11-28)
+
+Each item names the evidence. Same workflow and rules as above. Items marked (owner) need his yes or his hands.
+
+### A. Close the Windows file-race family
+1. A locked, retried read for every file the engine replaces atomically (tasks, ratings, ledger, waiting list). Evidence: pull request 131 found that two `ask` processes could still collide on a task file.
+2. A test that starts three processes doing `ask`, `rate`, `task close` and `waiting add` on one home at once and finds no error and no lost row.
+3. `lifeos selfcheck` prints, for each problem, the one command that fixes it (it still changes nothing).
+4. `today` warns when the last `backup` is older than 14 days.
+
+### B. Seats and answers
+5. `earn` shows a calendar of usage-limit rests per seat. Evidence: Codex and Gemini both hit limits in one week.
+6. After a call, `ask` prints how much of that seat's weekly share is used, from `egress`.
+7. `rate` with no arguments walks through the unrated answers that `today` lists (a plain prompt per answer, no model call). Evidence: three answers still unrated.
+8. (owner) Install the RAM, then run the local-seat retest and decide the warm-up (round 4 items 13 and 14).
+9. A short answer-quality note per seat in `route` output, from ratings with at least three scores.
+
+### C. Daily use
+10. A "what is next" command: the one thing to do now, from `today`, with the exact command to run.
+11. `lifeos task block ID --reason TEXT`, the twin of `task close`, for a task paused on purpose. Evidence: the paused side project was set by hand.
+12. `help-me` and the shell completion list the new commands (`task close`, `waiting`, `selfcheck`); a test fails when they do not.
+13. `waiting` entries with a date appear in `sunday`, with days left.
+
+### D. Cockpit
+14. `scripts/refresh_cockpit.py` also writes `shipped.json` from the merged pull requests (`gh pr list`), so that list is not typed by hand.
+15. The cockpit's seat table (`seats.json`) is generated from `lifeos/seats.py`, so it cannot drift.
+
+### E. Quality of the engine
+16. Make the top three largest modules smaller (check `tests/test_budgets.py` for the ratchet) without changing behaviour.
+17. Run `scripts/shuffle_run.py` three times after every ten merged pull requests and log the seeds in `STATE.md`.
+18. A README quickstart test: every command shown in the first screen of `README.md` runs against the demo home without error.
+
+### F. Release
+19. (owner) Publish v0.5.1: the tag target is the merge of pull request 132 (commit 60d6c53); `main` has one later CI-only commit that belongs under Unreleased.
+20. After 19, cut v0.5.2 from the round 5 work when items 1 to 7 are merged.
