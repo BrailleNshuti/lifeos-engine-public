@@ -192,17 +192,6 @@ def _os_unlock(fd):
             pass
 
 
-def _read_lock_meta(lock_path):
-    """Return (owner_token, pid, timestamp) from a lockfile, or (None, None, None)."""
-    try:
-        lines = Path(lock_path).read_text(encoding="ascii").splitlines()
-        if len(lines) >= 3:
-            return lines[0].strip(), int(lines[1].strip()), float(lines[2].strip())
-    except (OSError, ValueError):
-        pass
-    return None, None, None
-
-
 @contextmanager
 def _advisory_lock_file(lock_path, timeout=10.0):
     """Acquire an exclusive cross-process (OS advisory lock) and cross-thread lock on `lock_path`,
@@ -544,13 +533,6 @@ def _prepare_run_record_bytes(runs_path, record):
     stamped["prev_hash"] = hashlib.sha256(existing[-1].rstrip(b"\r")).hexdigest() if existing else "0" * 64
     line = (json.dumps(stamped, sort_keys=True) + "\n").encode("utf-8")
     return raw + line
-
-
-def append_task_result(path, model, text, today):
-    """Atomically append a result block to a task file."""
-    path = Path(path)
-    atomic_write_bytes(path, _prepare_task_result_bytes(path, model, text, today))
-    return True
 
 
 def append_task_note(home, path, heading, body):

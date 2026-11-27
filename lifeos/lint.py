@@ -13,11 +13,6 @@ STATUSES = {"inbox", "todo", "doing", "blocked", "done"}
 REQUIRED = ("id", "goal", "done_when", "route", "level", "status")
 
 
-def _proof_section(text):
-    m = re.search(r"(?ms)^## Proof\s*\n(.*?)(?=^## |\Z)", text)
-    return (m.group(1) if m else "").strip()
-
-
 def _has_proof(text):
     body = text.split("## Proof", 1)[1] if "## Proof" in text else ""
     return bool(re.search(r"https?://|\b[\w/.-]+\.(?:py|md|csv|json|html)\b|pytest|\bPR\b|#\d+", body))
