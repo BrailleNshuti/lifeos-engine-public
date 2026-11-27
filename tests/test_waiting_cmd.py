@@ -63,3 +63,30 @@ def test_two_processes_adding_lose_nothing(home):
     for p in procs:
         assert p.wait(timeout=120) == 0, p.stderr.read()[-300:]
     assert len(waiting.read(home)) == 30
+
+
+# Found by a blind review (Gemini, 2026-11-27) and confirmed by hand against the code.
+@pytest.mark.parametrize("damaged", [[{"item": "ok", "who": "you", "when": "x"}, {"itme": "typo"}], ["a plain string"], [5], [{"item": 7}]])
+def test_a_damaged_entry_stops_add_and_done_and_nothing_is_erased(home, damaged, capsys):
+    text = json.dumps(damaged)
+    (home / "waiting.json").write_text(text, encoding="utf-8")
+    assert main(["--home", str(home), "waiting", "add", "new"]) == 2
+    assert main(["--home", str(home), "waiting", "done", "1"]) == 2
+    assert "entry" in capsys.readouterr().err
+    assert (home / "waiting.json").read_text(encoding="utf-8") == text
+
+
+def test_reading_a_missing_file_is_empty_and_an_unreadable_one_is_not_called_invalid_json(home, monkeypatch):
+    assert waiting.read(home) == []
+    (home / "waiting.json").write_text("[]", encoding="utf-8")
+
+    def gone(path):
+        raise FileNotFoundError("deleted between the check and the read")
+    monkeypatch.setattr(waiting, "read_bytes_retry", gone)
+    assert waiting.read(home) == []
+
+    def locked(path):
+        raise PermissionError(13, "locked")
+    monkeypatch.setattr(waiting, "read_bytes_retry", locked)
+    with pytest.raises(waiting.WaitingError, match="Could not read"):
+        waiting.read(home)

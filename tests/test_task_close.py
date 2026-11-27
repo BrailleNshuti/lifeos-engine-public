@@ -116,3 +116,51 @@ def test_block_refuses_a_done_task_an_empty_reason_and_a_secret(home):
 def test_block_command(home, capsys):
     assert main(["--home", str(home), "task", "block", "T-261128", "--reason", "waiting for the RAM"]) == 0
     assert "blocked: tasks" in capsys.readouterr().out
+
+
+# Found by a blind review (Gemini, 2026-11-27) and confirmed by hand against the code.
+def test_a_proof_heading_at_the_end_of_the_file_still_gets_the_proof(home):
+    path = home / "tasks" / "T-261128-demo.md"
+    path.write_text(TASK.split("## Proof")[0] + "## Proof", encoding="utf-8")
+    taskclose.close(home, "T-261128", "tests/test_x.py", today=D)
+    text = path.read_text(encoding="utf-8")
+    assert "status: done" in text and "tests/test_x.py" in text and lint.check(home) == []
+
+
+def test_a_decorated_proof_heading_is_used_and_the_result_is_not_lost(home):
+    path = home / "tasks" / "T-261128-demo.md"
+    path.write_text(TASK.replace("## Proof\n", "## Proof (links)\n"), encoding="utf-8")
+    taskclose.close(home, "T-261128", "tests/test_x.py", result="It works.", today=D)
+    text = path.read_text(encoding="utf-8")
+    assert "## Proof (links)\ntests/test_x.py" in text and "It works." in text and "status: done" in text
+
+
+def test_nothing_is_written_when_the_proof_cannot_be_placed(home, monkeypatch):
+    path = home / "tasks" / "T-261128-demo.md"
+    before = path.read_bytes()
+    monkeypatch.setattr(taskclose, "_place", lambda *a, **k: None)
+    with pytest.raises(taskclose.CloseError, match="place"):
+        taskclose.close(home, "T-261128", "tests/test_x.py", today=D)
+    assert path.read_bytes() == before
+
+
+def test_status_and_done_when_lines_in_the_body_are_not_the_front_matter(home):
+    path = home / "tasks" / "T-261128-demo.md"
+    body_only = "---\nid: T-261128-demo\ngoal: g\n---\nstatus: doing\ndone_when: TODO\n## Proof\n"
+    path.write_text(body_only, encoding="utf-8")
+    with pytest.raises(taskclose.CloseError, match="status"):
+        taskclose.close(home, "T-261128", "tests/test_x.py", today=D)
+    assert path.read_text(encoding="utf-8") == body_only
+    ok = TASK.replace("## Task\n", "## Task\ndone_when: TODO (a quoted template line)\nstatus: doing\n")
+    path.write_text(ok, encoding="utf-8")
+    taskclose.close(home, "T-261128", "tests/test_x.py", today=D)
+    text = path.read_text(encoding="utf-8")
+    assert text.split("---\n")[1].count("status: done") == 1 and "status: doing" in text.split("---\n", 2)[2]
+
+
+def test_a_front_matter_that_never_closes_is_refused(home):
+    (home / "tasks" / "T-261128-demo.md").write_text("---\nid: x\nstatus: doing\n## Proof\n", encoding="utf-8")
+    with pytest.raises(taskclose.CloseError, match="front matter"):
+        taskclose.close(home, "T-261128", "tests/test_x.py", today=D)
+    with pytest.raises(taskclose.CloseError, match="front matter"):
+        taskclose.block(home, "T-261128", "paused")
