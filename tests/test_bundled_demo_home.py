@@ -36,3 +36,10 @@ def test_the_default_falls_back_to_the_bundle_when_there_is_no_checkout(monkeypa
 def test_the_package_data_lists_the_bundle():
     text = (ROOT / "pyproject.toml").read_text(encoding="utf-8")
     assert "_demo_home" in text and "package-data" in text
+
+
+def test_ci_installs_the_built_wheel_in_a_clean_environment():
+    text = (ROOT / ".github" / "workflows" / "ci.yml").read_text(encoding="utf-8")
+    for step in ("pip wheel . --no-deps", "python -m venv clean", "pip install --no-index", "lifeos demo",
+                 "lifeos selftest"):
+        assert step in text
