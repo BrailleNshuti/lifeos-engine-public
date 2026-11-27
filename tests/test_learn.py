@@ -34,6 +34,11 @@ def test_bad_rating_is_refused(home, model, score):
         rate(home, model, score)
 
 
+def test_a_rating_requires_a_task_id(home):
+    with pytest.raises(learn.LearnError, match="task id"):
+        rate(home, "claude", 3, task="")
+
+
 def test_note_with_private_data_is_refused(home):
     with pytest.raises(learn.LearnError):
         rate(home, "claude", 3, note="key sk-ant-api03-" + "a1B2c3D4" * 5)

@@ -88,7 +88,6 @@ def test_coverage_with_no_ledger_says_so(home):
     assert today.coverage(home) == {} and today.render_coverage({}) == "No answers recorded yet."
 
 
-# Codex's blind review of the round 5 code, finding 5 (confirmed by hand).
 def test_a_short_prefix_rating_does_not_hide_an_answer_on_another_task(home):
     for tid in ("T-3-first", "T-30-second"):
         (home / "tasks" / f"{tid}.md").write_text("---\nid: x\n---\n", encoding="utf-8")
@@ -118,3 +117,18 @@ def test_coverage_does_not_count_a_short_prefix_rating_for_another_task(home):
     runs(home, [{"task_id": "T-30-second", "model": "ollama", "date": "2026-11-25"}])
     learn.add_rating(home, "T-3", "ollama", 4, "summarise a changelog")
     assert today.coverage(home) == {"ollama": {"answered": 1, "rated": 0}}
+
+
+def test_blank_or_ambiguous_archived_rating_never_counts(home):
+    runs(home, [{"task_id": "T-30-second", "model": "ollama", "date": "2026-11-25"}])
+    path = home / "logs" / "ratings.csv"
+    path.write_text("date,task,model,score,kind,note\n2026-11-27,,ollama,4,local,bad row\n2026-11-27,T-3,ollama,4,local,ambiguous\n", encoding="utf-8")
+    assert today.coverage(home) == {"ollama": {"answered": 1, "rated": 0}}
+
+
+def test_rating_model_variants_are_normalized_like_run_models(home):
+    runs(home, [{"task_id": "T-261120-a", "model": "ollama:llama3.2", "date": "2026-11-25"}])
+    path = home / "logs" / "ratings.csv"
+    path.write_text("date,task,model,score,kind,note\n2026-11-27,T-261120-a,ollama:llama3.2,4,local,good\n", encoding="utf-8")
+    assert today.unrated(home, TODAY) == []
+    assert today.coverage(home) == {"ollama": {"answered": 1, "rated": 1}}

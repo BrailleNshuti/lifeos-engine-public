@@ -19,6 +19,7 @@ Read this first. Keep it short; every bullet stays under 400 characters (a test 
 - Tests: seat failure injection, crash recovery, a full disk, two processes, a big ledger, a shuffle script and a weekly Windows soak workflow (`.github/workflows/soak.yml`).
 
 - Round 4 (pull requests 117 to 127): `selfcheck`, `backup --restore`, all-or-none `dash-export`, a write-retry tally in `doctor`, unrated answers in `today`, failure causes in `earn`, `sunday --save`, a guard mutation test, seeded property tests, a canary test, and more (see CHANGELOG).
+- Round 7: HTTP 402 rests a seat without retry (PR 155). The blind review of `next`, `rate --walk`, read retries and rating coverage found four real fault groups; their fixes preserve the intentional bounded Windows retry and add focused regressions.
 
 ## Open
 
@@ -42,6 +43,5 @@ Read this first. Keep it short; every bullet stays under 400 characters (a test 
 
 ## Next
 
-- **Continue from `docs/HANDOFF.md` section 10 ("Round 4 status").** Still open there: 13 and 14 (owner: after the RAM), 23 (needs the owner's answer: a proof line that names the pull request?), 28 (owner publishes the prepared v0.5.1 tag and release).
-- Rounds 5 to 7 are `docs/HANDOFF.md` sections 11 to 13 (round 7 is a 30-item list from a full scan, 2026-11-28); build what is still open there, the owner's items last.
+- **Continue from `docs/HANDOFF.md` section 14.** Round 7 item 7 (blind review of rollback, restore and selfcheck) is the next evidence-first task; then continue the remaining list in section 13, with the owner's items last.
 - Work flow that never changes: branch, tests first, `lifeos guard $(git ls-files)`, pull request, 12 green checks, plain merge. Never add Co-Authored-By or session lines. Keep this file under 400 characters per bullet (a test checks).

@@ -48,12 +48,6 @@ def explicit_kind(raw):
     return found.group(1) if found else None
 
 
-def explicit_kind(raw):
-    """The task file's own `kind:` line, or None."""
-    found = re.search(r"^kind:[ 	]*(.+)$", (raw or "").replace(chr(13) + chr(10), chr(10)), re.M)
-    return found.group(1) if found else None
-
-
 def review_note(task_text):
     """Say so when the route names a review step and no review result is in the file (found in week one: a rated answer
     whose Codex review never ran)."""
@@ -65,6 +59,8 @@ def review_note(task_text):
 
 
 def add_rating(home, task_id, model, score, text, today=None, note="", kind=None):
+    if not re.fullmatch(r"T-[A-Za-z0-9-]+", task_id or ""):
+        raise LearnError("The rating needs a task id such as T-261116-demo-cli.")
     all_models = set(seats.CHAINS)
     if model not in all_models:
         raise LearnError(f"Unknown model '{model}'. Choose from: {', '.join(sorted(all_models))}.")
