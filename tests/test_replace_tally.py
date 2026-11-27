@@ -39,6 +39,7 @@ def test_the_real_retry_path_tallies(tmp_path, monkeypatch):
         return real(src, dst)
     monkeypatch.setattr(store.os, "replace", flaky)
     monkeypatch.setattr(store, "_pause", lambda s: None)
+    monkeypatch.setattr(store, "_transient", lambda err: True)  # the retry is Windows-only; force it so the test runs everywhere
     store.atomic_write_bytes(home / "logs" / "x.csv", b"a,b\n")
     assert diag.stats(home)["recovered"] == 1
 
