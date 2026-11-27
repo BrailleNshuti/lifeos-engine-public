@@ -123,7 +123,7 @@ The Windows `os.replace` write failure (winerror 5) has never reproduced locally
 
 - Work in a loop: pick the next item, do steps 1 to 9 of section 4, merge, pick the next. Do not wait for the owner between items.
 - If a step fails twice in a row, stop that item, write what you tried and the exact error in the log, and move to the next item.
-- Keep a log in `STATE.md` under the bullet "Overnight log". After every merged item or every hour, whichever comes first, add one factual line: time, pull request number, what changed, what failed, what is next. Push it through a docs pull request.
+- Keep a log in `STATE.md`: add one short bullet under "Built" (a test fails when a bullet is longer than 400 characters). After every merged item or every hour, whichever comes first, add one factual line: time, pull request number, what changed, what failed, what is next. Push it through a docs pull request.
 - If you are near your own usage limit, finish the current merge, write the log line, and add "Next up: <item>" so the next model can start at once. Never leave an unpushed branch, uncommitted files or a half-merged pull request.
 - Heads-up for the end: before you stop, `git status` must be clean, `gh pr list --state open` must be empty or each open pull request must be listed in the log with its blocker, and `main` must be green.
 - A section "Needs the owner" in the log collects every decision that is his: for example the 44 old commits on `main` that carry a `Claude-Session:` link in their message (not a co-author), which can only be removed by a force-push he must approve.
