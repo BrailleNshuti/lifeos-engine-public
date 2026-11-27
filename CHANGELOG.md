@@ -4,6 +4,7 @@ Dates are release dates. Newest first.
 
 ## [Unreleased]
 
+- New (round 4 item 22): when a task already holds an answer from another seat, `ask` and `delegate` add a NUMBERS line if the two answers share a number but each holds numbers the other lacks, which is where two seats may disagree. `notes.py` also lost its duplicated function definitions. `tests/test_number_disagreement.py`.
 - New (round 4 item 15): `lifeos doctor` names every seat that is resting after a usage limit or past a budget, with the reason and the time it comes back. `tests/test_doctor_resting.py`.
 - New (round 4 items 25 and 27): `lifeos sunday --save` keeps the weekly page as `reports/week-YYYY-Www.md` (refused, writing nothing, if the guard would block anything in it); `scripts/refresh_cockpit.py` runs `dash-export` into a folder outside the repo and prints which file feeds which cockpit dataset. `tests/test_sunday_save.py`, `tests/test_refresh_cockpit.py`.
 - New (round 4 items 16 and 19): the free answer check flags a long answer that stops in the middle of a sentence (lists, headings, links, tables and code are left alone), and `lifeos egress --task <id>` shows what left the laptop for one task. `tests/test_cut_off.py`, `tests/test_egress.py`.
