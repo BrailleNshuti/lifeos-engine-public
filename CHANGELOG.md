@@ -4,6 +4,7 @@ Dates are release dates. Newest first.
 
 ## [Unreleased]
 
+- New (round 4 items 12 and 26): `lifeos today` lists answers a seat gave a day or more ago that have no rating yet, with the exact `lifeos rate` line to run (on the owner's real notes it found three), and shows the days left or days late beside every dated waiting item. `tests/test_today_unrated.py`.
 - New (round 4 item 3): `lifeos backup --restore DIR` puts a backup's logs back after checking it against its manifest; the logs it replaces are moved to `logs.before-restore-<time>`, never deleted, and a backup that was changed is refused before anything moves. Round trip proven byte for byte in `tests/test_backup.py`.
 - New (round 4 items 5 and 6): every retried or failed Windows `os.replace` adds one line (date, outcome, tries; never a path) to `logs/replace-retries.log`, and `doctor` shows the count, so the unexplained write error is measured instead of guessed. A race test proves `rate` and `unrate` on the same file lose and resurrect nothing. `tests/test_replace_tally.py`, `tests/test_rate_unrate_race.py`.
 - Change (round 4 items 7 and 24): `lifeos dash-export` now writes seven files, all or none (it stages them in a side folder, so a full disk can never leave a mix of new and old files), and adds `egress.json` and `latency.json` so the cockpit refreshes from one command. `tests/test_dashdata.py`.
