@@ -263,7 +263,7 @@ def cmd_verify_quotes(args):
         print(f"lifeos: {err}", file=sys.stderr)
         return 2
     source = task_check_inputs(path)[1]
-    found, missing = quote_report(last_result(path), source)
+    found, missing = quote_report(last_result(path), source, backticks=True)
     if not found and not missing:
         print("No quoted lines (25 characters or more) in the latest answer.")
         return 0

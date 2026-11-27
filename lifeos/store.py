@@ -486,7 +486,7 @@ def read_run_records(home, normalize=True):
         if not runs.exists():
             return []
         rows = []
-        for line in runs.read_text(encoding="utf-8").splitlines():
+        for line in runs.read_text(encoding="utf-8", errors="replace").splitlines():  # bytes that are not UTF-8 must not stop every report
             try:  # a torn or damaged line must not take every reader down; `lifeos verify` reports it
                 row = json.loads(line) if line.strip() else None
             except ValueError:
@@ -518,6 +518,8 @@ def _prepare_csv_row_bytes(path, values):
     raw = path.read_bytes()
     if raw and raw[-1:] not in (b"\n", b"\r"):
         raw += b"\n"
+    if raw.count(b'"') % 2:  # a quote that was never closed would swallow the new row: close it first
+        raw += b'"\n'
     buf = io.StringIO()
     csv.writer(buf, lineterminator="\n").writerow(values)
     return raw + buf.getvalue().encode("utf-8")
