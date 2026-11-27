@@ -4,6 +4,7 @@ Dates are release dates. Newest first.
 
 ## [Unreleased]
 
+- Docs: round 5 of the backlog (20 items, each with the evidence behind it) added as section 11 of `docs/HANDOFF.md`.
 - CI: update the official checkout and Python setup actions to their Node 24 generations, removing GitHub's Node 20 deprecation warnings.
 
 ## [0.5.1] - 2026-11-27
