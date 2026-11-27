@@ -229,7 +229,7 @@ Same workflow and rules as above. Order matters: A first, because every later gr
 ### Round 4 status (updated 2026-11-27 evening, after pull request 127)
 - Built and merged: 1, 2, 3, 5, 6, 7, 9, 11, 12, 15, 16, 19, 20, 21, 22, 24, 25, 26, 27, 29, 30.
 - Already in the engine before round 4 (checked, nothing to build): 4, 8, 10, 17, 18.
-- Still open: 13 and 14 (owner, after the RAM is installed), 23 (ask the owner what the proof line should name), 28 (owner publishes the v0.5.1 tag and release).
+- Still open: 13 and 14 (owner, after the RAM is installed), 23 (ask the owner what the proof line should name), 28 (the v0.5.1 files are prepared; the owner publishes the tag and release).
 - All pull requests are merged, the working tree is clean, and both repos match their remote main. Nothing is half done.
 
 ### Where to continue (written for the next model)
