@@ -83,7 +83,7 @@ def close(home, task, proof, result="", today=None):
     today = today or dt.date.today()
     path = _find(home, task)
     for label, text in (("proof", proof), ("result", result)):
-        if [f for f in guard.scan_text(text) if f[1] == "BLOCK"]:
+        if guard.blocking(text):
             raise CloseError(f"The {label} looks like private data (rule 9). Rewrite it without the number or key.")
     if not has_proof("## Proof\n" + proof):
         raise CloseError("The proof needs something checkable: a link, a file name, a test name or a PR number (rule 1).")
@@ -91,6 +91,9 @@ def close(home, task, proof, result="", today=None):
         text, nl, front, status = _read(path)
         if status == "done":
             raise CloseError(f"{path.stem} is already done.")
+        done_when = re.search(r"^done_when:[ \t]*([^\n]*)", front.group(1), re.M)
+        if not done_when or not done_when.group(1).strip():
+            raise CloseError("The task has no finish line (done_when) in its front matter. Write it before you close the task.")
         if re.search(r"^done_when:[ \t]*TODO", front.group(1), re.M | re.I):
             raise CloseError("The finish line (done_when) is still TODO. Write it before you close the task.")
         placed = _place(_set_status(text, front, "done"), proof, result, today)
@@ -107,7 +110,7 @@ def block(home, task, reason, today=None):
     today = today or dt.date.today()
     if not reason:
         raise CloseError("Say why it is blocked, in one sentence.")
-    if [f for f in guard.scan_text(reason) if f[1] == "BLOCK"]:
+    if guard.blocking(reason):
         raise CloseError("The reason looks like private data (rule 9). Rewrite it without the number or key.")
     path = _find(home, task)
     with store_lock(home):

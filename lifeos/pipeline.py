@@ -38,7 +38,7 @@ def load(home, name):
             raise PipelineError(f"Step {i}: argv must be a list of strings.")
         if argv[0] == "pipeline":
             raise PipelineError(f"Step {i}: pipelines cannot nest.")
-        if any(f[1] == "BLOCK" for f in guard.scan_text(" ".join(argv))):
+        if guard.blocking(" ".join(argv)):
             raise PipelineError(f"Step {i}: the arguments look like private data (rule 9).")
         step.setdefault("name", argv[0])
         step.setdefault("gate", "stop")

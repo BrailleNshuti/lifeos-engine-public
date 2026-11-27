@@ -38,7 +38,7 @@ def predict(home, claim, percent, today=None):
     claim = " ".join(str(claim or "").split())
     if not claim:
         raise CalibrationError("Say what you expect to happen.")
-    if guard.scan_text(claim):
+    if guard.findings(claim):
         raise CalibrationError("The claim looks like private data (rule 9). Rewrite it without the number or key.")
     try:
         percent = int(percent)

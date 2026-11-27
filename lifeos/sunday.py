@@ -54,6 +54,9 @@ def build(home, today=None):
         "",
         speed,
         "",
+        "Rating coverage (answers with a rating)",
+        todaymod.render_coverage(todaymod.coverage(home)),
+        "",
         "Ratings this week",
         _ratings_block(home, today),
         "",
@@ -82,7 +85,7 @@ def save(home, today=None):
     writes nothing, when the page holds anything the guard would block."""
     today = today or dt.date.today()
     page = build(home, today)
-    blocks = [f for f in guard.scan_text(page) if f[1] == "BLOCK"]
+    blocks = guard.blocking(page)
     if blocks:
         raise SaveRefused(f"The page holds {len(blocks)} sensitive finding(s), so it was not saved. Fix the note or task that carries it.")
     path = week_file(home, today)
