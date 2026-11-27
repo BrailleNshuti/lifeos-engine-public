@@ -4,6 +4,7 @@ Dates are release dates. Newest first.
 
 ## [Unreleased]
 
+- Docs: round 4 of the backlog (30 urgent items in six groups, files trusted first) added as section 10 of `docs/HANDOFF.md`.
 - Docs (round 3 item 30): `STATE.md` rewritten into short dated sections (Now, Built, Open, Waiting on the owner, Release, Next) with every bullet under 400 characters, kept that way by `tests/test_state_shape.py`; the long overnight log lines are folded into one summary of what was built.
 - Fix (round 3 item 8, found by fuzzing the logs): a `runs.jsonl` with bytes that are not UTF-8 made `earn`, `egress`, `sunday` and every report that reads the run ledger crash with a UnicodeDecodeError (it now reads with replacement); and adding a row to a CSV log with a quote that was never closed lost the new row inside that quote (the quote is now closed first). `lifeos verify-quotes` also checks long backtick spans that hold a space, which is how Gemini quotes lines; the free CHECK line still never reads backticks, so a code span is not reported as a missing quote. Tests: `tests/test_fuzz_more_logs.py` (3 failed before) and `tests/test_verify_quotes_backticks.py` (4 failed before).
 - New (round 3 items 17 and 28): `lifeos ask --failover` lets the next seat in the chain answer when the first fails, with the delegate rules (a private task never reaches a cloud seat); `lifeos commands --out docs/COMMANDS.md` generates the command list from the parser, and a test fails when the checked-in page is stale. `tests/test_round3_batch_e.py`.
