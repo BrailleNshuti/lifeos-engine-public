@@ -456,6 +456,8 @@ def cmd_route(args):
     home = find_home(args.home)
     decision = router.evaluate_route(home, " ".join(args.target), tier=args.tier, full=args.full)
     print(json.dumps(decision, indent=2) if args.json else router.render_route(decision))
+    if not args.json:  # advice from your own ratings, never a silent switch
+        print("learned: " + learn.recommend(home, " ".join(args.target))["why"])
     return 1 if decision["blocked"] else 0
 
 
