@@ -130,7 +130,7 @@ def atomic_write_bytes(path, data):
     tmp = path.with_name(f".{path.name}.{os.getpid()}.{uuid.uuid4().hex[:6]}.tmp")
     flags = os.O_CREAT | os.O_EXCL | os.O_WRONLY | getattr(os, "O_BINARY", 0)
     try:
-        fd = os.open(str(tmp), flags)
+        fd = os.open(str(tmp), flags, 0o666)  # the umask trims this to the usual 0644; the default 0o777 made new files executable
         try:
             _write_all(fd, data)
             os.fsync(fd)

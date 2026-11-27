@@ -47,3 +47,23 @@ def test_every_command_has_a_help_line(name):
             assert helps.get(name), f"`lifeos {name}` has no help line"
             return
     raise AssertionError(name)
+
+
+# Commands named in the handoff backlog that are planned and do not exist yet. Remove a name here when its feature merges:
+# the second test fails if a planned command already exists, so this list cannot go stale.
+PLANNED = {"verify-quotes"}
+DOC_FILES = sorted(list((ROOT / "docs").glob("*.md")) + [ROOT / "STATE.md", ROOT / "CHANGELOG.md", ROOT / "AGENTS.md"])
+
+
+def test_every_command_named_in_any_doc_exists():
+    commands = _commands()
+    missing = {}
+    for path in DOC_FILES:
+        for name in set(re.findall(r"`lifeos ([a-z][a-z-]*)", path.read_text(encoding="utf-8"))):
+            if name not in commands and name not in PLANNED:
+                missing.setdefault(path.name, set()).add(name)
+    assert not missing, f"docs name commands that do not exist: {missing}"
+
+
+def test_planned_commands_do_not_exist_yet():
+    assert not (PLANNED & set(_commands())), "a planned command now exists: remove it from PLANNED"
