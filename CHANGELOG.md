@@ -4,6 +4,7 @@ Dates are release dates. Newest first.
 
 ## [Unreleased]
 
+- New (round 4 item 3): `lifeos backup --restore DIR` puts a backup's logs back after checking it against its manifest; the logs it replaces are moved to `logs.before-restore-<time>`, never deleted, and a backup that was changed is refused before anything moves. Round trip proven byte for byte in `tests/test_backup.py`.
 - New (round 4 items 5 and 6): every retried or failed Windows `os.replace` adds one line (date, outcome, tries; never a path) to `logs/replace-retries.log`, and `doctor` shows the count, so the unexplained write error is measured instead of guessed. A race test proves `rate` and `unrate` on the same file lose and resurrect nothing. `tests/test_replace_tally.py`, `tests/test_rate_unrate_race.py`.
 - Change (round 4 items 7 and 24): `lifeos dash-export` now writes seven files, all or none (it stages them in a side folder, so a full disk can never leave a mix of new and old files), and adds `egress.json` and `latency.json` so the cockpit refreshes from one command. `tests/test_dashdata.py`.
 - New (round 4 items 1 and 2): `lifeos selfcheck` checks your own files in one pass (ledger chain, task files through `lint`, the ratings log row by row, the waiting list), names each problem with its file and line, exits 1 on damage and never repairs anything. `tests/test_selfcheck.py`.

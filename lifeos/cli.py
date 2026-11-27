@@ -337,8 +337,12 @@ def cmd_backup(args):
             print(f"backup ok: {res['files']} file(s) match the manifest." if res["ok"]
                   else "backup BAD:\n" + "\n".join(res["errors"]))
             return 0 if res["ok"] else 1
+        if getattr(args, "restore", None):
+            aside = backup.restore(find_home(args.home), args.restore)
+            print("Restored the logs from the backup." + (f" The logs it replaced are kept in {aside.name}." if aside else ""))
+            return 0
         if not args.out:
-            print("lifeos: give --out DIR or --check DIR", file=sys.stderr)
+            print("lifeos: give --out DIR, --check DIR or --restore DIR", file=sys.stderr)
             return 2
         folder = backup.make(find_home(args.home), args.out)
         print(f"Backed up to {folder}. Check it any time: lifeos backup --check {folder}")
@@ -789,9 +793,10 @@ def build_parser():
     dc_sub.add_parser("list")
     dc_sub.add_parser("due")
     dc_p.set_defaults(func=cmd_decide)
-    bk_p = sub.add_parser("backup", help="copy logs/ with a hash manifest; --check verifies a backup")
+    bk_p = sub.add_parser("backup", help="copy logs/ with a hash manifest; --check verifies a backup; --restore puts one back")
     bk_p.add_argument("--out")
     bk_p.add_argument("--check")
+    bk_p.add_argument("--restore", help="put a checked backup's logs back; the logs it replaces are moved aside, never deleted")
     bk_p.set_defaults(func=cmd_backup)
     rd_p = sub.add_parser("redact", help="write copies of files with guard-flagged lines replaced, for sharing")
     rd_p.add_argument("files", nargs="+")
