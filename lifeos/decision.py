@@ -36,7 +36,7 @@ def record(home, title, why, revisit="", predict="", percent=None, today=None):
     title, why = _clean(title)[:120], _clean(why)[:400]
     if not title or not why:
         raise DecisionError("A decision needs a title and a reason.")
-    if guard.scan_text(title + " " + why):
+    if guard.findings(title + " " + why):
         raise DecisionError("The text looks like private data (rule 9).")
     if revisit:
         try:

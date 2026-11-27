@@ -108,7 +108,7 @@ def start(home, change, metric, days=28, today=None):
     change = " ".join(str(change or "").split())[:200]
     if not change:
         raise ExperimentError("Describe the one change you are testing.")
-    if guard.scan_text(change):
+    if guard.findings(change):
         raise ExperimentError("The description looks like private data (rule 9).")
     if metric not in METRICS:
         raise ExperimentError(f"Unknown metric '{metric}'. Choose from: {', '.join(METRICS)}.")

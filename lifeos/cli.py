@@ -145,7 +145,7 @@ def cmd_rate(args):
         from .delegate import task_text
         path = task_file(home, args.task)
         raw = path.read_text(encoding="utf-8")
-        row = learn.add_rating(home, args.task, args.model, args.score, task_text(path), note=args.note,
+        row = learn.add_rating(home, path.stem, args.model, args.score, task_text(path), note=args.note,
                                kind=learn.explicit_kind(raw))
     except (learn.LearnError, ValueError, FileNotFoundError) as err:
         print(f"lifeos: {err}", file=sys.stderr)
