@@ -8,7 +8,7 @@ import subprocess
 import sys
 
 from . import __version__
-from . import dashdata
+from . import dashdata, sunday
 from . import backup, bakeoff, calibrate, arch, canary, completion, console, debate, decision, demo, digest, earn, experiment, prove, savings, selftest, cockpit, exam, export, governor, history, hooks, learn, lint, mistakes, numbers, panel, pipeline, redact, release, today, vocab, kaizen, lab, log, mcp, replay, router, runs, seats, schema, showcase, sortcsv, stale, timeline, study, verify
 from .delegate import run_delegate
 from .notes import post_notes, pre_notes
@@ -619,6 +619,11 @@ def cmd_mcp(args):
     return 0
 
 
+def cmd_sunday(args):
+    print(sunday.build(find_home(args.home)))
+    return 0
+
+
 def cmd_dash_export(args):
     commands = len(next(a for a in build_parser()._actions if isinstance(a, argparse._SubParsersAction)).choices)
     for path in dashdata.export(find_home(args.home), args.out, commands=commands):
@@ -786,6 +791,9 @@ def build_parser():
     vq_p = sub.add_parser("verify-quotes", help="check that the quoted lines of the latest answer in a task are really in its context (no model call)")
     vq_p.add_argument("task", help="task id or prefix")
     vq_p.set_defaults(func=cmd_verify_quotes)
+
+    sun_p = sub.add_parser("sunday", help="the numbers for the weekly review on one page: earn, seat speed, ratings, stale items, open mistakes")
+    sun_p.set_defaults(func=cmd_sunday)
 
     dx_p = sub.add_parser("dash-export", help="write the data files for a dashboard (numbers, runs, ratings, tasks, waiting list) to a folder")
     dx_p.add_argument("--out", required=True, help="folder to write the five JSON files to (they are private)")
