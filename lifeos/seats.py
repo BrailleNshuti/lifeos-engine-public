@@ -116,6 +116,35 @@ CANNOT = {
 }
 
 
+# The same limits as `CANNOT`, as a plain table for the cockpit: which of four jobs a seat has no tool for. A test keeps the two
+# in step (every seat in CANNOT has a row here and the other way round).
+BLOCKS = {"grok": ("shop", "files", "shell"), "qwen": ("web", "shop"), "ollama": ("web", "shop")}
+JOBS = {
+    "claude": "Lead seat: plans, checks, writes the final call",
+    "codex": "Code review and small fixes",
+    "gemini": "Long reading, summaries and quote checks",
+    "grok": "Public web pages (one fetch tool)",
+    "qwen": "Private work that must stay on this laptop",
+    "ollama": "Small private jobs, offline",
+}
+NOTES = {
+    "grok": "Shop and price sites, saving files, running commands, plain http",
+    "qwen": "Live web facts; slow on this CPU until the RAM goes in",
+    "ollama": "Live web facts; gave a placeholder once",
+}
+
+
+def capability_rows():
+    """One dict per seat for the cockpit: seat, kind, job, what it cannot do, and web/shop/files/shell as 'ok' or 'blocked'."""
+    rows = []
+    for seat in ("claude", "codex", "gemini", "grok", "qwen", "ollama"):
+        blocked = BLOCKS.get(seat, ())
+        rows.append({"seat": seat, "kind": "local" if seat in LOCAL else "cloud", "job": JOBS[seat],
+                     "cannot": NOTES.get(seat, "Nothing blocked in the seat table"),
+                     **{job: "blocked" if job in blocked else "ok" for job in ("web", "shop", "files", "shell")}})
+    return rows
+
+
 def seat_warning(model, text):
     """A hint, never a block: the first thing in the task this seat has no tool for."""
     for pattern, message in CANNOT.get(model, []):
