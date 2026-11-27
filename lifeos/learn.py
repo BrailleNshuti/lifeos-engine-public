@@ -6,12 +6,13 @@ only with at least MIN_N ratings for it and a mean that beats the router's defau
 Otherwise the default stands (rule 2: numbers decide, but only enough numbers).
 """
 import csv
+import io
 import datetime as dt
 import re
 from pathlib import Path
 
 from . import guard, seats
-from .store import append_csv_row_creating, read_csv_rows
+from .store import append_csv_row_creating, atomic_write_bytes, read_csv_rows, store_lock
 
 HEADER = ["date", "task", "model", "score", "kind", "note"]
 MIN_N = 3
@@ -81,6 +82,25 @@ def add_rating(home, task_id, model, score, text, today=None, note="", kind=None
            "kind": clean_kind(kind) or seats.kind(text)[3], "note": note}
     append_csv_row_creating(path, HEADER, [row[k] for k in HEADER])
     return row
+
+
+def remove_last(home, task_id, model=None):
+    """Remove the last rating of a task (of one model if given), under the store lock. Returns the removed row or None."""
+    path = _path(home)
+    if not path.exists():
+        return None
+    with store_lock(home):
+        with path.open(encoding="utf-8-sig", newline="") as fh:
+            table = list(csv.reader(fh))
+        for index in range(len(table) - 1, 0, -1):
+            row = dict(zip(table[0], table[index]))
+            if row.get("task") == task_id and (model is None or row.get("model") == model):
+                removed = table.pop(index)
+                buffer = io.StringIO()
+                csv.writer(buffer, lineterminator="\n").writerows(table)
+                atomic_write_bytes(path, buffer.getvalue().encode("utf-8"))
+                return dict(zip(table[0], removed))
+    return None
 
 
 def report(home):
