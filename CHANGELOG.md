@@ -4,6 +4,7 @@ Dates are release dates. Newest first.
 
 ## [Unreleased]
 
+- New: `lifeos dash-export --out DIR` writes the five JSON files a dashboard needs (numbers, runs by seat, ratings with notes, tasks, and an optional hand-kept `waiting.json`). No model call. The files are private. Tests first in `tests/test_dashdata.py`.
 - Refactor: eleven command helpers moved from `lifeos/cli.py` to `lifeos/cmds_misc.py` (study, lab, doctor, vocab, guard, sort-csv and what they call), so `cli.py` drops from 1,241 to about 1,000 lines and has room for new commands. Same code, same behaviour; full suite 858 passed.
 - Test: `tests/test_readme_matches_code.py` fails if the README names a command that does not exist, and if any command lacks a help line (58 checks, all passing today).
 - New (from the first week of real use, tests first in `tests/test_seat_hints.py`): a `kind:` line in a task file now decides the rating's kind, so long pasted context can no longer file a rating under the wrong kind; `lifeos rate` says so when the route names a review step and no review result is in the task; `lifeos ask grok` prints a hint (never a block) when the task asks for shop prices, because shop and price-comparison sites block the seat's `web_fetch`; and a local model call now gives up after 240 s instead of 600 s (`LIFEOS_TIMEOUT` still overrides) so another seat can take over. Cause: Qwen 4B on this CPU did not answer in 600 s twice.
