@@ -359,7 +359,10 @@ def cmd_release(args):
 
 
 def cmd_earn(args):
-    print(earn.render(earn.review(find_home(args.home), days=args.days)))
+    home = find_home(args.home)
+    print(earn.render(earn.review(home, days=args.days)))
+    print()
+    print(earn.render_latency(earn.latency(home, days=args.days), args.days))
     return 0
 
 
