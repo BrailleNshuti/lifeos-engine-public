@@ -5,9 +5,10 @@ still has no rating, a waiting item that is late or due within three days, the n
 something. It is `lifeos today` cut down to one decision."""
 import datetime as dt
 
-from . import selfcheck, today
+from . import deadlines, selfcheck, today
 
 SOON_DAYS = 3
+DEADLINE_DAYS = 7
 
 
 def _waiting_gap(entry, day):
@@ -33,6 +34,10 @@ def choose(home, day=None):
         item = view["unrated"][0]
         return {"kind": "rate", "text": f"{item['seat']} answered {item['task']} on {item['date']} and it has no rating yet.",
                 "command": f"lifeos rate {item['task']} {item['seat']} <1-5> --note \"what was right or wrong\""}
+    near = [d for d in view["deadlines"] if not d["approx"] and d["days"] <= DEADLINE_DAYS]
+    if near:
+        return {"kind": "deadline", "text": f"{near[0]['text']} ({near[0]['date']}, {deadlines.words(near[0]['days'])})",
+                "command": "lifeos today"}
     due = sorted(((_waiting_gap(w, day), w) for w in view["waiting"]), key=lambda pair: (pair[0] is None, pair[0] or 0))
     if due and due[0][0] is not None and due[0][0] <= SOON_DAYS:
         gap, entry = due[0]

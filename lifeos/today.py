@@ -8,11 +8,12 @@ import datetime as dt
 import json
 from pathlib import Path
 
-from . import backup, calibrate, decision, experiment, learn, tasks, vocab
+from . import backup, calibrate, deadlines, decision, experiment, learn, tasks, vocab
 from .store import read_bytes_retry, read_run_records
 
 OPEN = ("todo", "doing", "blocked", "")
 BACKUP_DAYS = 14
+NOW_DAYS = 14
 
 
 def _due_key(task):
@@ -124,6 +125,8 @@ def build(home, today=None):
         "waiting": read_waiting(home),
         "unrated": unrated(home, today),
         "backup_age": backup.age_days(home, today),
+        "deadlines": deadlines.upcoming(home, today),
+        "now_age": deadlines.now_age_days(home, today),
     }
 
 
@@ -151,6 +154,12 @@ def render(v):
             lines.append(f"  - {w['item']} ({w.get('who', '?')}, {w.get('when', '?')}{', ' + left if left else ''})")
         if len(waiting) > 5:
             lines.append(f"  ... and {len(waiting) - 5} more in waiting.json")
+    coming = v.get("deadlines") or []
+    if coming:
+        lines += ["", "Deadlines (from now.md)"]
+        lines += [f"  - {d['date']}{' (about)' if d['approx'] else ''}: {d['text']} ({deadlines.words(d['days'])})" for d in coming[:4]]
+    if v.get("now_age") is not None and v["now_age"] > NOW_DAYS:
+        lines += ["", f"now.md says it was updated {v['now_age']} days ago (more than {NOW_DAYS}): refresh the week and the deadlines."]
     age = v.get("backup_age")
     if age is None or age > BACKUP_DAYS:
         lines += ["", "Backup: " + ("never made" if age is None else f"{age} days old") + f" (more than {BACKUP_DAYS} days is overdue): lifeos backup --out <folder outside your home>"]
