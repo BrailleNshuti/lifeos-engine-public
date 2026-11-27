@@ -275,3 +275,18 @@ Each item names the evidence. Same workflow and rules as above. Items marked (ow
 ### F. Release
 19. (owner) Publish v0.5.1: the tag target is the merge of pull request 132 (commit 60d6c53); `main` has one later CI-only commit that belongs under Unreleased.
 20. After 19, cut v0.5.2 from the round 5 work when items 1 to 7 are merged.
+
+
+### Round 5 status (updated 2026-11-28, after pull request 143)
+- Built and merged: 1 (locked, retried reads), 3, 4, 5, 6, 7 (`rate --walk`), 10 (`next`), 11 (`task block`), 12, 13, 14, 15, 16 (cockpit template moved out; `cockpit.py` is 515 lines), 18; also `task close` and `waiting` (not on the list, found needed).
+- Item 2 (a three-process race test) is not built yet. Item 9 is covered by the `learned:` line of `route`. Item 17 is a routine: run `scripts/shuffle_run.py` from a separate worktree (switching branches during a run gives false failures) and log the seed in `STATE.md`.
+- Owner items: 8 (RAM, then the Qwen retest), 19 (publish v0.5.1). Item 20 (v0.5.2) follows 19.
+
+## 12. Round 6: small items from the same evidence (written 2026-11-28)
+1. Done: two read-only MCP tools, `lifeos_selfcheck` and `lifeos_waiting_list`.
+2. A three-process race test for `ask`, `rate`, `task close` and `waiting add` on one home (round 5 item 2).
+3. `earn` shows rated against unrated answers per seat, so a seat with no ratings is not mistaken for a good one.
+4. The weekly soak workflow also runs `selfcheck` on the demo home and the cockpit refresh script, so a broken helper is found on a schedule.
+5. (owner) Ignore `.last-backup` in the notes repo, and decide whether old answers (three are unrated) get rated with `rate --walk` or are left.
+6. Real use: run five new real tasks across the seats, rate each one, and let `sunday` show the result before any new feature is chosen.
+7. (owner) After the RAM: Qwen retest, then v0.5.1 published, then v0.5.2 cut from rounds 5 and 6.

@@ -43,5 +43,5 @@ Read this first. Keep it short; every bullet stays under 400 characters (a test 
 ## Next
 
 - **Continue from `docs/HANDOFF.md` section 10 ("Round 4 status").** Still open there: 13 and 14 (owner: after the RAM), 23 (needs the owner's answer: a proof line that names the pull request?), 28 (owner publishes the prepared v0.5.1 tag and release).
-- Round 5 is `docs/HANDOFF.md` section 11 (20 items, each with its evidence). Build A first, then B, then the rest.
+- Rounds 5 and 6 are `docs/HANDOFF.md` sections 11 and 12, with their status; what is left is item 2 of round 5, round 6 items 2 to 4 and 6, and the owner's items (RAM, v0.5.1).
 - Work flow that never changes: branch, tests first, `lifeos guard $(git ls-files)`, pull request, 12 green checks, plain merge. Never add Co-Authored-By or session lines. Keep this file under 400 characters per bullet (a test checks).

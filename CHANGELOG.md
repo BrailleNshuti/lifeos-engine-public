@@ -4,6 +4,7 @@ Dates are release dates. Newest first.
 
 ## [Unreleased]
 
+- New (round 6 item 1): the MCP server has two more read-only tools, `lifeos_selfcheck` and `lifeos_waiting_list`, so the lead model can see damaged files and the waiting list without a shell. 18 tools now. `tests/test_mcp.py`.
 - Change (round 5 item 16, no behaviour change): the 900-line HTML template of `lifeos cockpit` moved out of `lifeos/cockpit.py` into `lifeos/cockpit_page.py` (the template is byte for byte the same), so `cockpit.py` shrinks from 1,415 to 515 lines and drops its special line budget.
 - New (round 5 items 14 and 15): `scripts/refresh_cockpit.py` now also writes `seats.json`, generated from `lifeos/seats.py` (a test keeps its blocked-jobs table in step with `CANNOT`), and `shipped.json` from the merged pull requests when `gh` works, so neither is typed by hand. `seats.capability_rows`, `tests/test_refresh_cockpit.py`.
 - New (round 5 items 3 and 4): `lifeos today` warns when no backup was made for more than 14 days (or ever); `backup --out` remembers the day in `.last-backup` in the home, outside the backed-up logs. `lifeos selfcheck` adds a line saying how to fix each kind of damage it finds (it still changes nothing). `tests/test_backup_age_and_fix_hints.py`.
