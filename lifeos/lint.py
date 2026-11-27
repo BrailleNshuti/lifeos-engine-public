@@ -13,7 +13,7 @@ STATUSES = {"inbox", "todo", "doing", "blocked", "done"}
 REQUIRED = ("id", "goal", "done_when", "route", "level", "status")
 
 
-def _has_proof(text):
+def has_proof(text):
     body = text.split("## Proof", 1)[1] if "## Proof" in text else ""
     return bool(re.search(r"https?://|\b[\w/.-]+\.(?:py|md|csv|json|html)\b|pytest|\bPR\b|#\d+", body))
 
@@ -43,7 +43,7 @@ def check(home):
             bad(f"status: '{f['status']}' is not one of {', '.join(sorted(STATUSES))}")
         if f.get("due") and not re.fullmatch(r"\d{4}-\d\d-\d\d", f["due"]):
             bad(f"due: '{f['due']}' is not YYYY-MM-DD")
-        if f.get("status") == "done" and not _has_proof(text):
+        if f.get("status") == "done" and not has_proof(text):
             bad("proof: marked done but no link, file or test under ## Proof (rule 1)")
     return out
 

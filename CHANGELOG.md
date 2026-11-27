@@ -4,6 +4,7 @@ Dates are release dates. Newest first.
 
 ## [Unreleased]
 
+- New (round 5): `lifeos task close ID --proof TEXT` marks a task done with its proof in one locked atomic write and refuses without a checkable proof, with a TODO finish line, with private data or when already done; `lifeos waiting add|list|done` keeps `waiting.json` without hand editing. Both came from work that had to be done with one-off scripts. `lint.has_proof` is now public. `tests/test_task_close.py`, `tests/test_waiting_cmd.py`.
 - CI: update the official checkout and Python setup actions to their Node 24 generations, removing GitHub's Node 20 deprecation warnings.
 
 ## [0.5.1] - 2026-11-27
