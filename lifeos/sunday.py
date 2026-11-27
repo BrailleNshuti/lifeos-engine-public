@@ -3,7 +3,7 @@ unless you pass `--save`, which keeps the page as `reports/week-YYYY-Www.md` so 
 import datetime as dt
 from pathlib import Path
 
-from . import earn, guard, learn, mistakes, stale
+from . import earn, guard, learn, mistakes, stale, today as todaymod
 from .store import atomic_write_bytes
 
 
@@ -28,6 +28,17 @@ def _ratings_block(home, today):
     return "\n".join(f"{r['date']}  {r['model']:<8} {r['score']}/5  {r.get('task', '')}  {r.get('note', '')[:80]}" for r in rows)
 
 
+def _waiting_block(home, today):
+    rows = todaymod.read_waiting(home)
+    if not rows:
+        return "Nothing is waiting."
+    lines = []
+    for w in rows:
+        left = todaymod.days_left(w.get("when"), today)
+        lines.append(f"- {w['item']} ({w.get('who', '?')}, {w.get('when', '?')}{', ' + left if left else ''})")
+    return "\n".join(lines)
+
+
 def build(home, today=None):
     home = Path(home)
     today = today or dt.date.today()
@@ -45,6 +56,9 @@ def build(home, today=None):
         "",
         "Ratings this week",
         _ratings_block(home, today),
+        "",
+        "Waiting",
+        _waiting_block(home, today),
         "",
         "Stale",
         stale.render(stale.find(home, today=today)),
