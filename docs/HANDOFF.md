@@ -134,3 +134,48 @@ The Windows `os.replace` write failure (winerror 5) has never reproduced locally
 - At least features B1, B3, B4 and B5 merged; B2, B6, B7 and B8 merged if time allows.
 - Every robustness bullet in section C has at least one merged test.
 - `STATE.md` log current, `CHANGELOG.md` current, full suite green on CI, nothing unpushed.
+
+## 9. Round 3: thirty more items (added 2026-11-27 after rounds 1 and 2 were finished)
+
+Rounds 1 and 2 are merged: T1 to T16, failure injection for every cloud seat, the locked CSV appends and creation, `verify-quotes`,
+`sunday`, `egress`, `dash-export`, the guard additions, the delegate reroute and the weekly Windows soak workflow. Same workflow, same
+rules as above. Mark an item done in the log with its pull request number. Items marked (owner) need the owner's yes first: stop and log them.
+
+### Reliability
+1. A script `scripts/shuffle_run.py` that runs the test files in random order with a printed seed, to expose order dependence; run it three times.
+2. A two-process test for `record_result` (task file, ledger row and run record in one commit): no row lost, no half commit.
+3. What `store_lock` does when the lock is held longer than its timeout: a clear error naming the lock, covered by a test.
+4. Crash recovery: kill a child process in the middle of `commit_transaction`, then prove `recover_journal` restores a consistent state.
+5. `atomic_write_bytes` onto a destination another process holds open (Windows): the error names the path and the number of tries.
+6. Disk-full injection for every writer module (study, log, decision, week, exam): no partial or empty file is left behind.
+7. Performance budget: a 50 MB `runs.jsonl` must not make `earn`, `egress` or `sunday` take more than a few seconds.
+8. Extend `tests/test_fuzz_logs.py` to ratings, predictions, experiments and vocabulary: CRLF, BOM, broken quotes, NUL bytes.
+9. Clock tests around midnight UTC against local time for ledger dates and the 7-day windows.
+10. `LIFEOS_HOME` with spaces, non-ASCII characters, a trailing slash and a relative path, across the main commands.
+
+### Privacy
+11. Guard: an `Authorization: Basic` header and a long hex or base64 value after `key=` or `secret=`; with harmless look-alikes that must stay clean.
+12. A test that the pack sent to every cloud seat never contains `me.md` or `now.md` unless `--full` is given.
+13. Redaction round trip: for every canary kind, `redact` then `guard` finds nothing.
+14. `egress` warning when one seat's weekly tokens pass its share in `seats.SHARES`.
+15. (owner) Bring the notes repo's own CI guard (`data_guard.py`) up to date with the engine guard.
+16. A check that no module writes a prompt or answer text into the run ledger (only counts, ids and status).
+
+### Seats and answer quality
+17. `lifeos ask --failover`: an explicit opt-in that uses the delegate chain, with the same private-task rules.
+18. Per-seat prompt tests: what each adapter sends (stdin or file) is the pack and nothing else.
+19. Grok: refuse or warn when a URL in the task is not public https.
+20. Seat health memory: if the last `doctor --smoke` is older than 7 days, `delegate` says so once.
+21. `lifeos rate --undo`: remove the last rating of a task by mistake, with a test.
+22. A warning when a rating of 2 or lower has no note.
+23. An answer-length flag in the free check (a very long answer to an L0 task).
+24. A prompt experiment harness: two wordings of `GROK_RULE` on the same three public questions, results recorded for the owner (needs the cloud; run only on the owner's word).
+
+### Documentation and daily use
+25. `lifeos help-me` prints the daily loop from `docs/DAILY.md`.
+26. Shell completion covers every new command (extend the completion test).
+27. Error-message audit: every `lifeos:` error says what to do next, checked by a test over the source strings.
+28. `docs/COMMANDS.md` generated from the parser, with a staleness test like the architecture graph.
+29. Cut release v0.5.1 from the Unreleased section once items 1 to 28 are merged: version bump, changelog move, tag. (owner: the tag and release publication)
+30. Tidy `STATE.md`: group the log lines under dated headings and keep each under 400 characters, with a test on line length.
+
