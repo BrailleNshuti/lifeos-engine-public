@@ -134,6 +134,17 @@ def cmd_rate(args):
     print("router: " + learn.recommend(home, task_text(path))["why"])
     if learn.review_note(raw):
         print("note: " + learn.review_note(raw), file=sys.stderr)
+    if row["score"] <= 2 and not row["note"]:
+        print("note: a low score with no note teaches the router little; add a note with --note", file=sys.stderr)
+    return 0
+
+
+def cmd_unrate(args):
+    removed = learn.remove_last(find_home(args.home), args.task, args.model)
+    if removed is None:
+        print(f"lifeos: no rating found for {args.task}", file=sys.stderr)
+        return 1
+    print(f"removed the rating {removed['model']} {removed['score']}/5 of {args.task}")
     return 0
 
 
@@ -694,6 +705,11 @@ def build_parser():
     rate_p.add_argument("score", type=int)
     rate_p.add_argument("--note", default="")
     rate_p.set_defaults(func=cmd_rate)
+
+    unrate_p = sub.add_parser("unrate", help="remove the last rating of a task (a mistake), optionally of one model")
+    unrate_p.add_argument("task")
+    unrate_p.add_argument("model", nargs="?")
+    unrate_p.set_defaults(func=cmd_unrate)
 
     his_p = sub.add_parser("history-scan", help="scan every commit on every branch for class C data (masked output)")
     his_p.add_argument("--max-commits", type=int)

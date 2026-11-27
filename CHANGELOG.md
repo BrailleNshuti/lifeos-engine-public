@@ -4,6 +4,7 @@ Dates are release dates. Newest first.
 
 ## [Unreleased]
 
+- New: `lifeos unrate TASK [MODEL]` removes the last rating of a task (a mistake), under the store lock; `lifeos rate` warns when a score of 2 or less has no note. Tests first in `tests/test_unrate.py` (6 of 9 failed before). Items 21 and 22 of the round 3 backlog.
 - Docs: `docs/HANDOFF.md` section 9 lists thirty more items for the next round (reliability, privacy, seats and answer quality, documentation), each with a clear end; `STATE.md` logs round 2.
 - New: `lifeos delegate` now moves a seat that has no tool for the job (`seats.CANNOT`) behind the seats that do, and says so in the route reason ("rerouted: grok has no tool for this job, so gemini goes first"). Nothing is added or dropped, so a private chain stays local; an explicit seat is never moved; `ask` still only prints the hint. Tests first in `tests/test_seat_reroute.py` (6 of 8 failed before).
 - Chore: removed three functions nothing called (found by a scan of 584 definitions for names mentioned once): `lint._proof_section`, `store._read_lock_meta` and `store.append_task_result`, the last an unlocked read-modify-write of a task file that no command used.
