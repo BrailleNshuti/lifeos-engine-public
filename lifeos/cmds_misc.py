@@ -249,3 +249,4 @@ def cmd_sort_csv(args):
     print(f"sorted {info['rows']} rows -> {info['out']} (rules: {info['by_rule']}, local model: {info['by_model']}, "
           f"to check: {info['flagged']}). Open the file and review rows where lifeos_check is 'yes'.")
     return 0
+
