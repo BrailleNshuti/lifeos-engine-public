@@ -559,6 +559,12 @@ def _reconstruct_persisted_error(home, rec):
     return AskError(msg)
 
 
+def _review_failure(model, label_name, run_id, status, error):
+    summary = "rested" if failure_kind(error) in ("usage_limit", "no_credits") else status.replace("_", " ")
+    return {"model": model, "label": label_name, "run_id": run_id, "status": status,
+            "summary": summary, "error": redact_error(error)}
+
+
 def _valid_persisted_budget(val):
     return not isinstance(val, bool) and isinstance(val, int) and 1 <= val <= 50000
 
@@ -875,11 +881,24 @@ def run_review(home, task_id, reviewers=("codex", "claude"), budget=6000, dry_ru
                 _verify_review_identity(
                     existing_group, path.stem, expected_model, repo, req_commit, budget=budget, diff_text=diff_text,
                 )
-                if existing_group.get("status") == "ok":
+                if existing_group.get("status") in ("ok", "partial"):
+                    results, failures = [], []
+                    for reviewer, child_id in zip(cleaned, existing_group.get("child_run_ids") or ()):
+                        child = get_run_record(home, child_id, normalize=True)
+                        if not child:
+                            continue
+                        who = f"review:{label(reviewer)}"
+                        if child.get("status") == "ok":
+                            results.append({"model": reviewer, "label": who, "run_id": child_id, "text": "",
+                                            "flags": ["persisted_flag"] * int(child.get("flags", 0))})
+                        else:
+                            failures.append(_review_failure(reviewer, who, child_id, child.get("status", "failed"),
+                                                            child.get("error", "review failed")))
                     return {
                         "pack": "", "tokens": int(existing_group.get("tokens", 0)),
                         "sha256": existing_group.get("context_sha256", ""), "reviewers": cleaned, "path": path,
-                        "group_run_id": group_id, "commit_sha": existing_group.get("commit_sha"), "results": [],
+                        "group_run_id": group_id, "commit_sha": existing_group.get("commit_sha"),
+                        "status": existing_group.get("status"), "results": results, "failures": failures,
                     }
                 raise _reconstruct_persisted_error(home, existing_group)
 
@@ -952,6 +971,7 @@ def run_review(home, task_id, reviewers=("codex", "claude"), budget=6000, dry_ru
             }
 
         results = []
+        failures = []
         child_ids = []
         group_started = time.monotonic()
         first_err = None
@@ -975,6 +995,9 @@ def run_review(home, task_id, reviewers=("codex", "claude"), budget=6000, dry_ru
                         })
                     elif first_err is None:
                         first_err = _reconstruct_persisted_error(home, existing_child)
+                    if existing_child.get("status") != "ok":
+                        failures.append(_review_failure(r, who, child_id, existing_child.get("status", "failed"),
+                                                        existing_child.get("error", "review failed")))
                     continue
 
             locality = PROVIDERS.get(r, {}).get("locality", "remote")
@@ -1017,6 +1040,7 @@ def run_review(home, task_id, reviewers=("codex", "claude"), budget=6000, dry_ru
                 if phase:
                     fail_child["phase"] = phase
                 append_run_record(home, fail_child)
+                failures.append(_review_failure(r, who, child_id, st, redacted))
                 if first_err is None:
                     first_err = type(err)(redacted)
                 continue
@@ -1027,6 +1051,7 @@ def run_review(home, task_id, reviewers=("codex", "claude"), budget=6000, dry_ru
                     **base_child, "finished_at": utc_now_iso(), "duration_ms": elapsed_ms, "status": "failed",
                     "flags": 0, "error": redacted,
                 })
+                failures.append(_review_failure(r, who, child_id, "failed", redacted))
                 if first_err is None:
                     first_err = AskError(f"{r} failed: {redacted}")
                 continue
@@ -1060,10 +1085,11 @@ def run_review(home, task_id, reviewers=("codex", "claude"), budget=6000, dry_ru
         if first_err is not None:
             parent_rec["error"] = redact_error(first_err)
         append_run_record(home, parent_rec)
-        if first_err is not None:
+        if first_err is not None and not results:
             raise first_err
 
         return {
             "pack": pack, "tokens": tokens, "sha256": digest, "reviewers": cleaned, "path": path,
-            "group_run_id": group_id, "commit_sha": commit_sha, "results": results,
+            "group_run_id": group_id, "commit_sha": commit_sha, "status": group_status,
+            "results": results, "failures": failures,
         }

@@ -89,6 +89,15 @@ def test_review_and_context_explain_tools(home, monkeypatch):
     assert not err and "sha256" in exp
 
 
+def test_partial_review_tool_names_the_missing_reviewer_and_keeps_the_answer(home, monkeypatch):
+    monkeypatch.setitem(ask.ADAPTERS, "codex", lambda _prompt: "Checked a.py. Next step: ok.")
+    monkeypatch.setitem(ask.ADAPTERS, "claude", lambda _prompt: (_ for _ in ()).throw(ask.AskError("usage limit reached")))
+    text, err = tool(home, "lifeos_review", task="T-261116", reviewers="codex,claude")
+    assert not err
+    assert "2 asked, 1 answered, claude rested" in text
+    assert "review:codex" in text
+
+
 
 @pytest.mark.parametrize("bad", ["../now", "..\\now", "T-1/../../x", "*", "T-261116*/../..", ""])
 def test_task_ids_cannot_leave_the_tasks_folder(home, bad):

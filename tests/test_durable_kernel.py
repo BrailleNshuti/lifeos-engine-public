@@ -589,14 +589,14 @@ def test_blocked_failed_timeout_tool_missing_partial_and_full_fail_runs_recorded
         ask.run_ask(home, "codex", "T-261116", adapters={"codex": leaky_answer_adapter}, today=TODAY, run_id="R-261120-blka0001")
 
     # 5. Partial multi-model review (one succeeds, one raises unexpected RuntimeError) -> parent status="partial"
-    with pytest.raises(ask.AskError) as part_exc:
-        ask.run_review(
-            home, "T-261116", reviewers=("codex", "claude"),
-            adapters={"codex": lambda p: CLEAN, "claude": unexpected_crash_adapter},
-            today=TODAY, run_id="R-261120-partgrp1",
-        )
-    assert leaked_secret not in str(part_exc.value)
-    assert "[REDACTED]" in str(part_exc.value)
+    partial = ask.run_review(
+        home, "T-261116", reviewers=("codex", "claude"),
+        adapters={"codex": lambda p: CLEAN, "claude": unexpected_crash_adapter},
+        today=TODAY, run_id="R-261120-partgrp1",
+    )
+    assert partial["status"] == "partial" and len(partial["results"]) == len(partial["failures"]) == 1
+    assert leaked_secret not in partial["failures"][0]["error"]
+    assert "[REDACTED]" in partial["failures"][0]["error"]
 
     # 6. Fully failed multi-model review (all reviewers fail) -> parent status="failed"
     with pytest.raises(ask.AskError) as full_exc:
@@ -624,8 +624,7 @@ def test_blocked_failed_timeout_tool_missing_partial_and_full_fail_runs_recorded
     assert by_id["R-261120-partgrp1"]["command"] == "review_group" and by_id["R-261120-partgrp1"]["status"] == "partial"
     assert by_id["R-261120-failgrp1"]["command"] == "review_group" and by_id["R-261120-failgrp1"]["status"] == "failed"
 
-    # 7. Retrying any persisted failed/blocked/timeout/tool_missing/partial run_id replays the failure
-    #    (both Python API and CLI exit codes 1/2/3) without calling the adapter again or adding run records
+    # 7. Retrying any persisted terminal run replays it without calling the adapter or adding run records.
     run_count_before = len(_read_runs(home))
     retry_calls = []
 
@@ -655,10 +654,18 @@ def test_blocked_failed_timeout_tool_missing_partial_and_full_fail_runs_recorded
         ask.run_review(home, "T-261116", reviewers=("codex",), adapters={"codex": never_called_adapter}, today=TODAY, run_id="R-261120-blkr0001")
     assert cli.main(["--home", str(home), "review", "T-261116", "--reviewers", "codex", "--run-id", "R-261120-blkr0001"]) == 1
 
-    for grpid in ("R-261120-partgrp1", "R-261120-failgrp1"):
-        with pytest.raises(ask.AskError):
-            ask.run_review(home, "T-261116", reviewers=("codex", "claude"), adapters={"codex": never_called_adapter, "claude": never_called_adapter}, today=TODAY, run_id=grpid)
-        assert cli.main(["--home", str(home), "review", "T-261116", "--reviewers", "codex,claude", "--run-id", grpid]) == 3
+    replayed_partial = ask.run_review(home, "T-261116", reviewers=("codex", "claude"),
+                                      adapters={"codex": never_called_adapter, "claude": never_called_adapter},
+                                      today=TODAY, run_id="R-261120-partgrp1")
+    assert replayed_partial["status"] == "partial" and len(replayed_partial["results"]) == 1
+    assert cli.main(["--home", str(home), "review", "T-261116", "--reviewers", "codex,claude",
+                     "--run-id", "R-261120-partgrp1"]) == 4
+    with pytest.raises(ask.AskError):
+        ask.run_review(home, "T-261116", reviewers=("codex", "claude"),
+                       adapters={"codex": never_called_adapter, "claude": never_called_adapter},
+                       today=TODAY, run_id="R-261120-failgrp1")
+    assert cli.main(["--home", str(home), "review", "T-261116", "--reviewers", "codex,claude",
+                     "--run-id", "R-261120-failgrp1"]) == 3
 
     cli_captured = capsys.readouterr()
     assert leaked_secret not in cli_captured.out and leaked_secret not in cli_captured.err

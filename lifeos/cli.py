@@ -648,10 +648,12 @@ def cmd_review(args):
         return 0
     commit_note = f", commit {out['commit_sha'][:12]}" if out.get("commit_sha") else ""
     print(f"blind review ({out['group_run_id']}, pack {out['sha256'][:12]}{commit_note}) -> {out['path'].relative_to(home)}")
+    failed = ", ".join(f"{r['model']} {r['summary']}" for r in out.get("failures", []))
+    print(f"review summary: {len(revs)} asked, {len(out['results'])} answered" + (f", {failed}" if failed else ""))
     for r in out["results"]:
         warn = f" [CHECK: {'; '.join(r['flags'])}]" if r["flags"] else ""
         print(f"  {r['label']} ({r['run_id']}){warn}")
-    return 0
+    return 4 if out.get("status") == "partial" else 0
 
 
 def cmd_mcp(args):

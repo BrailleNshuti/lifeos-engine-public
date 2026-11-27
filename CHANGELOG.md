@@ -4,6 +4,7 @@ Dates are release dates. Newest first.
 
 ## [Unreleased]
 
+- Fix (round 7 item 8): a blind review with one successful and one failed reviewer now returns and prints the usable result with a plain summary (`2 asked, 1 answered, claude rested`) and exits 4 for partial instead of raising as a full failure; replaying its run id gives the same summary without another model call, and the MCP tool reports the same partial result. Fully failed reviews still exit 3. `tests/test_ask.py`, `tests/test_durable_kernel.py`, `tests/test_mcp.py`.
 - Change (round 7 item 10): `lifeos seats` shows how many days ago each seat last completed a real call, or `never`; old successful calls remain visible outside the seven-day spend window, while failed and manually pasted debate answers do not count. `tests/test_seats.py`.
 - Docs: audit the round 7 handoff against the repository and mark the already-proved release, version, deadline and stale-note checks done.
 - Fix (blind review of round 7 item 6): a blocked task can no longer hide a later actionable overdue task in `next`; an archived task cannot pin it to an impossible rating; rating coverage now rejects blank or ambiguous prefixes and normalizes local model variants; the rating writer refuses invalid task ids; `rate --walk` reads a task once, explains vanished or locked files, and stops cleanly on EOF or Ctrl-C. Six regression tests failed before the fixes. `tests/test_next.py`, `tests/test_today_unrated.py`, `tests/test_rate_walk.py`, `tests/test_learn.py`.
