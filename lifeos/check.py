@@ -39,6 +39,27 @@ def task_check_inputs(path):
     return done_when, raw.split("\n## Result", 1)[0]
 
 
+WORD_NUMBERS = {"one": 1, "two": 2, "three": 3, "four": 4, "five": 5, "six": 6, "seven": 7, "eight": 8, "nine": 9, "ten": 10}
+COUNTED = re.compile(r"\b(one|two|three|four|five|six|seven|eight|nine|ten|\d{1,2})\s+(?:[\w-]+\s+){0,2}?"
+                     r"(items?|points?|steps?|causes?|claims?|examples?|ways|options|reasons|lines|bullets|findings|risks|ideas)\b", re.I)
+LIST_ITEM = re.compile(r"^\s*(?:[-*•]|\d+[.)])\s+\S", re.M)
+NEEDS_NUMBER = re.compile(r"\b(?:a|the|exact)\s+(?:number|figure|price|cost|amount|percentage)\b|\bhow (?:many|much)\b", re.I)
+
+
+def _structured_flags(text, wanted):
+    """Parts of a done_when the free check can test: a counted list ("three causes") and a requested number."""
+    flags = []
+    asked = COUNTED.search(wanted)
+    if asked:
+        n = WORD_NUMBERS.get(asked.group(1).lower()) or int(asked.group(1))
+        have = len(LIST_ITEM.findall(text))
+        if have and have < n:
+            flags.append(f"done_when asks for {n} {asked.group(2).lower()}; the answer lists {have}")
+    if NEEDS_NUMBER.search(wanted) and not re.search(r"\d", text):
+        flags.append("done_when asks for a number; the answer has none")
+    return flags
+
+
 def _done_when_flags(text, done_when):
     wanted = (done_when or "").strip()
     if not wanted or wanted.upper().startswith("TODO"):
@@ -48,7 +69,7 @@ def _done_when_flags(text, done_when):
         flags.append("done_when asks for a URL; the answer has none")
     if re.search(r"\bdated?\b", wanted, re.I) and not DATE.search(text):
         flags.append("done_when asks for a date; the answer has none")
-    return flags
+    return flags + _structured_flags(text, wanted)
 
 
 def quote_report(text, source, backticks=False):
