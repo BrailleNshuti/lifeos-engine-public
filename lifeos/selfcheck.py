@@ -81,6 +81,14 @@ def run(home):
     return problems
 
 
+FIXES = {
+    "ledger": "lifeos verify shows the line; restore a good copy with lifeos backup --restore <backup folder>, or keep the file and note the break",
+    "tasks": "open the task file and fix the line named; lifeos lint checks it again",
+    "ratings": "open logs/ratings.csv at the line named and fix it, or remove a wrong row with lifeos unrate <task>",
+    "waiting": "fix waiting.json by hand, or rewrite the list with lifeos waiting add",
+}
+
+
 def render(problems):
     if not problems:
         return "selfcheck: your files are sound (ledger chain, tasks, ratings, waiting list)."
@@ -88,6 +96,8 @@ def render(problems):
     lines = [f"selfcheck: {errors} problem(s), {len(problems) - errors} warning(s). Nothing was changed."]
     for p in problems:
         lines.append(f"  {p['level']:7} {p['area']:8} {p['where']}: {p['message']}")
+    for area in sorted({p["area"] for p in problems if p["level"] == "error"}):
+        lines.append(f"  fix {area}: {FIXES[area]}")
     return "\n".join(lines)
 
 

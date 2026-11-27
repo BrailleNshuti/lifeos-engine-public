@@ -4,6 +4,7 @@ Dates are release dates. Newest first.
 
 ## [Unreleased]
 
+- New (round 5 items 3 and 4): `lifeos today` warns when no backup was made for more than 14 days (or ever); `backup --out` remembers the day in `.last-backup` in the home, outside the backed-up logs. `lifeos selfcheck` adds a line saying how to fix each kind of damage it finds (it still changes nothing). `tests/test_backup_age_and_fix_hints.py`.
 - Change (round 5 items 12 and 18): `help-me` starts with `lifeos next` and ends with closing a task and the waiting list; a test runs the README's safe quickstart commands (`demo`, `canary`, `numbers --html`) and checks that every command named on the first screen and in `help-me` exists. The README row for `rate --walk` no longer reads as a `delegate` option. `tests/test_quickstart_and_helpme.py`.
 - New (round 5 items 5 and 6): `earn` and `sunday` list the days each seat hit a usage limit, and `ask` prints one line after every cloud call with that seat's tokens of the last 7 days against its weekly share. Counts only. `tests/test_limits_and_share.py`.
 - New (round 5 item 7): `lifeos rate --walk` goes through every answer that `today` lists as unrated: it shows the task, the seat and the start of the answer, asks for a score (s skips, q stops) and a note (a 1 or a 2 needs one). No model call. `tests/test_rate_walk.py`.

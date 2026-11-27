@@ -8,10 +8,11 @@ import datetime as dt
 import json
 from pathlib import Path
 
-from . import calibrate, decision, experiment, learn, tasks, vocab
+from . import backup, calibrate, decision, experiment, learn, tasks, vocab
 from .store import read_bytes_retry, read_run_records
 
 OPEN = ("todo", "doing", "blocked", "")
+BACKUP_DAYS = 14
 
 
 def _due_key(task):
@@ -80,6 +81,7 @@ def build(home, today=None):
         "experiment": running[0] if running else None,
         "waiting": read_waiting(home),
         "unrated": unrated(home, today),
+        "backup_age": backup.age_days(home, today),
     }
 
 
@@ -107,6 +109,9 @@ def render(v):
             lines.append(f"  - {w['item']} ({w.get('who', '?')}, {w.get('when', '?')}{', ' + left if left else ''})")
         if len(waiting) > 5:
             lines.append(f"  ... and {len(waiting) - 5} more in waiting.json")
+    age = v.get("backup_age")
+    if age is None or age > BACKUP_DAYS:
+        lines += ["", "Backup: " + ("never made" if age is None else f"{age} days old") + f" (more than {BACKUP_DAYS} days is overdue): lifeos backup --out <folder outside your home>"]
     pending = v.get("unrated") or []
     if pending:
         lines += ["", f"Not rated yet ({len(pending)}): rate while you still remember what was wrong"]
