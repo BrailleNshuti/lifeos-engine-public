@@ -96,7 +96,52 @@ def latency(home, today=None, days=30):
             for s, v in sorted(seats.items()) if v["ok"] or v["failed"]]
 
 
-def render_latency(rows, days=30):
+FAILURE_WORDS = (
+    ("timeout", ("did not answer within", "timed out", "timeout")),
+    ("quota", ("quota", "usage limit", "rate limit", "hit your", "429", "too many requests")),
+    ("signin", ("sign in", "signed in", "log in", "login", "unauthorized", "401", "api key", "credential", "authenticat")),
+    ("max_turns", ("max turns",)),
+    ("format", ("not valid json", "could not parse", "unexpected output", "empty answer")),
+)
+
+
+def failure_kind(rec):
+    """Why a call did not answer, in one word: timeout, quota, signin, max_turns, format, tool_missing or other. Read from the
+    status and the stored (already redacted) error line; nothing new is recorded."""
+    status = str(rec.get("status") or "")
+    if status == "timeout":
+        return "timeout"
+    if status == "tool_missing":
+        return "tool_missing"
+    text = str(rec.get("error") or "").lower()
+    for kind, words in FAILURE_WORDS:
+        if any(w in text for w in words):
+            return kind
+    return "other"
+
+
+def failure_kinds(home, today=None, days=30):
+    """{seat: {kind: count}} for calls that failed in the last `days` days (blocked calls are not failures)."""
+    today = today or dt.date.today()
+    since = today - dt.timedelta(days=days)
+    out = {}
+    for r in read_run_records(Path(home)):
+        seat = str(r.get("model") or "").split(":", 1)[0].strip()
+        status = r.get("status")
+        if not seat or status in ("ok", "blocked", None):
+            continue
+        try:
+            day = dt.date.fromisoformat(str(r.get("date") or str(r.get("started_at") or "")[:10])[:10])
+        except ValueError:
+            continue
+        if since < day <= today:
+            kinds = out.setdefault(seat, {})
+            kind = failure_kind(r)
+            kinds[kind] = kinds.get(kind, 0) + 1
+    return out
+
+
+def render_latency(rows, days=30, why=None):
     if not rows:
         return f"No timed calls in the last {days} days."
     lines = [f"Seat speed (last {days} days; seconds of calls that answered)", ""]
@@ -104,4 +149,7 @@ def render_latency(rows, days=30):
         median = f"{r['median_s']:>6.1f}" if r["median_s"] is not None else "     -"
         worst = f"{r['worst_s']:>6.1f}" if r["worst_s"] is not None else "     -"
         lines.append(f"{r['seat']:<8} {r['ok']:>3} ok {r['failed']:>3} failed  median {median} s  worst {worst} s")
+        kinds = (why or {}).get(r["seat"])
+        if kinds:
+            lines.append("         why: " + ", ".join(f"{n} {k}" for k, n in sorted(kinds.items(), key=lambda kv: (-kv[1], kv[0]))))
     return "\n".join(lines)

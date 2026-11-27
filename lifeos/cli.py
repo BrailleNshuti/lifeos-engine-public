@@ -378,7 +378,7 @@ def cmd_earn(args):
     home = find_home(args.home)
     print(earn.render(earn.review(home, days=args.days)))
     print()
-    print(earn.render_latency(earn.latency(home, days=args.days), args.days))
+    print(earn.render_latency(earn.latency(home, days=args.days), args.days, why=earn.failure_kinds(home, days=args.days)))
     return 0
 
 
