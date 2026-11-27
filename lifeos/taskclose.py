@@ -15,6 +15,7 @@ from .context import task_file
 from .lint import has_proof
 from .store import atomic_write_bytes, store_lock
 
+BOM = bytes([0xEF, 0xBB, 0xBF])
 FRONT = re.compile(r"\A---\n(.*?\n)---[ \t]*(?:\n|\Z)", re.S)
 PROOF_HEADING = re.compile(r"^## Proof[^\n]*(?:\n|\Z)", re.M)
 
@@ -31,9 +32,13 @@ def _find(home, task):
 
 
 def _read(path):
-    """(text with LF line ends, the newline style of the file, the front matter match, the status word)."""
-    raw = path.read_bytes().decode("utf-8")
-    nl = "\r\n" if "\r\n" in raw else "\n"
+    """(text with LF line ends, the newline style and BOM of the file, the front matter match, the status word)."""
+    try:
+        data = path.read_bytes()
+        raw = data.decode("utf-8-sig")
+    except (OSError, UnicodeDecodeError) as err:
+        raise CloseError(f"Could not read {path.name} as UTF-8 text ({err}). Nothing was changed.") from None
+    nl = ("\r\n" if "\r\n" in raw else "\n", data.startswith(BOM))
     text = raw.replace("\r\n", "\n")
     front = FRONT.match(text)
     if not front:
@@ -42,6 +47,16 @@ def _read(path):
     if not status:
         raise CloseError(f"{path.name} has no status line in its front matter.")
     return text, nl, front, status.group(1).strip()
+
+
+def _encode(text, style):
+    """Back to bytes with the newline style and the BOM the file had."""
+    newline, bom = style
+    return (BOM if bom else b"") + text.replace(chr(10), newline).encode("utf-8")
+
+
+def _lf(text):
+    return (text or "").replace(chr(13) + chr(10), chr(10)).replace(chr(13), chr(10))
 
 
 def _set_status(text, front, word):
@@ -64,7 +79,7 @@ def _place(text, proof, result, today):
 
 def close(home, task, proof, result="", today=None):
     """Mark the task done with its proof. Returns the task path. Raises CloseError and writes nothing when it cannot."""
-    proof, result = (proof or "").strip(), (result or "").strip()
+    proof, result = _lf(proof).strip(), _lf(result).strip()
     today = today or dt.date.today()
     path = _find(home, task)
     for label, text in (("proof", proof), ("result", result)):
@@ -81,14 +96,14 @@ def close(home, task, proof, result="", today=None):
         placed = _place(_set_status(text, front, "done"), proof, result, today)
         if placed is None:
             raise CloseError(f"Could not place the proof in {path.name}; nothing was changed.")
-        atomic_write_bytes(path, placed.replace("\n", nl).encode("utf-8"))
+        atomic_write_bytes(path, _encode(placed, nl))
     return Path(path)
 
 
 def block(home, task, reason, today=None):
     """Pause a task on purpose: status becomes blocked and the reason is written as a dated update. Returns the task path.
     Raises CloseError and writes nothing for a done task, an empty reason, private text or an unknown id."""
-    reason = " ".join((reason or "").split())
+    reason = " ".join(_lf(reason).split())
     today = today or dt.date.today()
     if not reason:
         raise CloseError("Say why it is blocked, in one sentence.")
@@ -100,5 +115,5 @@ def block(home, task, reason, today=None):
         if status == "done":
             raise CloseError(f"{path.stem} is already done; a finished task cannot be blocked.")
         text = _set_status(text, front, "blocked").rstrip("\n") + f"\n\n## Update {today:%Y-%m-%d}\nBlocked on purpose: {reason}\n"
-        atomic_write_bytes(path, text.replace("\n", nl).encode("utf-8"))
+        atomic_write_bytes(path, _encode(text, nl))
     return Path(path)
