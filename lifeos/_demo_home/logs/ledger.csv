@@ -1,0 +1,5 @@
+date,task,model,minutes_saved,note
+2026-11-16,T-261116-demo-cli,claude-code,45,made-up row
+2026-11-17,T-261116-demo-cli,codex,30,made-up row
+2026-11-18,research brief,grok,-15,made-up row: AI cost time here
+2026-11-25,next week,chatgpt,60,outside week 47

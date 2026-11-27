@@ -20,3 +20,10 @@ def find_home(explicit=None):
 def estimate_tokens(text):
     """Rough token estimate: about four characters per token for English text."""
     return (len(text) + 3) // 4
+
+
+def default_example():
+    """The made-up demo home: the repository's `examples/demo-home` when it is there (a checkout), else the copy bundled in the
+    package (`lifeos/_demo_home`, kept identical by a test), so `lifeos demo` also works after a plain `pip install`."""
+    checkout = Path(__file__).resolve().parent.parent / "examples" / "demo-home"
+    return checkout if checkout.is_dir() else Path(__file__).resolve().parent / "_demo_home"
