@@ -33,6 +33,7 @@ def home(tmp_path, demo):
 def test_two_processes_adding_ratings_lose_nothing(home):
     procs = [subprocess.Popen([sys.executable, "-c", CHILD, str(home), tag, str(PER_PROCESS), str(ROOT)],
                               stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True) for tag in ("a", "b")]
+    (home / "GO").write_text("go", encoding="utf-8")
     results = [p.communicate(timeout=180) + (p.returncode,) for p in procs]
     for out, err, code in results:
         assert code == 0, err[-400:]

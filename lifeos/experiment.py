@@ -10,7 +10,7 @@ import json
 from pathlib import Path
 
 from . import guard, learn
-from .store import append_csv_row, atomic_write_bytes, read_csv_rows, read_run_records
+from .store import append_csv_row_creating, read_csv_rows, read_run_records
 
 HEADER = ["date", "id", "kind", "metric", "value", "text"]
 MIN_POINTS = 3
@@ -89,10 +89,7 @@ def _rows(home):
 
 def _append(home, values):
     path = _path(home)
-    if not path.exists():
-        path.parent.mkdir(parents=True, exist_ok=True)
-        atomic_write_bytes(path, (",".join(HEADER) + "\n").encode("utf-8"))
-    append_csv_row(path, values)
+    append_csv_row_creating(path, HEADER, values)
 
 
 def _state(home):
