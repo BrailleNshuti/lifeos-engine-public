@@ -184,9 +184,9 @@ rules as above. Mark an item done in the log with its pull request number. Items
 Same workflow and rules as above. Order matters: A first, because every later group depends on trusting the files. Items marked (owner) need the owner's yes.
 
 ### A. Trust the files (do these first)
-1. `lifeos selfcheck`: one command that checks the ledger chain, `ratings.csv`, every task file, `waiting.json` and the run records; prints what to fix; exits non-zero on damage.
+1. A self-check command: one command that checks the ledger chain, `ratings.csv`, every task file, `waiting.json` and the run records; prints what to fix; exits non-zero on damage.
 2. `lifeos task lint`: every task has a valid `status`, an `id` equal to its file name, a `done_when`, and a proof when it is `done`.
-3. `lifeos backup` and `lifeos restore`: a dated zip of the logs and tasks kept on this laptop only, with a test that a restore gives back identical bytes.
+3. A backup command and a restore command: a dated zip of the logs and tasks kept on this laptop only, with a test that a restore gives back identical bytes.
 4. A broken ledger chain names the first bad record and stops; it never repairs by itself.
 5. A two-process test for `lifeos rate` and `lifeos unrate` on the same file: no lost or doubled row.
 6. Count every `os.replace` retry in a small local counter file and show it in `doctor`, so the Windows error is measured, not guessed.
@@ -199,7 +199,7 @@ Same workflow and rules as above. Order matters: A first, because every later gr
 11. `lifeos route` shows the seat with the best mean rating per kind, only when it has at least three ratings; advice, never a silent switch.
 12. `lifeos today` lists answers older than a day that have no rating yet.
 13. A local-seat retest script: three fixed public prompts for Qwen and Ollama, timings written to `docs/LIVE-CHECK.md`. (owner: run it after the RAM is in)
-14. `lifeos warm <seat>`: load a local model once before use, so the first call is not the slow one. (owner: decide after the retest)
+14. A warm-up command: load a local model once before use, so the first call is not the slow one. (owner: decide after the retest)
 15. `doctor` shows each seat's rest-until time and last smoke test age.
 16. Gemini and Codex answers cut off mid-sentence are flagged by the free check.
 
