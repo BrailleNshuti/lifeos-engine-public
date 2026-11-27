@@ -4,6 +4,7 @@ Dates are release dates. Newest first.
 
 ## [Unreleased]
 
+- Change (round 5 item 13): the `sunday` page and the file `--save` writes now list the waiting items with the days left or days late. `tests/test_sunday_save.py`.
 - Docs: round 5 of the backlog (20 items, each with the evidence behind it) added as section 11 of `docs/HANDOFF.md`.
 - New (round 5 items 10 and 11): `lifeos next` names the one thing to do now with its exact command (damaged files, overdue task, unrated answer, waiting item due within three days, next open task, in that order; read only); `lifeos task block ID --reason TEXT` pauses a task on purpose with a dated reason. `docs/DAILY.md` starts with both. `tests/test_next.py`, `tests/test_task_close.py`.
 - Fix (round 5 item 1, the same family as the `ask` race fixed in pull request 131): readers of files the engine replaces atomically (task files, CSV logs such as ratings, the waiting list) now wait out a short Windows sharing violation with the same pauses the writers use, instead of failing; any other error and a lasting lock still raise. `store.read_bytes_retry`, `tests/test_read_retry.py`.

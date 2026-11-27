@@ -45,3 +45,15 @@ def test_the_command_prints_the_page_and_names_the_file(home, capsys):
     assert "Sunday review" in out and "saved: reports" in out
     main(["--home", str(home), "sunday"])
     assert "saved:" not in capsys.readouterr().out
+
+
+def test_the_weekly_page_lists_what_is_waiting_with_days_left(home):
+    import json
+    (home / "waiting.json").write_text(json.dumps([{"item": "pick a date", "who": "you", "when": "2026-12-01"},
+                                                   {"item": "later", "who": "you", "when": "anytime"}]), encoding="utf-8")
+    page = sunday.build(home, D)
+    assert "Waiting\n- pick a date (you, 2026-12-01, in 2 days)\n- later (you, anytime)" in page
+
+
+def test_an_empty_waiting_list_says_so(home):
+    assert "Waiting\nNothing is waiting." in sunday.build(home, D)
