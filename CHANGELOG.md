@@ -4,6 +4,8 @@ Dates are release dates. Newest first.
 
 ## [Unreleased]
 
+- CI: update the official checkout and Python setup actions to their Node 24 generations, removing GitHub's Node 20 deprecation warnings.
+
 ## [0.5.1] - 2026-11-27
 
 - Fix: concurrent `ask` processes now take one locked task snapshot for the context pack, provider policy and answer checks, so a Windows task-file replacement cannot make the other process fail with `PermissionError`.
