@@ -22,6 +22,7 @@ Read this first. Keep it short; every bullet stays under 400 characters (a test 
 - Round 7: HTTP 402 rests a seat without retry (PR 155); CI installs the built wheel in a clean environment and runs its demo and selftest. The blind review of `next`, `rate --walk`, read retries and rating coverage found four real fault groups, now fixed with regressions.
 - Seat health includes the age of every seat's last successful real call across the full ledger, so an open but stale or never-used seat is visible instead of looking healthy by omission.
 - Blind reviews preserve usable answers when another reviewer fails: the CLI names who answered or rested, records and replays the partial group without another call, and distinguishes partial (exit 4) from fully failed (exit 3).
+- A permanent test-import gate covers all 75 shipped modules, including the separate cockpit template, so a new or forgotten module cannot sit outside direct test collection unnoticed.
 
 ## Open
 

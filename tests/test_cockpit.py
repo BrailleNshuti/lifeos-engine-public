@@ -8,7 +8,7 @@ import urllib.request
 
 import pytest
 
-from lifeos import cockpit
+from lifeos import cockpit, cockpit_page
 from lifeos.cli import main
 
 
@@ -95,7 +95,7 @@ def test_cockpit_config_text_cannot_break_out_of_the_page(home):
     assert "</script><script>alert(1)" not in html
     data_block = html.split("const DATA =", 1)[1].split("const WRITE_NONCE", 1)[0]
     assert "</" not in data_block.replace(r"<\/", "")  # every closing sequence in the data is escaped
-    template = cockpit.COCKPIT_HTML_TEMPLATE
+    template = cockpit_page.COCKPIT_HTML_TEMPLATE
     for field in ("esc(pf.owner)", "esc(pf.focus ||", "esc(pf.horizon)", "esc(t.title)", "esc(t.when)", "esc(t.detail)",
                   "esc(a.label)", "esc(a.id)"):
         assert field in template, field
