@@ -4,6 +4,7 @@ Dates are release dates. Newest first.
 
 ## [Unreleased]
 
+- New (round 4 item 15): `lifeos doctor` names every seat that is resting after a usage limit or past a budget, with the reason and the time it comes back. `tests/test_doctor_resting.py`.
 - New (round 4 items 25 and 27): `lifeos sunday --save` keeps the weekly page as `reports/week-YYYY-Www.md` (refused, writing nothing, if the guard would block anything in it); `scripts/refresh_cockpit.py` runs `dash-export` into a folder outside the repo and prints which file feeds which cockpit dataset. `tests/test_sunday_save.py`, `tests/test_refresh_cockpit.py`.
 - New (round 4 items 16 and 19): the free answer check flags a long answer that stops in the middle of a sentence (lists, headings, links, tables and code are left alone), and `lifeos egress --task <id>` shows what left the laptop for one task. `tests/test_cut_off.py`, `tests/test_egress.py`.
 - New (round 4 item 9): `lifeos earn` and `lifeos sunday` say why a seat's calls failed (timeout, quota, signin, max_turns, format, tool_missing or other), read from the status and the stored redacted error line; nothing new is recorded. On the owner's ledger: Codex and Gemini hit usage limits, Grok ran out of turns and the local models timed out. `tests/test_failure_kinds.py`.

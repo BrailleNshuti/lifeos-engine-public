@@ -175,6 +175,12 @@ def cmd_doctor(args):
         problems += flag != "ok"
         print(f"  {flag:<9} {name:<10} {lines:>3} lines  ~{tokens} tokens")
     print(f"Always-loaded core: ~{total} tokens per conversation that reads rules, me and now.")
+    try:
+        resting = seats.pressure(read_run_records(home), dt.datetime.now(dt.timezone.utc))
+    except Exception:
+        resting = {}
+    for seat_name, reason in sorted(resting.items()):
+        print(f"  resting   {seat_name}: {reason}")
     retries = diag.stats(home)
     if retries["recovered"] or retries["failed"]:
         print(f"  windows   {retries['recovered']} write(s) needed a retry and worked, {retries['failed']} failed (last {retries['last']}); see logs/replace-retries.log")
