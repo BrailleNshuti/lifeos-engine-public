@@ -106,7 +106,7 @@ def _print_provider(row):
 
 
 def _record_rest(home, row):
-    """Save a probe that hit a usage limit, so the seat table rests it. Never spends tokens, never raises."""
+    """Save a probe that hit a usage limit or ran out of credits. Never spends tokens, never raises."""
     now = dt.datetime.now(dt.timezone.utc)
     try:
         saved = append_run_record(home, {
@@ -153,7 +153,7 @@ def _doctor_providers(home, args):
             _print_provider(row)
     resting = sum(row["status"] == "resting" for row in rows)
     if resting:
-        print(f"  {resting} seat(s) resting: not a fault, they reopen at the time shown.")
+        print(f"  {resting} seat(s) resting: not a fault; wait for the time shown or add credits.")
     return sum(row["status"] not in _OK_STATES for row in rows), None
 
 

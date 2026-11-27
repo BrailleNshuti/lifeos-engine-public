@@ -67,6 +67,7 @@ GOOD_AT = {
 }
 
 _QUOTA = ("usage limit", "rate limit", "quota", "too many requests", "insufficient_quota")
+_NO_CREDITS = ("out of credits", "no credits", "insufficient credits", "http 402", "402 payment required")
 _MONTHS = {
     "jan": 1, "feb": 2, "mar": 3, "apr": 4, "may": 5, "jun": 6,
     "jul": 7, "aug": 8, "sep": 9, "oct": 10, "nov": 11, "dec": 12,
@@ -177,6 +178,8 @@ def failure_kind(message):
     text = str(message or "").lower()
     if "timed out" in text or "timeout" in text or "did not answer within" in text:
         return "timeout"
+    if any(phrase in text for phrase in _NO_CREDITS):
+        return "no_credits"
     if any(phrase in text for phrase in _QUOTA):
         return "usage_limit"
     if any(phrase in text for phrase in ("not installed", "not on path", "not reachable", "no model")):
@@ -196,7 +199,7 @@ def focus_error(message):
     """Keep the sentence that says why a call failed when a banner comes first."""
     text = str(message or "")
     low = text.lower()
-    markers = _QUOTA + ("try again", "timed out", "not installed", "not on path", "not reachable")
+    markers = _NO_CREDITS + _QUOTA + ("try again", "timed out", "not installed", "not on path", "not reachable")
     for marker in markers:
         at = low.find(marker)
         if at != -1:
@@ -352,6 +355,7 @@ def budget(records, now):
 def pressure(records, now):
     """Return {seat: reason} for seats that should not be called.
 
+    An out-of-credits failure rests the seat until a later successful call.
     A usage-limit failure rests the seat until the time in the message (see
     `_rest_until` for the floor, ceiling and timezone rules). A later ok run
     clears the rest. Cloud seats also rest on the one budget: their own 7-day
@@ -365,7 +369,11 @@ def pressure(records, now):
     for seat, (_stamp, rec) in newest.items():
         if rec.get("status") not in ("failed", "timeout"):
             continue
-        if failure_kind(rec.get("error")) != "usage_limit":
+        kind = failure_kind(rec.get("error"))
+        if kind == "no_credits":
+            resting[seat] = "out of credits; add credits before retrying"
+            continue
+        if kind != "usage_limit":
             continue
         until, note = _rest_until(rec)
         if until is not None and now < until:
