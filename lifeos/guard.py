@@ -129,7 +129,25 @@ def scan_text(text, private=(), allow_mark=True):
             findings.append((number, "WARN", "Email address", _mask(m.group(0))))
         for m in PHONE.finditer(line):
             findings.append((number, "WARN", "Phone number", _mask(m.group(0))))
+    findings += _split_tokens(text, allow_mark)
     return findings
+
+
+def _split_tokens(text, allow_mark):
+    """A token wrapped over two lines by an editor or a chat: join each pair of adjacent non-blank lines and keep only the
+    matches that cross the line break (a token on one line is already reported by the line scan)."""
+    lines = text.splitlines()
+    found = []
+    for index in range(len(lines) - 1):
+        first, second = lines[index].rstrip(), lines[index + 1].lstrip()
+        if not first or not second or (allow_mark and (ALLOW_MARK in first or ALLOW_MARK in second)):
+            continue
+        joined = first + second
+        for kind, pattern in TOKEN_PATTERNS:
+            for m in pattern.finditer(joined):
+                if m.start() < len(first) < m.end():
+                    found.append((index + 1, "BLOCK", kind, _mask(m.group(0))))
+    return found
 
 
 def staged_files():
