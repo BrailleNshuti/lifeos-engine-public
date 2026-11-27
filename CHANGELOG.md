@@ -4,6 +4,7 @@ Dates are release dates. Newest first.
 
 ## [Unreleased]
 
+- New (round 4 items 16 and 19): the free answer check flags a long answer that stops in the middle of a sentence (lists, headings, links, tables and code are left alone), and `lifeos egress --task <id>` shows what left the laptop for one task. `tests/test_cut_off.py`, `tests/test_egress.py`.
 - New (round 4 item 9): `lifeos earn` and `lifeos sunday` say why a seat's calls failed (timeout, quota, signin, max_turns, format, tool_missing or other), read from the status and the stored redacted error line; nothing new is recorded. On the owner's ledger: Codex and Gemini hit usage limits, Grok ran out of turns and the local models timed out. `tests/test_failure_kinds.py`.
 - New (round 4 items 12 and 26): `lifeos today` lists answers a seat gave a day or more ago that have no rating yet, with the exact `lifeos rate` line to run (on the owner's real notes it found three), and shows the days left or days late beside every dated waiting item. `tests/test_today_unrated.py`.
 - New (round 4 item 3): `lifeos backup --restore DIR` puts a backup's logs back after checking it against its manifest; the logs it replaces are moved to `logs.before-restore-<time>`, never deleted, and a backup that was changed is refused before anything moves. Round trip proven byte for byte in `tests/test_backup.py`.

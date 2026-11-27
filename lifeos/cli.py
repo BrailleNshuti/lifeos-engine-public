@@ -656,7 +656,7 @@ def cmd_selfcheck(args):
 
 def cmd_egress(args):
     home = find_home(args.home)
-    print(egress.render(egress.report(home, days=args.days), args.days))
+    print(egress.render(egress.report(home, days=args.days, task=args.task), args.days, task=args.task))
     for warning in egress.over_share(home):
         print(warning)
     return 0
@@ -853,6 +853,7 @@ def build_parser():
     sc_p.set_defaults(func=cmd_selfcheck)
     eg_p = sub.add_parser("egress", help="what left this laptop: calls, tokens and failures per cloud seat (counts only, never text)")
     eg_p.add_argument("--days", type=int, default=30)
+    eg_p.add_argument("--task", help="only what left for this task (id or prefix)")
     eg_p.set_defaults(func=cmd_egress)
     sun_p = sub.add_parser("sunday", help="the numbers for the weekly review on one page: earn, seat speed, ratings, stale items, open mistakes")
     sun_p.set_defaults(func=cmd_sunday)

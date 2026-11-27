@@ -74,6 +74,21 @@ def _quote_flags(text, source):
     return [f"{len(missing)} of {len(found) + len(missing)} quoted lines not found in the task context (check them by hand)"]
 
 
+CUT_MIN = 400  # characters; a short answer may end any way it likes
+
+
+def looks_cut_off(text):
+    """True when a long answer stops in the middle of a sentence: the last line is plain prose (no list marker, heading,
+    link, table or code) and ends on a letter, a digit, a comma or an open bracket. A seat that hit its output limit does this."""
+    text = (text or "").strip()
+    if len(text) < CUT_MIN or text.endswith("```"):
+        return False
+    last = text.splitlines()[-1].strip()
+    if len(last) < 30 or re.match(r"^([-*>#|]|\d+[.)]\s)", last) or "http" in last or "`" in last:
+        return False
+    return bool(re.search(r"[A-Za-z0-9,(\[]$", last)) and last.count(" ") >= 4
+
+
 def check_answer(text, done_when="", source=""):
     """Return a list of short flags. An empty list means nothing obvious is wrong."""
     text = (text or "").strip()
@@ -92,6 +107,8 @@ def check_answer(text, done_when="", source=""):
         flags.append("link without a date (rule 6)")
     if len(re.findall(HEDGE, text, re.I)) >= 2:
         flags.append("mostly guesses, not evidence")
+    if looks_cut_off(text):
+        flags.append("the answer seems cut off mid-sentence: ask again for the rest or for a shorter answer")
     if len(text) > LONG_ANSWER:
         flags.append(f"very long answer ({len(text):,} characters): ask for the short version")
     if not re.search(r"next", text, re.I):
