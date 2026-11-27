@@ -33,7 +33,7 @@ def test_everyday_commands_answer_quickly(cmd, demo):
 
 def test_no_module_grows_past_the_size_ratchet():
     # One module per command and short files. The ceiling may be lowered, never raised without a reason in the PR.
-    limits = {"cockpit.py": 1450, "cli.py": 1250, "ask.py": 1100}
+    limits = {"cli.py": 1250, "ask.py": 1100, "cockpit_page.py": 950}  # cockpit_page.py is one HTML template string, no logic
     for path in (ROOT / "lifeos").glob("*.py"):
         n = len(path.read_text(encoding="utf-8").splitlines())
         assert n <= limits.get(path.name, 800), f"{path.name} has {n} lines"
