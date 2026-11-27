@@ -49,17 +49,23 @@ def _done_when_flags(text, done_when):
     return flags
 
 
+def quote_report(text, source):
+    """(found, missing): the quoted lines (25 characters or more) of an answer that are, and are not, in the source.
+    Case and spacing are ignored. No minimum length of the source here; `_quote_flags` adds that rule."""
+    haystack = _squash(source or "")
+    found, missing = [], []
+    for match in QUOTE.finditer(text or ""):
+        (found if _squash(match.group(1)) in haystack else missing).append(match.group(1))
+    return found, missing
+
+
 def _quote_flags(text, source):
-    if not source:
-        return []
     if len(source or "") < QUOTE_MIN_SOURCE:  # a seat that fetched its own pages quotes text we never gave it
         return []
-    quotes = [m.group(1) for m in QUOTE.finditer(text)]
-    haystack = _squash(source)
-    missing = [q for q in quotes if _squash(q) not in haystack]
+    found, missing = quote_report(text, source)
     if not missing:
         return []
-    return [f"{len(missing)} of {len(quotes)} quoted lines not found in the task context (check them by hand)"]
+    return [f"{len(missing)} of {len(found) + len(missing)} quoted lines not found in the task context (check them by hand)"]
 
 
 def check_answer(text, done_when="", source=""):
