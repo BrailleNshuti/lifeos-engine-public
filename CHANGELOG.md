@@ -4,6 +4,7 @@ Dates are release dates. Newest first.
 
 ## [Unreleased]
 
+- Tests: the `lifeos ask` CLI path now has an end-to-end fake-adapter check for its seat hint, free CHECK line and successful exit code.
 - Tests: direct coverage for the pre-call seat hint and post-call answer check, including missing task files that must never raise.
 - Docs: `docs/HANDOFF.md`, the document for the next model to continue the build: rules, workflow, traps, a test and feature backlog with a done-when for each, and how to log progress. `AGENTS.md` points to it.
 - New: the privacy guard now also blocks a JSON web token, a US-style social security number (nnn-nn-nnnn), a tax or social security number after its label (Steuer-ID, tax id, ...) and a stated PIN ("PIN is nnnn"). Found by probing with made-up values; nothing blocked a bare number, so ordinary digits, dates, ISBNs and version strings are unchanged (19 new cases in `tests/test_guard_more.py`, 9 of them harmless look-alikes).
