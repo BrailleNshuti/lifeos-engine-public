@@ -4,6 +4,7 @@ Dates are release dates. Newest first.
 
 ## [Unreleased]
 
+- New: `lifeos earn` now ends with a seat speed table from the run ledger: per seat, calls that answered, calls that failed, median and worst seconds (failed calls are counted but never timed). On the real ledger it showed Qwen at a 262 s median with 2 failures against Claude at 19 s. Tests first in `tests/test_earn_latency.py`.
 - Fix: when a model answered but the answer could not be saved (disk full, locked file), `lifeos ask` no longer ends in a traceback with the answer lost: it prints "the answer arrived but was not saved" and the answer itself, and exits 3. `AskError` carries the answer for callers. Tests first in `tests/test_answer_write_failure.py` (3 of 4 failed before the change).
 - Fix: `atomic_write_bytes` created new files with mode 0755 on POSIX (executable) because `os.open` defaults to 0777 before the umask; it now asks for 0666, so a new file is 0644 under the usual umask. Found by the Linux CI run of the new mode test (`test_a_new_file_gets_the_normal_mode_not_a_private_one`), which failed before the fix; it never showed on Windows.
 - Test: T7 to T10 of the handoff backlog (test-only): the six handlers moved to `cmds_misc.py` each run through `main([...])`; the dashboard export survives awkward notes, a missing or broken waiting file, and never carries a task body; atomic writes on POSIX keep a read-only mode, replace a symlink and give a new file the normal mode (those three run on the Linux CI jobs only).
