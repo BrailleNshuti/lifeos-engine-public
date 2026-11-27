@@ -9,7 +9,7 @@ import datetime as dt
 from pathlib import Path
 
 from . import guard
-from .store import append_csv_row, atomic_write_bytes, read_csv_rows
+from .store import append_csv_row_creating, read_csv_rows
 
 HEADER = ["date", "word", "kind", "value", "text"]
 GAPS = [0, 1, 3, 7, 14]
@@ -29,10 +29,7 @@ def _rows(home):
 
 def _append(home, values):
     path = _path(home)
-    if not path.exists():
-        path.parent.mkdir(parents=True, exist_ok=True)
-        atomic_write_bytes(path, (",".join(HEADER) + "\n").encode("utf-8"))
-    append_csv_row(path, values)
+    append_csv_row_creating(path, HEADER, values)
 
 
 def _clean(value, limit):

@@ -11,7 +11,7 @@ import re
 from pathlib import Path
 
 from . import guard, seats
-from .store import append_csv_row, atomic_write_bytes, read_csv_rows
+from .store import append_csv_row_creating, read_csv_rows
 
 HEADER = ["date", "task", "model", "score", "kind", "note"]
 MIN_N = 3
@@ -77,12 +77,9 @@ def add_rating(home, task_id, model, score, text, today=None, note="", kind=None
     if guard.scan_text(note):
         raise LearnError("The note looks like private data (rule 9). Rewrite it without the number or key.")
     path = _path(home)
-    if not path.exists():
-        path.parent.mkdir(parents=True, exist_ok=True)
-        atomic_write_bytes(path, (",".join(HEADER) + "\n").encode("utf-8"))
     row = {"date": (today or dt.date.today()).isoformat(), "task": task_id, "model": model, "score": score,
            "kind": clean_kind(kind) or seats.kind(text)[3], "note": note}
-    append_csv_row(path, [row[k] for k in HEADER])
+    append_csv_row_creating(path, HEADER, [row[k] for k in HEADER])
     return row
 
 
