@@ -8,6 +8,21 @@ concurrency:
   group: ci-${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 jobs:
+  package:
+    name: package
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+      - run: python -m pip wheel . --no-deps --wheel-dir dist
+      - run: python -m venv clean
+      - name: Install only the wheel and exercise its bundled demo
+        run: |
+          clean/bin/pip install --no-index --find-links dist lifeos-engine
+          clean/bin/lifeos demo
+          clean/bin/lifeos selftest
   test:
     name: ${{ matrix.name }}
     runs-on: ${{ matrix.os }}

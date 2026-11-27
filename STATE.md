@@ -1,4 +1,4 @@
-# State of lifeos-engine · 2026-11-27
+# State of lifeos-engine · 2026-11-28
 
 Read this first. Keep it short; every bullet stays under 400 characters (a test checks it). Update it after meaningful merges.
 
@@ -19,7 +19,7 @@ Read this first. Keep it short; every bullet stays under 400 characters (a test 
 - Tests: seat failure injection, crash recovery, a full disk, two processes, a big ledger, a shuffle script and a weekly Windows soak workflow (`.github/workflows/soak.yml`).
 
 - Round 4 (pull requests 117 to 127): `selfcheck`, `backup --restore`, all-or-none `dash-export`, a write-retry tally in `doctor`, unrated answers in `today`, failure causes in `earn`, `sunday --save`, a guard mutation test, seeded property tests, a canary test, and more (see CHANGELOG).
-- Round 7: HTTP 402 rests a seat without retry (PR 155). The blind review of `next`, `rate --walk`, read retries and rating coverage found four real fault groups; their fixes preserve the intentional bounded Windows retry and add focused regressions.
+- Round 7: HTTP 402 rests a seat without retry (PR 155); CI installs the built wheel in a clean environment and runs its demo and selftest. The blind review of `next`, `rate --walk`, read retries and rating coverage found four real fault groups, now fixed with regressions.
 
 ## Open
 

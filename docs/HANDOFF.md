@@ -301,9 +301,9 @@ What the scan looked at: the installed package in a clean virtual environment, e
 ### A. Packaging and release
 1. Done: `lifeos demo` and `selftest` work after a plain `pip install` (the demo home is bundled; found in a clean virtual environment).
 2. Done: `python -m lifeos` works (the module had no `__main__`).
-3. The release checklist and a CI job install the built wheel into a clean environment and run `demo` and `selftest`, so the next packaging miss is caught before a release.
-4. A test that `lifeos.__version__`, `pyproject.toml` and the newest CHANGELOG heading agree.
-5. (owner) Publish v0.5.1 (tag at the merge of pull request 132, commit 60d6c53), then cut v0.5.2 from rounds 4 to 7.
+3. Done: the release checklist and CI install the built wheel into a clean environment and run `demo` and `selftest`, so the next packaging miss is caught before a release.
+4. Done: `tests/test_release_files.py` checks that `lifeos.__version__`, `pyproject.toml` and the newest released CHANGELOG heading agree.
+5. Done: v0.5.1 was published from the merge of pull request 132, commit 60d6c53. The owner cuts v0.5.2 later from the Unreleased work.
 
 ### B. Review the new code (rule 7, blind)
 6. Done: Gemini and Claude blind-reviewed `nextup`, `ratewalk`, the read retries in `store` and `today.coverage`; each finding was checked by hand. The real findings have regression tests and fixes. The bounded Windows read retry was deliberate and stayed unchanged.
@@ -316,8 +316,8 @@ What the scan looked at: the installed package in a clean virtual environment, e
 11. (owner) After the RAM: the Qwen retest and the warm-up decision.
 
 ### D. The real-use loop (the aim of the project)
-12. Deadlines: read the `## Deadlines` section of `now.md` and show the next ones with the days left in `today` and `next`, so the owner's real outside dates are never found by accident.
-13. `today` warns when `now.md` says "updated" more than 14 days ago (it says 2026-11-13).
+12. Done: `today` and `next` read the `## Deadlines` section of `now.md` and show the next made-local action with days left, without copying the owner's dates into this public repo.
+13. Done: `today` warns when the update marker in `now.md` is more than 14 days old.
 14. `sunday` ends with one proposed small fix for the week (rule 11), chosen from the numbers: the kind with the lowest ratings, the unrated answers, the slowest seat, an unused part.
 15. `earn` writes the "did it earn its place" question for each unused part (`vocab`, `decide` and `debate` were never used in 30 days) so the Sunday review can answer it. (owner decides pause or remove)
 16. Run five more real tasks across the seats, rate each one, and keep the numbers in `sunday` (ongoing).
@@ -362,7 +362,7 @@ Run `git pull`, then `gh pr list` and `lifeos selfcheck` and `lifeos today` in t
 
 ### Not done (in order of value)
 1. Round 7 item 7: blind-review the `dash-export` rollback, `backup --restore` and `selfcheck`; check each finding by hand and write a failing test before each real fix.
-2. Round 7 items 3, 4, 14, 15 and 17 to 23 (see section 13). Items 12 and 13 (deadlines in `today` and `next`, the stale `now.md` warning) are built.
+2. Round 7 items 14, 15 and 17 to 23 (see section 13). Items 3, 4, 12 and 13 are already built and covered by tests or CI.
 3. Run real tasks across the seats and rate them (`rate --walk`); `sunday` shows how few answers are rated.
 
 ### Owner's items (never do these without his word)
