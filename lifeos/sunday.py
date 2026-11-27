@@ -44,7 +44,7 @@ def build(home, today=None):
     today = today or dt.date.today()
     open_mistakes = mistakes.quiz(home, 5)
     mistake_lines = "\n".join(f"{n}. {m['prompt']}" for n, m in enumerate(open_mistakes, 1)) or "No open mistakes."
-    speed = earn.render_latency(earn.latency(home, today=today), why=earn.failure_kinds(home, today=today))
+    speed = earn.render_latency(earn.latency(home, today=today), why=earn.failure_kinds(home, today=today), limits=earn.limit_days(home, today=today))
     if not speed.startswith("Seat speed"):
         speed = "Seat speed" + chr(10) + speed
     parts = [

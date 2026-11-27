@@ -58,3 +58,14 @@ def over_share(home, today=None):
         if share and row["tokens"] > share:
             out.append(f"WARNING: {row['seat']} used {row['tokens']:,} tokens in the last 7 days; its weekly share is {share:,}.")
     return out
+
+
+def share_line(home, seat, today=None):
+    """One line after a cloud call: this seat's tokens in the last 7 days against its weekly share, or '' for a local seat or a
+    seat with no share. Counts only."""
+    share = seats.SHARES.get(seat)
+    if not share:
+        return ""
+    rows = [r for r in report(home, today=today, days=7) if r["seat"] == seat]
+    used = rows[0]["tokens"] if rows else 0
+    return f"weekly share: {seat} {used:,} of {share:,} tokens in the last 7 days ({round(100 * used / share)} %)"
