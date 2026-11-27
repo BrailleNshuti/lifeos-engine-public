@@ -4,6 +4,8 @@ Dates are release dates. Newest first.
 
 ## [Unreleased]
 
+## [0.5.1] - 2026-11-27
+
 - Fix: concurrent `ask` processes now take one locked task snapshot for the context pack, provider policy and answer checks, so a Windows task-file replacement cannot make the other process fail with `PermissionError`.
 - Fix: `backup --check` now reports malformed manifests and refuses manifest paths outside the backup's `logs/` tree instead of raising or reading the outside file.
 - Fix: `dash-export` now rolls back files already replaced when a later dashboard file cannot be installed, so its seven-file all-or-none promise also holds during the replacement phase.

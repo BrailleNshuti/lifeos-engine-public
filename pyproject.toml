@@ -1,6 +1,6 @@
 [project]
 name = "lifeos-engine"
-version = "0.5.0"
+version = "0.5.1"
 description = "The machinery of a personal AI operating system: task files, weekly numbers, context packs and a privacy guard."
 readme = "README.md"
 requires-python = ">=3.10"
