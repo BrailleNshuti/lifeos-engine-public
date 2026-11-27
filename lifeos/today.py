@@ -52,6 +52,31 @@ def unrated(home, today=None, min_age_days=1):
     return sorted(out, key=lambda row: (row["date"], row["task"]))
 
 
+def coverage(home):
+    """{seat: {"answered": n, "rated": n}}: distinct (task, seat) answers in the ledger and how many have a rating. A seat with
+    many answers and few ratings has not been judged yet, however good it feels. Review runs are left out. Never raises."""
+    rated = {(str(r.get("task") or ""), str(r.get("model") or "")) for r in learn.read_ratings(home)}
+    answered = set()
+    for r in read_run_records(Path(home)):
+        seat = str(r.get("model") or "").split(":", 1)[0].strip()
+        task = str(r.get("task_id") or "")
+        if r.get("status") == "ok" and r.get("command") in ("ask", "delegate") and seat and seat != "review" and task:
+            answered.add((task, seat))
+    out = {}
+    for task, seat in answered:
+        row = out.setdefault(seat, {"answered": 0, "rated": 0})
+        row["answered"] += 1
+        row["rated"] += any(m == seat and (task == t or task.startswith(t)) for t, m in rated)
+    return dict(sorted(out.items()))
+
+
+def render_coverage(rows):
+    if not rows:
+        return "No answers recorded yet."
+    return chr(10).join(f"{seat:<8} {r['rated']:>3} of {r['answered']:>3} answers rated" + ("   <- not judged yet" if r["rated"] * 2 < r["answered"] else "")
+                     for seat, r in rows.items())
+
+
 def days_left(when, today=None):
     """'in 3 days', 'today', '2 days late' for an ISO date; '' for any other text such as 'anytime'."""
     try:

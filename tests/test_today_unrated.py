@@ -69,3 +69,20 @@ def test_render_shows_the_rate_command_and_days_left(home):
 def test_days_left_wording():
     assert [today.days_left(d, TODAY) for d in ("2026-11-27", "2026-11-28", "2026-12-01", "2026-11-26", "anytime", "")] == \
         ["today", "tomorrow", "in 4 days", "1 days late", "", ""]
+
+
+def test_coverage_counts_answers_and_ratings_per_seat(home):
+    runs(home, [{"task_id": "T-261120-a", "model": "gemini", "date": "2026-11-25"},
+                {"task_id": "T-261121-b", "model": "gemini", "date": "2026-11-25"},
+                {"task_id": "T-261121-b", "model": "gemini", "date": "2026-11-26"},
+                {"task_id": "T-261122-c", "model": "grok", "date": "2026-11-25"},
+                {"task_id": "T-9", "model": "review", "date": "2026-11-25"},
+                {"task_id": "T-261122-c", "model": "claude", "date": "2026-11-25", "status": "failed"}])
+    learn.add_rating(home, "T-261120", "gemini", 4, "summarise a changelog")
+    assert today.coverage(home) == {"gemini": {"answered": 2, "rated": 1}, "grok": {"answered": 1, "rated": 0}}
+    text = today.render_coverage(today.coverage(home))
+    assert "gemini     1 of   2 answers rated" in text and "grok       0 of   1 answers rated   <- not judged yet" in text
+
+
+def test_coverage_with_no_ledger_says_so(home):
+    assert today.coverage(home) == {} and today.render_coverage({}) == "No answers recorded yet."

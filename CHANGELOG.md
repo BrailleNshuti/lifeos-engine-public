@@ -4,6 +4,7 @@ Dates are release dates. Newest first.
 
 ## [Unreleased]
 
+- New (round 6 items 3 and 4): `sunday` shows rating coverage per seat (answers with a rating, and a flag when under half are rated: on the owner's notes Qwen has none), and the weekly Windows soak also runs `selfcheck`, `next` and the cockpit refresh script on the demo home. `today.coverage`, `tests/test_today_unrated.py`.
 - Fix (found by a new four-process race test, which failed in about a quarter of runs before): on Windows a reader that opens a file while another process replaces it gets a plain `PermissionError` with no Windows error code, so the earlier read retry skipped it; reads now wait it out, and the context pack, `lint`, `selfcheck`, the free check, `delegate` and `rate --walk` read through the same retry (`store.read_text_retry`). The write retry gets a sixth pause (1.4 s in all). This is a likely cause of the unexplained Windows write error: readers holding a file, not only scanners. `tests/test_mixed_writers_race.py` (12 of 12 runs pass now), `tests/test_read_retry.py`.
 - New (round 6 item 1): the MCP server has two more read-only tools, `lifeos_selfcheck` and `lifeos_waiting_list`, so the lead model can see damaged files and the waiting list without a shell. 18 tools now. `tests/test_mcp.py`.
 - Change (round 5 item 16, no behaviour change): the 900-line HTML template of `lifeos cockpit` moved out of `lifeos/cockpit.py` into `lifeos/cockpit_page.py` (the template is byte for byte the same), so `cockpit.py` shrinks from 1,415 to 515 lines and drops its special line budget.
