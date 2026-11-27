@@ -48,3 +48,31 @@ def close(home, task, proof, result="", today=None):
             text = re.sub(r"(^## Proof[ \t]*\n)", lambda m: f"## Result · you · {today:%Y-%m-%d}\n{result}\n\n" + m.group(1), text, count=1, flags=re.M)
         atomic_write_bytes(path, text.replace("\n", nl).encode("utf-8"))
     return Path(path)
+
+
+def block(home, task, reason, today=None):
+    """Pause a task on purpose: status becomes blocked and the reason is written as a dated update. Returns the task path.
+    Raises CloseError and writes nothing for a done task, an empty reason, private text or an unknown id."""
+    reason = " ".join((reason or "").split())
+    today = today or dt.date.today()
+    if not reason:
+        raise CloseError("Say why it is blocked, in one sentence.")
+    if [f for f in guard.scan_text(reason) if f[1] == "BLOCK"]:
+        raise CloseError("The reason looks like private data (rule 9). Rewrite it without the number or key.")
+    try:
+        path = task_file(home, task)
+    except (ValueError, FileNotFoundError) as err:
+        raise CloseError(str(err)) from None
+    with store_lock(home):
+        raw = path.read_bytes().decode("utf-8")
+        nl = "\r\n" if "\r\n" in raw else "\n"
+        text = raw.replace("\r\n", "\n")
+        status = re.search(r"^status:[ \t]*(\S*)", text, re.M)
+        if not status or not text.startswith("---\n"):
+            raise CloseError(f"{path.name} has no front matter with a status line.")
+        if status.group(1) == "done":
+            raise CloseError(f"{path.stem} is already done; a finished task cannot be blocked.")
+        text = re.sub(r"^status:[ \t]*\S*", "status: blocked", text, count=1, flags=re.M)
+        text = text.rstrip("\n") + f"\n\n## Update {today:%Y-%m-%d}\nBlocked on purpose: {reason}\n"
+        atomic_write_bytes(path, text.replace("\n", nl).encode("utf-8"))
+    return Path(path)
