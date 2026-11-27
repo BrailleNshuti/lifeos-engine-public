@@ -357,15 +357,14 @@ Run `git pull`, then `gh pr list` and `lifeos selfcheck` and `lifeos today` in t
 - Round 7 (section 13): the 30-item list from a full scan is written; items 1, 2 and the guard fix for git diff headers are done.
 
 ### Open at the time of writing
-- Pull requests still in review: **#145** (rating coverage per seat in `sunday`, the soak runs the helper commands) and **#150** (deadlines from `now.md` in `today` and `next`; its first CI run failed because it sat on an older base, it needs `main` merged in, the changelog and graph conflicts resolved, and a fresh run). Check `gh pr list`; merge each with a plain merge once all 12 checks pass.
+- No engine pull request is open: everything above is merged on `main` (the last ones were #145, #150 and #153).
 - Notes repo pull request **#64** (the closed blind-review task with its checked verdicts): the notes repo needs the owner's review; do not use the admin bypass without his word.
 
 ### Not done (in order of value)
-1. Finish #145 and #150 as above.
-2. Round 7 item 9: treat "out of credits" (HTTP 402, Grok on 2026-11-27) as a resting reason in `seats`, `doctor` and the `delegate` chain. A branch name `feat/seat-no-credits` was started and has no changes.
-3. Blind review of `nextup`, `ratewalk`, the read retries and `today.coverage`: the task `T-261127-blind-review-nextup-ratewalk` is in the notes repo as todo. Use Gemini and Claude (or Codex when it is open); check each finding by hand; write a failing test first.
-4. Round 7 items 3, 4, 14, 15 and 17 to 23 (see section 13).
-5. Run real tasks across the seats and rate them (`rate --walk`); `sunday` shows how few answers are rated.
+1. Round 7 item 9: treat "out of credits" (HTTP 402, Grok on 2026-11-27) as a resting reason in `seats`, `doctor` and the `delegate` chain. A branch name `feat/seat-no-credits` was started and has no changes.
+2. Blind review of `nextup`, `ratewalk`, the read retries and `today.coverage`: the task `T-261127-blind-review-nextup-ratewalk` is in the notes repo as todo. Use Gemini and Claude (or Codex when it is open); check each finding by hand; write a failing test first.
+3. Round 7 items 3, 4, 14, 15 and 17 to 23 (see section 13). Items 12 and 13 (deadlines in `today` and `next`, the stale `now.md` warning) are built.
+4. Run real tasks across the seats and rate them (`rate --walk`); `sunday` shows how few answers are rated.
 
 ### Owner's items (never do these without his word)
 - Install the RAM, then retest Qwen and Ollama and decide the warm-up (round 4 items 13 and 14).

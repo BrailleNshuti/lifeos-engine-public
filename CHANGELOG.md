@@ -4,6 +4,7 @@ Dates are release dates. Newest first.
 
 ## [Unreleased]
 
+- Docs: the hand-off to Codex now records that every engine pull request is merged (the final state at the end of 2026-11-28).
 - New (round 7 items 12 and 13): `lifeos today` shows the next deadlines from the `## Deadlines` section of `now.md` with the days left (a weekday in the line picks the year; a month and year alone is marked approximate; lines that cannot be read are left out), warns when `now.md` says it was updated more than 14 days ago, and `lifeos next` names a deadline within a week. `lifeos/deadlines.py`, `tests/test_deadlines.py` (made-up dates only).
 - Docs: section 14 of `docs/HANDOFF.md` is the hand-off to Codex of 2026-11-28 (done, open, not done, the owner's items and the traps found), and `STATE.md` records that v0.5.1 is released.
 - New (round 6 items 3 and 4): `sunday` shows rating coverage per seat (answers with a rating, and a flag when under half are rated: on the owner's notes Qwen has none), and the weekly Windows soak also runs `selfcheck`, `next` and the cockpit refresh script on the demo home. `today.coverage`, `tests/test_today_unrated.py`.
