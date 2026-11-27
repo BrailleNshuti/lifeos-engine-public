@@ -45,6 +45,22 @@ def test_a_usage_limit_probe_prints_the_reason_and_records_a_rest(home, monkeypa
     assert seats.pressure(read_run_records(home), now)["gemini"].startswith("usage limit until")
 
 
+def test_an_out_of_credits_probe_is_resting_and_not_retried(home, monkeypatch, capsys):
+    code, out = smoke(home, monkeypatch, capsys, grok="HTTP 402: out of credits")
+    assert code == 0 and "resting" in out and "out of credits" in out
+    assert seats.pressure(read_run_records(home), dt.datetime.now(dt.timezone.utc))["grok"] == (
+        "out of credits; add credits before retrying"
+    )
+
+    called = []
+    monkeypatch.setattr(ask, "ADAPTERS", {
+        name: (lambda prompt, name=name: called.append(name) or "OK") for name in ask.PROVIDERS
+    })
+    assert cli.main(["--home", str(home), "doctor", "--smoke"]) == 0
+    capsys.readouterr()
+    assert "grok" not in called
+
+
 def test_a_smoke_record_never_counts_as_spend(home, monkeypatch, capsys):
     smoke(home, monkeypatch, capsys, gemini=QUOTA)
     now = dt.datetime.now(dt.timezone.utc)

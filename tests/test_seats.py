@@ -45,6 +45,16 @@ def test_a_later_success_clears_the_rest():
     assert "codex" not in seats.pressure(records, NOW)
 
 
+def test_out_of_credits_rests_the_seat_until_a_later_success():
+    failure = _run("grok", "failed", error="grok failed: HTTP 402: out of credits")
+    assert seats.failure_kind(failure["error"]) == "no_credits"
+    assert seats.pressure([failure], NOW)["grok"] == "out of credits; add credits before retrying"
+    assert "grok" not in seats.pressure([
+        failure,
+        _run("grok", "ok", finished_at="2026-11-16T11:00:00Z", error=""),
+    ], NOW)
+
+
 def test_no_clock_in_the_message_rests_for_twelve_hours():
     resting = seats.pressure([_run("gemini", "failed", error="HTTP 429 quota")], NOW)
     assert resting["gemini"] == "usage limit until 2026-11-16 22:00 UTC (no time in the message, 12 h rest)"

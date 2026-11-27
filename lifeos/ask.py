@@ -411,8 +411,9 @@ def _smoke_call(adapter, label):
     except Exception as err:
         reason = redact_error(err)
         kind = failure_kind(reason)
-        if kind == "usage_limit":
-            return "resting", f"{label}, usage limit: {reason}", reason
+        if kind in ("usage_limit", "no_credits"):
+            why = "out of credits" if kind == "no_credits" else "usage limit"
+            return "resting", f"{label}, {why}: {reason}", reason
         return "unhealthy", f"{label}, smoke failed: {reason}", reason
     if answer:
         return "healthy", f"{label}, smoke ok", ""

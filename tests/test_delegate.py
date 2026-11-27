@@ -232,6 +232,26 @@ def test_a_resting_seat_is_skipped_before_the_call(home, monkeypatch):
     assert "skipped codex" in out["reason"]
 
 
+def test_out_of_credits_falls_back_once_then_skips_that_seat(home):
+    task = home / "tasks" / "T-261116-demo-cli.md"
+    task.write_text(task.read_text(encoding="utf-8").replace("Ship the context command", "Find today's news"), encoding="utf-8")
+    called = []
+
+    def no_credits(prompt):
+        called.append("grok")
+        raise ask.AskError("grok failed: HTTP 402: out of credits")
+
+    adapters = {**ADAPTERS, "grok": no_credits}
+    first = delegate.run_delegate(home, "T-261116", adapters=adapters)
+    assert first["model"] == "gemini" and first["tried"][:2] == ["grok", "gemini"]
+    assert first["failed"][0]["kind"] == "no_credits"
+    assert "out of credits" in first["reason"]
+
+    second = delegate.run_delegate(home, "T-261116", adapters=adapters)
+    assert second["model"] == "gemini" and second["tried"] == ["gemini"]
+    assert called == ["grok"] and "skipped grok" in second["reason"]
+
+
 def test_a_private_task_never_falls_back_to_the_cloud(home):
     """Private sorting stays on this laptop: if the local model is down, stop instead of asking cloud Claude."""
     def down(prompt):
