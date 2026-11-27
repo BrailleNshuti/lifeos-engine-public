@@ -1,0 +1,14 @@
+{
+  "owner": "Sam",
+  "focus": "Made-up demo: two courses, one side project, one practice routine",
+  "horizon": "Demo milestone (made up)",
+  "targets": [
+    {"title": "Example Language Certificate (made up)", "when": "Spring 2030", "detail": "Invented notes for the demo"},
+    {"title": "Example Cloud Practitioner (made up)", "when": "Summer 2030", "detail": "Invented notes for the demo"}
+  ],
+  "areas": [
+    {"id": "study", "label": "study"},
+    {"id": "lab", "label": "side project"},
+    {"id": "work", "label": "work (hours)"}
+  ]
+}

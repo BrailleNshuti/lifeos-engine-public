@@ -10,6 +10,8 @@ import shutil
 import tempfile
 from pathlib import Path
 
+from .home import default_example
+
 TASK = "T-261116"
 STEPS = [
     ("demo", ["demo"]),
@@ -53,7 +55,7 @@ STEPS = [
 
 
 def _example():
-    return Path(__file__).resolve().parent.parent / "examples" / "demo-home"
+    return default_example()
 
 
 DEBATE_NAMES = ["debate start", "debate record claude", "debate record codex", "debate next", "debate score", "debate run dry",
