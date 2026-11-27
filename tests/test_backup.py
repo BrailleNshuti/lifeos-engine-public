@@ -1,4 +1,5 @@
 import datetime as dt
+import hashlib
 import json
 
 import pytest
@@ -89,3 +90,25 @@ def test_restore_command_reports_and_a_backup_inside_the_home_is_refused(home, t
     assert main(["--home", str(home), "backup", "--restore", str(folder)]) == 0
     assert "Restored" in capsys.readouterr().out
     assert main(["--home", str(home), "backup", "--restore", str(home / "logs")]) == 2
+
+
+@pytest.mark.parametrize("manifest", ["{broken", "{}", '{"files": []}'])
+def test_check_reports_a_malformed_manifest_instead_of_raising(tmp_path, manifest):
+    folder = tmp_path / "backup"
+    folder.mkdir()
+    (folder / "MANIFEST.json").write_text(manifest, encoding="utf-8")
+    result = backup.check(folder)
+    assert not result["ok"] and result["files"] == 0
+    assert "manifest" in result["errors"][0].lower()
+
+
+def test_manifest_paths_cannot_escape_the_backup(tmp_path):
+    folder = tmp_path / "backup"
+    folder.mkdir()
+    outside = tmp_path / "outside.txt"
+    outside.write_text("outside", encoding="utf-8")
+    digest = hashlib.sha256(outside.read_bytes()).hexdigest()
+    (folder / "MANIFEST.json").write_text(json.dumps({"files": {"../outside.txt": digest}}), encoding="utf-8")
+    result = backup.check(folder)
+    assert not result["ok"]
+    assert "unsafe path" in result["errors"][0]

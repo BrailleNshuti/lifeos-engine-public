@@ -4,6 +4,7 @@ Dates are release dates. Newest first.
 
 ## [Unreleased]
 
+- Fix: `backup --check` now reports malformed manifests and refuses manifest paths outside the backup's `logs/` tree instead of raising or reading the outside file.
 - Fix: `dash-export` now rolls back files already replaced when a later dashboard file cannot be installed, so its seven-file all-or-none promise also holds during the replacement phase.
 - Docs: `STATE.md` and `docs/HANDOFF.md` say exactly where round 4 stands and how the next model continues.
 - Tests (round 4 item 20): a canary test plants text in `me.md`, `now.md` and a note and proves it never reaches any of the four cloud seats' input by default; `--full` adds only the two core files, never a note, and Grok is blocked from receiving them even with `--full`. `tests/test_no_private_files_to_cloud.py`.
