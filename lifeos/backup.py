@@ -13,6 +13,7 @@ from pathlib import Path, PurePosixPath
 from . import verify
 
 MANIFEST = "MANIFEST.json"
+STAMP = ".last-backup"
 
 
 class BackupError(Exception):
@@ -48,7 +49,20 @@ def make(home, out, today=None):
         hashes[rel] = _sha(dest)
     manifest = {"date": today.isoformat(), "head": verify.verify_chain(home)["head"], "files": hashes}
     (folder / MANIFEST).write_text(json.dumps(manifest, indent=1, sort_keys=True), encoding="utf-8")
+    try:  # remember the day, so `today` can say when a backup is overdue; never fails the backup
+        (home / STAMP).write_text(today.isoformat() + chr(10), encoding="utf-8")
+    except OSError:
+        pass
     return folder
+
+
+def age_days(home, today=None):
+    """Days since the last `backup --out` made from this home, or None when none was ever made. Never raises."""
+    try:
+        last = dt.date.fromisoformat((Path(home) / STAMP).read_text(encoding="utf-8").strip())
+    except (OSError, ValueError):
+        return None
+    return ((today or dt.date.today()) - last).days
 
 
 def check(folder):

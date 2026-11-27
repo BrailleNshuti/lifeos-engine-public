@@ -286,11 +286,13 @@ def cmd_verify_quotes(args):
 
 HELP_ME = """The daily loop (details: docs/DAILY.md)
 
+Start             lifeos next                                       the one thing to do now, with its command
 1. Make the task      lifeos task new --level L1 "one sentence goal"   then write the done_when line yourself
 2. See the cost       lifeos ask <seat> <task> --dry-run                sends nothing
 3. Ask                lifeos ask <seat> <task>                          read the CHECK line it prints
 4. Check by hand      open every URL, run every command the answer relies on, lifeos verify-quotes <task>
 5. Rate               lifeos rate <task> <seat> <1-5> --note "what was wrong or right"
+6. Close              lifeos task close <task> --proof "link, file, test or PR"     keep the list true: lifeos waiting add|list|done
 Weekly               lifeos sunday      what left the laptop: lifeos egress      refresh the dashboard: lifeos dash-export --out DIR
 When a seat fails    lifeos delegate <task> tries the next seat; private tasks never go to a cloud seat"""
 
