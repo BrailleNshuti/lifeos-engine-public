@@ -5,6 +5,8 @@ due for review, predictions still open and the running experiment. It reads and 
 model. Rule 4: the hardest thing goes first, so the next task is named before anything else.
 """
 import datetime as dt
+import json
+from pathlib import Path
 
 from . import calibrate, decision, experiment, tasks, vocab
 
@@ -13,6 +15,15 @@ OPEN = ("todo", "doing", "blocked", "")
 
 def _due_key(task):
     return (task["due"] or "9999-99-99", task["id"])
+
+
+def read_waiting(home):
+    """The hand-kept waiting list (`waiting.json` in the home folder): a list of {item, who, when}. Never raises."""
+    try:
+        rows = json.loads((Path(home) / "waiting.json").read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return []
+    return [r for r in rows if isinstance(r, dict) and r.get("item")] if isinstance(rows, list) else []
 
 
 def build(home, today=None):
@@ -29,6 +40,7 @@ def build(home, today=None):
         "words_due": len(vocab.due(home, today=today)),
         "predictions_open": calibrate.report(home)["open"],
         "experiment": running[0] if running else None,
+        "waiting": read_waiting(home),
     }
 
 
@@ -48,4 +60,10 @@ def render(v):
     e = v["experiment"]
     if e:
         lines.append(f"Experiment {e['id']} running: {e['change']} ({e['metric']}, ends after {e['days']} days from {e['start']})")
+    waiting = v.get("waiting") or []
+    if waiting:
+        lines += ["", f"Waiting ({len(waiting)})"]
+        lines += [f"  - {w['item']} ({w.get('who', '?')}, {w.get('when', '?')})" for w in waiting[:5]]
+        if len(waiting) > 5:
+            lines.append(f"  ... and {len(waiting) - 5} more in waiting.json")
     return "\n".join(lines)

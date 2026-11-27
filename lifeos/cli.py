@@ -131,6 +131,7 @@ def cmd_rate(args):
         print(f"lifeos: {err}", file=sys.stderr)
         return 2
     print(f"rated {row['model']} {row['score']}/5 for: {row['kind']}")
+    print("router: " + learn.recommend(home, task_text(path))["why"])
     if learn.review_note(raw):
         print("note: " + learn.review_note(raw), file=sys.stderr)
     return 0
