@@ -2,6 +2,10 @@
 
 Written from the first week of real use (2026-11-26). Everything here ran on a real task.
 
+## Start here every morning
+
+Run `lifeos next`. It names the one thing to do now and the exact command: damaged files first, then an overdue task, an answer you have not rated, a waiting item that is due, the next open task. Close a finished task with `lifeos task close <id> --proof "..."` and keep the waiting list with `lifeos waiting add|list|done`.
+
 ## The loop
 
 1. **Make the task.** `lifeos task new --level L1 "one sentence goal"`, then open the file and write the `done_when` line yourself:

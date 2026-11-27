@@ -8,7 +8,7 @@ import subprocess
 import sys
 
 from . import __version__
-from . import commandsdoc, dashdata, egress, selfcheck, sunday
+from . import commandsdoc, dashdata, egress, nextup, selfcheck, sunday, taskclose, waiting
 from . import backup, bakeoff, calibrate, arch, canary, completion, console, debate, decision, demo, digest, earn, experiment, prove, savings, selftest, cockpit, exam, export, governor, history, hooks, learn, lint, mistakes, numbers, panel, pipeline, redact, release, today, vocab, kaizen, lab, log, mcp, replay, router, runs, seats, schema, showcase, sortcsv, stale, timeline, study, verify
 from .delegate import run_delegate
 from .notes import post_notes, pre_notes
@@ -30,6 +30,20 @@ def cmd_task(args):
         path = new_task(home, " ".join(args.sentence), route=args.route, level=args.level, due=args.due or "")
         print(path.relative_to(home))
         print("Next: write the done_when line yourself.")
+    elif args.action == "block":
+        try:
+            path = taskclose.block(home, args.task, args.reason)
+        except taskclose.CloseError as err:
+            print(f"lifeos: {err}", file=sys.stderr)
+            return 2
+        print(f"blocked: {path.relative_to(home)}")
+    elif args.action == "close":
+        try:
+            path = taskclose.close(home, args.task, args.proof, result=args.result or "")
+        except taskclose.CloseError as err:
+            print(f"lifeos: {err}", file=sys.stderr)
+            return 2
+        print(f"closed: {path.relative_to(home)}")
     else:
         for t in list_tasks(home, args.status):
             print(f"{t['id']:<40} {t['status']:<7} {t['due']:<11} {t['goal']}")
@@ -650,6 +664,27 @@ def cmd_commands(args):
     return 0
 
 
+def cmd_next(args):
+    print(nextup.render(nextup.choose(find_home(args.home))))
+    return 0
+
+
+def cmd_waiting(args):
+    home = find_home(args.home)
+    try:
+        if args.waiting_action == "add":
+            entry = waiting.add(home, " ".join(args.item), who=args.who, when=args.when)
+            print(f"added: {entry['item']} ({entry['who']}, {entry['when']})")
+        elif args.waiting_action == "done":
+            print(f"removed: {waiting.remove(home, args.number)['item']}")
+        else:
+            print(waiting.render(waiting.read(home)))
+    except waiting.WaitingError as err:
+        print(f"lifeos: {err}", file=sys.stderr)
+        return 2
+    return 0
+
+
 def cmd_selfcheck(args):
     problems = selfcheck.run(find_home(args.home))
     print(selfcheck.render(problems))
@@ -697,6 +732,13 @@ def build_parser():
     new.add_argument("--route", default="Claude Code -> Codex review")
     new.add_argument("--level", default="L2", choices=["L0", "L1", "L2", "L3"])
     new.add_argument("--due")
+    cl = task_sub.add_parser("close", help="mark a task done with its proof (a link, a file, a test or a PR number)")
+    cl.add_argument("task", help="task id or prefix")
+    cl.add_argument("--proof", required=True)
+    cl.add_argument("--result", help="optional result text, written above the proof")
+    bl = task_sub.add_parser("block", help="pause a task on purpose, with the reason")
+    bl.add_argument("task", help="task id or prefix")
+    bl.add_argument("--reason", required=True)
     lst = task_sub.add_parser("list", help="list task files")
     lst.add_argument("--status", choices=["inbox", "doing", "done"])
     task.set_defaults(func=cmd_task)
@@ -858,6 +900,18 @@ def build_parser():
     hm_p = sub.add_parser("help-me", help="print the daily loop: make a task, ask, check, rate, review the week")
     hm_p.set_defaults(func=cmd_help_me)
 
+    nx_p = sub.add_parser("next", help="the one thing to do now, with the exact command (damaged files, overdue task, unrated answer, waiting item, next task)")
+    nx_p.set_defaults(func=cmd_next)
+    wt_p = sub.add_parser("waiting", help="the waiting list: add an item, list them, mark one done (waiting.json, no hand editing)")
+    wt_sub = wt_p.add_subparsers(dest="waiting_action", required=True)
+    wt_add = wt_sub.add_parser("add", help="add one thing that is waiting")
+    wt_add.add_argument("item", nargs="+")
+    wt_add.add_argument("--who", default="you")
+    wt_add.add_argument("--when", default="anytime", help="a date such as 2026-12-01, or words such as anytime")
+    wt_sub.add_parser("list", help="show the list")
+    wt_done = wt_sub.add_parser("done", help="remove an entry by its number in `waiting list`")
+    wt_done.add_argument("number", type=int)
+    wt_p.set_defaults(func=cmd_waiting)
     sc_p = sub.add_parser("selfcheck", help="check your own files: ledger chain, task files, ratings log, waiting list (reads only)")
     sc_p.set_defaults(func=cmd_selfcheck)
     eg_p = sub.add_parser("egress", help="what left this laptop: calls, tokens and failures per cloud seat (counts only, never text)")

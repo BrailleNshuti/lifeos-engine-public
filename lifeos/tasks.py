@@ -3,6 +3,8 @@ import datetime as dt
 import re
 from pathlib import Path
 
+from .store import read_bytes_retry
+
 STOP_WORDS = {"the", "a", "an", "to", "of", "and", "for", "in", "on", "my", "with", "at", "by", "from", "into"}
 
 TEMPLATE = """---
@@ -51,7 +53,7 @@ def new_task(home, sentence, today=None, route="Claude Code -> Codex review", le
 
 
 def read_frontmatter(path):
-    text = Path(path).read_text(encoding="utf-8")
+    text = read_bytes_retry(path).decode("utf-8").replace(chr(13) + chr(10), chr(10))
     match = re.match(r"^---\n(.*?)\n---", text, re.S)
     fields = {}
     if match:
