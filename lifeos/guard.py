@@ -22,10 +22,17 @@ TOKEN_PATTERNS = [
     ("AWS access key", re.compile(r"\bAKIA[0-9A-Z]{16}\b")),
     ("Google API key", re.compile(r"\bAIza[0-9A-Za-z_\-]{35}\b")),
     ("Private key", re.compile(r"-----BEGIN (?:[A-Z]+ )?PRIVATE KEY-----")),
+    ("JSON web token", re.compile(r"\beyJ[A-Za-z0-9_-]{8,}\.eyJ[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}")),
+    ("Social security number", re.compile(r"(?<![\d-])\d{3}-\d{2}-\d{4}(?![\d-])")),
 ]
 ID_DOCUMENT = re.compile(
     r"(?i)\b(?:passport|reisepass|personalausweis|ausweis|aufenthaltstitel|residence permit|id card)"
     r"(?:\s*(?:no\.?|nr\.?|number|nummer))?\s*[:#]?\s*([A-Z0-9]{8,10})\b")
+# A tax or social security number is only recognised after its label; a bare 11-digit number is too common to block.
+TAX_ID = re.compile(r"(?i)\b(?:steuer-?id|steuer-?identifikationsnummer|steuernummer|tax id|social security number)\b"
+                    r"\s*(?:no\.?|nr\.?|number|nummer)?\s*[:#=]?\s*([0-9][0-9 .-]{7,17}[0-9])")
+# A PIN is only recognised when it is stated with a verb or a colon, never as a bare word before a number.
+PIN = re.compile(r"(?i)\b(?:pin(?: code)?|geheimzahl)\b\s*(?:is|ist|=|:)\s*(\d{4,8})\b")
 IBAN_CANDIDATE = re.compile(r"(?i)\b[A-Z]{2}\d{2}(?:[ .-]?[A-Z0-9]{4}){2,7}(?:[ .-]?[A-Z0-9]{1,3})?\b")
 # A card number may end a sentence (a full stop after the last digit); a decimal point followed by a digit is still a number.
 # Digits right after a run id prefix (R-261116-60279634) are an id, not a card, even if the checksum happens to pass.
@@ -101,6 +108,11 @@ def scan_text(text, private=(), allow_mark=True):
         for m in ID_DOCUMENT.finditer(line):
             if any(c.isdigit() for c in m.group(1)):
                 findings.append((number, "BLOCK", "ID or passport number", _mask(m.group(1))))
+        for m in TAX_ID.finditer(line):
+            if sum(c.isdigit() for c in m.group(1)) >= 9:
+                findings.append((number, "BLOCK", "Tax or social security number", _mask(m.group(1))))
+        for m in PIN.finditer(line):
+            findings.append((number, "BLOCK", "PIN", _mask(m.group(1))))
         for m in IBAN_CANDIDATE.finditer(line):
             if iban_valid(m.group(0)):
                 findings.append((number, "BLOCK", "IBAN", _mask(m.group(0))))

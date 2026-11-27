@@ -4,6 +4,7 @@ Dates are release dates. Newest first.
 
 ## [Unreleased]
 
+- New: the privacy guard now also blocks a JSON web token, a US-style social security number (nnn-nn-nnnn), a tax or social security number after its label (Steuer-ID, tax id, ...) and a stated PIN ("PIN is nnnn"). Found by probing with made-up values; nothing blocked a bare number, so ordinary digits, dates, ISBNs and version strings are unchanged (19 new cases in `tests/test_guard_more.py`, 9 of them harmless look-alikes).
 - New: a table of what each seat has no tool for (`seats.CANNOT`), shown as a hint before `lifeos ask` and never as a block: Grok cannot read shop sites, change files or run commands; the local models have no web access. Tests first in `tests/test_seat_hints.py`.
 - Docs: `docs/DAILY.md`, one page for daily use: the five-step loop, which seat for which job, and what each failure seen in week one means.
 - New: `lifeos dash-export --out DIR` writes the five JSON files a dashboard needs (numbers, runs by seat, ratings with notes, tasks, and an optional hand-kept `waiting.json`). No model call. The files are private. Tests first in `tests/test_dashdata.py`.
