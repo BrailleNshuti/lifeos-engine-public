@@ -70,6 +70,13 @@ def test_the_dotted_card_form_has_its_own_sample(monkeypatch):
 
 
 def test_every_module_level_pattern_is_covered_here():
-    named = {attr for attr, _ in OTHER_SAMPLES.values()} | {"CARD_DOTTED"}
+    named = {attr for attr, _ in OTHER_SAMPLES.values()} | {"CARD_DOTTED", "DIFF_INDEX"}
     module_patterns = {n for n, v in vars(guard).items() if isinstance(v, re.Pattern) and n.isupper()}
     assert module_patterns <= named | {"NEVER"}, f"patterns with no sample: {sorted(module_patterns - named)}"
+
+
+def test_the_diff_header_exemption_matters(monkeypatch):
+    line = "index fda0c5c.." + "595" + "9218 100644"
+    assert kinds(line) == set()
+    monkeypatch.setattr(guard, "DIFF_INDEX", NEVER)
+    assert "Card number" in kinds(line), "the sample must pass the card checksum, or the exemption proves nothing"

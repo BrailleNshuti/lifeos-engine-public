@@ -42,6 +42,9 @@ CARD_CANDIDATE = re.compile(r"(?<!\w)(?<!\d\.)(?<!\bR-)(?:\d[ -]?){12,18}\d(?!\w
 CARD_DOTTED = re.compile(r"(?<!\w)(?<!\d\.)\d{4}(?:\.\d{4}){2,4}(?:\.\d{1,3})?(?!\w|\.\d)")
 SECRET_ASSIGNMENT = re.compile(r"(?i)\b(?:password|passwort|api[_-]?key|secret|token)\b\s*[:=]\s*['\"]?[^\s'\"]{8,}")
 EMAIL = re.compile(r"\b[A-Za-z0-9._%+\-]+@[A-Za-z0-9.\-]+\.[A-Za-z]{2,}\b")
+# A git diff header such as `index 1a2b3c4..5d6e7f8 100644` ends in a run of digits (object id, space, file mode) that can pass the
+# card checksum by chance; it is never a card number.
+DIFF_INDEX = re.compile(r"^\s*index [0-9a-f]{6,40}\.\.[0-9a-f]{6,40}(?: [0-7]{6})?\s*$")
 PHONE = re.compile(r"(?<!\w)\+\d{2,3}[ \-]?\d{2,4}[ \-]?\d{3,}[ \-]?\d{0,6}")
 
 
@@ -118,7 +121,7 @@ def scan_text(text, private=(), allow_mark=True):
         for m in IBAN_CANDIDATE.finditer(line):
             if iban_valid(m.group(0)):
                 findings.append((number, "BLOCK", "IBAN", _mask(m.group(0))))
-        for pattern in (CARD_CANDIDATE, CARD_DOTTED):
+        for pattern in (() if DIFF_INDEX.match(line) else (CARD_CANDIDATE, CARD_DOTTED)):
             for m in pattern.finditer(line):
                 if luhn_valid(m.group(0)):
                     findings.append((number, "BLOCK", "Card number", _mask(m.group(0))))
