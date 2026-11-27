@@ -9,7 +9,7 @@ import json
 from pathlib import Path
 
 from . import calibrate, decision, experiment, learn, tasks, vocab
-from .store import read_run_records
+from .store import read_bytes_retry, read_run_records
 
 OPEN = ("todo", "doing", "blocked", "")
 
@@ -21,7 +21,7 @@ def _due_key(task):
 def read_waiting(home):
     """The hand-kept waiting list (`waiting.json` in the home folder): a list of {item, who, when}. Never raises."""
     try:
-        rows = json.loads((Path(home) / "waiting.json").read_text(encoding="utf-8"))
+        rows = json.loads(read_bytes_retry(Path(home) / "waiting.json").decode("utf-8-sig"))
     except (OSError, ValueError):
         return []
     return [r for r in rows if isinstance(r, dict) and r.get("item")] if isinstance(rows, list) else []

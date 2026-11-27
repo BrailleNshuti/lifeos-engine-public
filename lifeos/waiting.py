@@ -6,7 +6,7 @@ import json
 from pathlib import Path
 
 from . import guard
-from .store import atomic_write_bytes, store_lock
+from .store import atomic_write_bytes, read_bytes_retry, store_lock
 
 FILE = "waiting.json"
 ITEM_MAX = 400
@@ -26,7 +26,7 @@ def read(home):
     if not path.exists():
         return []
     try:
-        rows = json.loads(path.read_text(encoding="utf-8-sig"))
+        rows = json.loads(read_bytes_retry(path).decode("utf-8-sig"))
     except (OSError, ValueError) as err:
         raise WaitingError(f"{FILE} is not valid JSON ({err}). Fix it by hand; nothing was changed.") from None
     if not isinstance(rows, list):

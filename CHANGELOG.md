@@ -4,6 +4,7 @@ Dates are release dates. Newest first.
 
 ## [Unreleased]
 
+- Fix (round 5 item 1, the same family as the `ask` race fixed in pull request 131): readers of files the engine replaces atomically (task files, CSV logs such as ratings, the waiting list) now wait out a short Windows sharing violation with the same pauses the writers use, instead of failing; any other error and a lasting lock still raise. `store.read_bytes_retry`, `tests/test_read_retry.py`.
 - New (round 5): `lifeos task close ID --proof TEXT` marks a task done with its proof in one locked atomic write and refuses without a checkable proof, with a TODO finish line, with private data or when already done; `lifeos waiting add|list|done` keeps `waiting.json` without hand editing. Both came from work that had to be done with one-off scripts. `lint.has_proof` is now public. `tests/test_task_close.py`, `tests/test_waiting_cmd.py`.
 - CI: update the official checkout and Python setup actions to their Node 24 generations, removing GitHub's Node 20 deprecation warnings.
 
