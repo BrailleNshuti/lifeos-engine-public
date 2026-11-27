@@ -20,7 +20,7 @@ from .labcard import LabRefused
 from .store import append_run_record, new_run_id, read_run_records, utc_now_iso
 from .tasks import list_tasks, new_task
 from .week import build_redteam_pack, draft_weekly_review, render_markdown, week_numbers
-from .cmds_misc import cmd_study, cmd_lab, cmd_doctor, cmd_vocab, cmd_guard, cmd_sort_csv  # noqa: F401  (handlers kept out of cli.py to stay under its size budget)
+from .cmds_misc import cmd_verify_quotes, cmd_study, cmd_lab, cmd_doctor, cmd_vocab, cmd_guard, cmd_sort_csv  # noqa: F401  (handlers kept out of cli.py to stay under its size budget)
 
 
 
@@ -782,6 +782,10 @@ def build_parser():
     num_p.add_argument("--html", help="write a self-contained HTML page (no script, no links) to this file")
     num_p.add_argument("--json", action="store_true")
     num_p.set_defaults(func=cmd_numbers)
+
+    vq_p = sub.add_parser("verify-quotes", help="check that the quoted lines of the latest answer in a task are really in its context (no model call)")
+    vq_p.add_argument("task", help="task id or prefix")
+    vq_p.set_defaults(func=cmd_verify_quotes)
 
     dx_p = sub.add_parser("dash-export", help="write the data files for a dashboard (numbers, runs, ratings, tasks, waiting list) to a folder")
     dx_p.add_argument("--out", required=True, help="folder to write the five JSON files to (they are private)")

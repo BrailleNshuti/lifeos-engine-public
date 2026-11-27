@@ -4,6 +4,7 @@ import json
 from pathlib import Path
 import sys
 from . import vocab, lab, seats, sortcsv, study
+from .check import QUOTE_MIN_SOURCE, quote_report, task_check_inputs
 from .ask import PROVIDERS, AskError, ToolMissing, provider_status
 from .guard import scan_paths, scan_staged, staged_files
 from .home import CORE_FILES, HomeError, estimate_tokens, find_home
@@ -250,3 +251,25 @@ def cmd_sort_csv(args):
           f"to check: {info['flagged']}). Open the file and review rows where lifeos_check is 'yes'.")
     return 0
 
+
+
+def cmd_verify_quotes(args):
+    from .context import task_file
+    from .delegate import last_result
+    home = find_home(args.home)
+    try:
+        path = task_file(home, args.task)
+    except (ValueError, FileNotFoundError) as err:
+        print(f"lifeos: {err}", file=sys.stderr)
+        return 2
+    source = task_check_inputs(path)[1]
+    found, missing = quote_report(last_result(path), source)
+    if not found and not missing:
+        print("No quoted lines (25 characters or more) in the latest answer.")
+        return 0
+    print(f"{len(found)} of {len(found) + len(missing)} quoted lines are in the task context.")
+    for line in missing:
+        print(f"  NOT FOUND: {line[:100]}")
+    if len(source) < QUOTE_MIN_SOURCE:
+        print("The task context is short: a seat that fetched its own pages quotes text that is not here. Check those lines at their source.")
+    return 1 if missing else 0

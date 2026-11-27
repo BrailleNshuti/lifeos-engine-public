@@ -51,7 +51,7 @@ def test_every_command_has_a_help_line(name):
 
 # Commands named in the handoff backlog that are planned and do not exist yet. Remove a name here when its feature merges:
 # the second test fails if a planned command already exists, so this list cannot go stale.
-PLANNED = {"verify-quotes"}
+PLANNED = set()
 DOC_FILES = sorted(list((ROOT / "docs").glob("*.md")) + [ROOT / "STATE.md", ROOT / "CHANGELOG.md", ROOT / "AGENTS.md"])
 
 
