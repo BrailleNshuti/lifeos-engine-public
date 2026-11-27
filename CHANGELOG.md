@@ -4,6 +4,7 @@ Dates are release dates. Newest first.
 
 ## [Unreleased]
 
+- Docs: `STATE.md` and `docs/HANDOFF.md` say exactly where round 4 stands and how the next model continues.
 - Tests (round 4 item 20): a canary test plants text in `me.md`, `now.md` and a note and proves it never reaches any of the four cloud seats' input by default; `--full` adds only the two core files, never a note, and Grok is blocked from receiving them even with `--full`. `tests/test_no_private_files_to_cloud.py`.
 - New (round 4 items 11 and 21): `lifeos route` adds a `learned:` line from your own ratings (advice only, never a silent switch), and the free answer check tests two more parts of `done_when`: a counted list ("three causes" against the list items in the answer) and a requested number. `tests/test_route_learned.py`, `tests/test_done_when_structured.py`.
 - New (round 4 item 22): when a task already holds an answer from another seat, `ask` and `delegate` add a NUMBERS line if the two answers share a number but each holds numbers the other lacks, which is where two seats may disagree. `notes.py` also lost its duplicated function definitions. `tests/test_number_disagreement.py`.

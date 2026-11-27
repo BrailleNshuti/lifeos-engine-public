@@ -226,7 +226,15 @@ Same workflow and rules as above. Order matters: A first, because every later gr
 30. Seeded property tests for CSV round trip, task id parsing and date windows, with the seed printed on failure.
 
 
-### Round 4 status (updated 2026-11-27, after pull requests 118 to 124)
-- Built: 1, 2 (task checks already existed as `lint`; `selfcheck` runs them), 3, 5, 6, 7, 9, 12, 16, 19, 24, 25, 26, 27.
-- Already in the engine before round 4 (checked, no work needed): 4 (the chain check names the line), 8 (`ask --run-id`), 10 (`ask --dry-run`), 17 (`context_sha256` in every run record), 18 (`check_text` reads every answer before it is saved).
-- Still open: 11, 13 (owner), 14 (owner), 15, 20, 21, 22, 23, 28 (owner publishes), 29, 30.
+### Round 4 status (updated 2026-11-27 evening, after pull request 127)
+- Built and merged: 1, 2, 3, 5, 6, 7, 9, 11, 12, 15, 16, 19, 20, 21, 22, 24, 25, 26, 27, 29, 30.
+- Already in the engine before round 4 (checked, nothing to build): 4, 8, 10, 17, 18.
+- Still open: 13 and 14 (owner, after the RAM is installed), 23 (ask the owner what the proof line should name), 28 (owner publishes the v0.5.1 tag and release).
+- All pull requests are merged, the working tree is clean, and both repos match their remote main. Nothing is half done.
+
+### Where to continue (written for the next model)
+1. `git pull`, read `STATE.md`, then this file's sections 1 to 5 (rules, workflow, traps).
+2. Run `lifeos selfcheck`, `lifeos today` and `lifeos sunday` in the notes repo: they show what needs attention now.
+3. Write round 5 as section 11 of this file (30 items, each with a "done when"), from what real use showed. Start with trust and data safety, then seats, then daily use.
+4. The cockpit (a private page) is refreshed with `python scripts/refresh_cockpit.py`; the owner or Claude uploads the files.
+5. Never touch the paused side project. Never force-push. The owner publishes releases.
