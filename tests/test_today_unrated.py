@@ -71,6 +71,23 @@ def test_days_left_wording():
         ["today", "tomorrow", "in 4 days", "1 days late", "", ""]
 
 
+def test_coverage_counts_answers_and_ratings_per_seat(home):
+    runs(home, [{"task_id": "T-261120-a", "model": "gemini", "date": "2026-11-25"},
+                {"task_id": "T-261121-b", "model": "gemini", "date": "2026-11-25"},
+                {"task_id": "T-261121-b", "model": "gemini", "date": "2026-11-26"},
+                {"task_id": "T-261122-c", "model": "grok", "date": "2026-11-25"},
+                {"task_id": "T-9", "model": "review", "date": "2026-11-25"},
+                {"task_id": "T-261122-c", "model": "claude", "date": "2026-11-25", "status": "failed"}])
+    learn.add_rating(home, "T-261120", "gemini", 4, "summarise a changelog")
+    assert today.coverage(home) == {"gemini": {"answered": 2, "rated": 1}, "grok": {"answered": 1, "rated": 0}}
+    text = today.render_coverage(today.coverage(home))
+    assert "gemini     1 of   2 answers rated" in text and "grok       0 of   1 answers rated   <- not judged yet" in text
+
+
+def test_coverage_with_no_ledger_says_so(home):
+    assert today.coverage(home) == {} and today.render_coverage({}) == "No answers recorded yet."
+
+
 # Codex's blind review of the round 5 code, finding 5 (confirmed by hand).
 def test_a_short_prefix_rating_does_not_hide_an_answer_on_another_task(home):
     for tid in ("T-3-first", "T-30-second"):
@@ -93,3 +110,11 @@ def test_rate_files_the_rating_under_the_full_task_id(home, monkeypatch):
     monkeypatch.setenv("LIFEOS_HOME", str(home))
     assert main(["rate", "T-261120", "gemini", "4"]) == 0
     assert learn.read_ratings(home)[-1]["task"] == "T-261120-a"
+
+
+def test_coverage_does_not_count_a_short_prefix_rating_for_another_task(home):
+    for tid in ("T-3-first", "T-30-second"):
+        (home / "tasks" / f"{tid}.md").write_text("---\nid: x\n---\n", encoding="utf-8")
+    runs(home, [{"task_id": "T-30-second", "model": "ollama", "date": "2026-11-25"}])
+    learn.add_rating(home, "T-3", "ollama", 4, "summarise a changelog")
+    assert today.coverage(home) == {"ollama": {"answered": 1, "rated": 0}}

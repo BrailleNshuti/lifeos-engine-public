@@ -22,6 +22,14 @@ jobs:
         shell: bash
         run: |
           python scripts/soak.py --runs 3 | tee soak.txt
+      - name: Helper commands on the demo home
+        shell: bash
+        env:
+          LIFEOS_HOME: examples/demo-home
+        run: |
+          lifeos selfcheck
+          python scripts/refresh_cockpit.py --out "$RUNNER_TEMP/cockpit-export"
+          lifeos next
       - name: Counts in the job summary
         if: always()
         shell: bash
