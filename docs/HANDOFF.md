@@ -225,3 +225,8 @@ Same workflow and rules as above. Order matters: A first, because every later gr
 29. Break-the-guard test: remove each guard pattern in turn and prove a test fails (every pattern is covered).
 30. Seeded property tests for CSV round trip, task id parsing and date windows, with the seed printed on failure.
 
+
+### Round 4 status (updated 2026-11-27, after pull requests 118 to 124)
+- Built: 1, 2 (task checks already existed as `lint`; `selfcheck` runs them), 3, 5, 6, 7, 9, 12, 16, 19, 24, 25, 26, 27.
+- Already in the engine before round 4 (checked, no work needed): 4 (the chain check names the line), 8 (`ask --run-id`), 10 (`ask --dry-run`), 17 (`context_sha256` in every run record), 18 (`check_text` reads every answer before it is saved).
+- Still open: 11, 13 (owner), 14 (owner), 15, 20, 21, 22, 23, 28 (owner publishes), 29, 30.
