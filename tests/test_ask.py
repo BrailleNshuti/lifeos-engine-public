@@ -26,6 +26,22 @@ def fake(prompt):
 fake.prompts = []
 
 
+def test_cli_ask_prints_the_hint_and_check_with_a_fake_adapter(home, monkeypatch, capsys):
+    task = home / "tasks" / "T-261116-demo-cli.md"
+    raw = task.read_text(encoding="utf-8")
+    raw = raw.replace("Ship the context command", "Find current shop prices and availability")
+    raw = raw.replace("tests green and the pull request merged", "price and source URL")
+    task.write_text(raw, encoding="utf-8")
+    monkeypatch.setitem(ask.ADAPTERS, "grok", lambda prompt: "I'll save the price and source.")
+
+    assert main(["--home", str(home), "ask", "grok", "T-261116"]) == 0
+
+    captured = capsys.readouterr()
+    assert "CHECK (free, no model):" in captured.out
+    assert "promises to save" in captured.out
+    assert "shop" in captured.err and "block" in captured.err
+
+
 def test_ask_appends_result_and_ledger(home):
     fake.prompts.clear()
     original = (home / "tasks" / "T-261116-demo-cli.md").read_text(encoding="utf-8")
