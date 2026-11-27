@@ -306,12 +306,12 @@ What the scan looked at: the installed package in a clean virtual environment, e
 5. (owner) Publish v0.5.1 (tag at the merge of pull request 132, commit 60d6c53), then cut v0.5.2 from rounds 4 to 7.
 
 ### B. Review the new code (rule 7, blind)
-6. Blind review of `nextup`, `ratewalk`, the read retries in `store` and `today.coverage` (Gemini now; Codex after its limit resets; Grok needs credits). Check each finding by hand; fix the real ones with a failing test first.
+6. Done: Gemini and Claude blind-reviewed `nextup`, `ratewalk`, the read retries in `store` and `today.coverage`; each finding was checked by hand. The real findings have regression tests and fixes. The bounded Windows read retry was deliberate and stayed unchanged.
 7. Blind review of the `dash-export` rollback, `backup --restore` and `selfcheck`.
 8. `lifeos review` prints a plain summary when one reviewer fails and the others answer ("2 asked, 1 answered, codex rested") and uses an exit code that says partial, not failed.
 
 ### C. Seat health
-9. Treat "out of credits" (HTTP 402, seen on Grok on 2026-11-27) as a resting reason in `seats`, `doctor` and the `delegate` chain, with the message and no retry.
+9. Done: "out of credits" (HTTP 402) is a resting reason in `seats`, `doctor` and the `delegate` chain, with the message and no retry (pull request 155).
 10. `seats` shows the age of each seat's last good call, so a seat that has not answered for weeks is visible.
 11. (owner) After the RAM: the Qwen retest and the warm-up decision.
 
@@ -341,7 +341,7 @@ What the scan looked at: the installed package in a clean virtual environment, e
 30. Keep the shuffled-order run (from a separate worktree) as a routine after every ten merged pull requests, and log the seed in `STATE.md`.
 
 
-## 14. Hand-off to Codex (written 2026-11-28 by Claude, who is resting; read this first, it is the newest)
+## 14. Hand-off from Claude, continued by Codex (read this first; it is the newest)
 
 Run `git pull`, then `gh pr list` and `lifeos selfcheck` and `lifeos today` in the notes repo. They show the true state; this section says what it was when Claude stopped.
 
@@ -354,17 +354,16 @@ Run `git pull`, then `gh pr list` and `lifeos selfcheck` and `lifeos today` in t
 - Packaging: after a plain `pip install` the demo and `selftest` work (the demo home is bundled in `lifeos/_demo_home`, kept identical to `examples/demo-home` by a test).
 - Blind review (rule 7) of the new code: Gemini and Codex each reviewed `task close` and `waiting`; 10 of 10 findings were real and are fixed.
 - The cockpit page (a private page, not in this repo) was redesigned and its data refreshed; refresh it with `python scripts/refresh_cockpit.py`.
-- Round 7 (section 13): the 30-item list from a full scan is written; items 1, 2 and the guard fix for git diff headers are done.
+- Round 7 (section 13): the 30-item list from a full scan is written. Item 6's blind review is complete and its confirmed findings are fixed; item 9's no-credits seat handling is merged in pull request 155.
 
 ### Open at the time of writing
-- No engine pull request is open: everything above is merged on `main` (the last ones were #145, #150 and #153).
-- Notes repo pull request **#64** (the closed blind-review task with its checked verdicts): the notes repo needs the owner's review; do not use the admin bypass without his word.
+- The engine hardening branch for round 7 item 6 is the only work in progress. Merge it only after the full suite, guard and all CI checks pass.
+- Notes repo pull request **#64** is merged. The durable item 6 review task will be closed with the engine merge as proof.
 
 ### Not done (in order of value)
-1. Round 7 item 9: treat "out of credits" (HTTP 402, Grok on 2026-11-27) as a resting reason in `seats`, `doctor` and the `delegate` chain. A branch name `feat/seat-no-credits` was started and has no changes.
-2. Blind review of `nextup`, `ratewalk`, the read retries and `today.coverage`: the task `T-261127-blind-review-nextup-ratewalk` is in the notes repo as todo. Use Gemini and Claude (or Codex when it is open); check each finding by hand; write a failing test first.
-3. Round 7 items 3, 4, 14, 15 and 17 to 23 (see section 13). Items 12 and 13 (deadlines in `today` and `next`, the stale `now.md` warning) are built.
-4. Run real tasks across the seats and rate them (`rate --walk`); `sunday` shows how few answers are rated.
+1. Round 7 item 7: blind-review the `dash-export` rollback, `backup --restore` and `selfcheck`; check each finding by hand and write a failing test before each real fix.
+2. Round 7 items 3, 4, 14, 15 and 17 to 23 (see section 13). Items 12 and 13 (deadlines in `today` and `next`, the stale `now.md` warning) are built.
+3. Run real tasks across the seats and rate them (`rate --walk`); `sunday` shows how few answers are rated.
 
 ### Owner's items (never do these without his word)
 - Install the RAM, then retest Qwen and Ollama and decide the warm-up (round 4 items 13 and 14).

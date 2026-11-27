@@ -2,25 +2,28 @@
 called and nothing is sent. For each answer it shows the task, the seat and the start of that seat's answer, then asks for a
 score from 1 to 5 (s skips, q stops) and a note; a score of 1 or 2 needs a note, because that is what teaches the router."""
 import re
-from pathlib import Path
 
 from . import learn, today
 from .context import task_file
-from .delegate import task_text
+from .delegate import task_text_from
+
 from .store import read_text_retry
 
 SHOW = 300
 
 
-def _answer_of(path, seat):
+def _answer_of(raw, seat):
     """The start of the last result written by this seat (any `## Result · <seat>...` block), or ''."""
-    try:
-        raw = read_text_retry(path, errors="replace")
-    except OSError:
-        return ""
     blocks = [body for who, body in re.findall(r"^## Result · (\S+) · \d{4}-\d{2}-\d{2}\n(.*?)(?=^## |\Z)", raw, re.M | re.S)
               if who.split(":", 1)[0] == seat]
     return " ".join(blocks[-1].split())[:SHOW] if blocks else ""
+
+
+def _prompt(ask, text):
+    try:
+        return ask(text).strip()
+    except (EOFError, KeyboardInterrupt):
+        return None
 
 
 def walk(home, ask=input, say=print, day=None):
@@ -34,26 +37,39 @@ def walk(home, ask=input, say=print, day=None):
         try:
             path = task_file(home, item["task"])
         except (ValueError, FileNotFoundError):
+            say(f"[{n}/{len(items)}] {item['task']}  skipped: task file no longer exists")
             continue
         say(f"[{n}/{len(items)}] {item['task']}  seat: {item['seat']}  answered {item['date']}")
-        goal = learn.explicit_kind(read_text_retry(path, errors="replace"))
-        shown = _answer_of(path, item["seat"])
+        try:
+            raw_task = read_text_retry(path, errors="replace")
+        except OSError as err:
+            say(f"  skipped: could not read task file ({err})")
+            continue
+        goal = learn.explicit_kind(raw_task)
+        shown = _answer_of(raw_task, item["seat"])
         say("  answer starts: " + (shown or "(no answer text found)") + ("..." if len(shown) >= SHOW else ""))
         while True:
-            raw = ask("  score 1-5 (s skip, q stop): ").strip().lower()
-            if raw in ("s", "q", "") or raw in {"1", "2", "3", "4", "5"}:
+            raw = _prompt(ask, "  score 1-5 (s skip, q stop): ")
+            if raw is None or raw.lower() in ("s", "q", "") or raw in {"1", "2", "3", "4", "5"}:
                 break
             say("  type a number from 1 to 5, s or q")
+        if raw is None:
+            say("  stopped.")
+            break
+        raw = raw.lower()
         if raw == "q":
             break
         if raw in ("s", ""):
             continue
-        note = ask("  note" + (" (needed for 1 or 2)" if int(raw) <= 2 else "") + ": ").strip()
+        note = _prompt(ask, "  note" + (" (needed for 1 or 2)" if int(raw) <= 2 else "") + ": ")
+        if note is None:
+            say("  stopped.")
+            break
         if int(raw) <= 2 and not note:
             say("  skipped: a 1 or a 2 needs a note.")
             continue
         try:
-            learn.add_rating(home, item["task"], item["seat"], int(raw), task_text(path), note=note,
+            learn.add_rating(home, item["task"], item["seat"], int(raw), task_text_from(raw_task), note=note,
                              kind=goal if goal else None)
         except learn.LearnError as err:
             say(f"  not saved: {err}")

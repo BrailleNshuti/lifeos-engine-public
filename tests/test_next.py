@@ -45,11 +45,33 @@ def test_a_blocked_task_is_not_suggested(home):
     assert nextup.choose(home, DAY)["kind"] == "none"
 
 
+def test_a_blocked_old_task_does_not_hide_an_actionable_overdue_task(home):
+    task(home, "T-261120-blocked", due="2026-11-20", status="blocked")
+    task(home, "T-261125-late", due="2026-11-25")
+    choice = nextup.choose(home, DAY)
+    assert choice["kind"] == "overdue" and "T-261125-late" in choice["command"]
+
+
 def test_an_unrated_answer_comes_before_a_waiting_item(home):
+    task(home, "T-261120-a")
     (home / "logs" / "runs.jsonl").write_text(json.dumps({"command": "ask", "model": "gemini", "status": "ok", "task_id": "T-261120-a", "date": "2026-11-25"}) + "\n", encoding="utf-8")
     (home / "waiting.json").write_text(json.dumps([{"item": "x", "who": "you", "when": "2026-11-29"}]), encoding="utf-8")
     c = nextup.choose(home, DAY)
     assert c["kind"] == "rate" and "lifeos rate T-261120-a gemini" in c["command"]
+
+
+def test_an_answer_whose_task_was_archived_does_not_pin_next(home):
+    (home / "logs" / "runs.jsonl").write_text(json.dumps({"command": "ask", "model": "gemini", "status": "ok", "task_id": "T-261120-gone", "date": "2026-11-25"}) + "\n", encoding="utf-8")
+    (home / "waiting.json").write_text(json.dumps([{"item": "call back", "who": "you", "when": "2026-11-28"}]), encoding="utf-8")
+    choice = nextup.choose(home, DAY)
+    assert choice["kind"] == "waiting" and "call back" in choice["text"]
+
+
+def test_a_deadline_within_a_week_precedes_waiting_and_a_far_deadline_does_not(home):
+    (home / "now.md").write_text("# now · updated 2026-11-28\n\n## Deadlines\n- 3 Dec 2026: near\n- 20 Dec 2026: far\n", encoding="utf-8")
+    (home / "waiting.json").write_text(json.dumps([{"item": "later", "who": "you", "when": "2026-12-20"}]), encoding="utf-8")
+    choice = nextup.choose(home, DAY)
+    assert choice["kind"] == "deadline" and "near" in choice["text"]
 
 
 def test_a_waiting_item_due_soon_is_named_and_a_far_one_is_not(home):

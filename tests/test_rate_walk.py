@@ -68,3 +68,24 @@ def test_the_old_form_still_works_and_a_bare_rate_explains(home, capsys, monkeyp
     assert main(["rate", "T-261125-a", "gemini", "4"]) == 0
     assert main(["rate"]) == 2
     assert "--walk" in capsys.readouterr().err
+
+
+def test_a_task_archived_after_the_list_was_built_is_explained(home, monkeypatch):
+    item = {"task": "T-261125-gone", "seat": "gemini", "date": "2026-11-25"}
+    monkeypatch.setattr(ratewalk.today, "unrated", lambda *_: [item])
+    out = []
+    assert ratewalk.walk(home, ask=scripted(), say=out.append, day=DAY) == 0
+    assert any("task file" in line and "skipped" in line for line in out)
+
+
+def test_a_read_error_and_end_of_input_stop_cleanly(home, monkeypatch):
+    original = ratewalk.read_text_retry
+    monkeypatch.setattr(ratewalk, "read_text_retry", lambda *_args, **_kwargs: (_ for _ in ()).throw(PermissionError(13, "locked")))
+    out = []
+    assert ratewalk.walk(home, ask=scripted(), say=out.append, day=DAY) == 0
+    assert any("could not read" in line and "skipped" in line for line in out)
+
+    monkeypatch.setattr(ratewalk, "read_text_retry", original)
+    out = []
+    assert ratewalk.walk(home, ask=lambda *_: (_ for _ in ()).throw(EOFError()), say=out.append, day=DAY) == 0
+    assert "  stopped." in out and out[-1] == "0 rating(s) saved."

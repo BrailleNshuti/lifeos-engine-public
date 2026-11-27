@@ -22,7 +22,12 @@ pick = seats.pick  # tests and older callers: (model, reason) from the task text
 
 def task_text(path):
     """Goal, context and task only: not the route line, route notes, or earlier results."""
-    raw = visible_task(read_text_retry(path))
+    return task_text_from(read_text_retry(path))
+
+
+def task_text_from(text):
+    """`task_text` from content already read, for callers that must not race a second file read."""
+    raw = visible_task(text)
     goal = re.search(r"^goal:\s*(.+)$", raw, re.M)
     body = raw.split("## Result", 1)[0].split("---", 2)[-1]
     return f"{goal.group(1) if goal else ''}\n{body}"
