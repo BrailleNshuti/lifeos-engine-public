@@ -663,7 +663,14 @@ def cmd_egress(args):
 
 
 def cmd_sunday(args):
-    print(sunday.build(find_home(args.home)))
+    home = find_home(args.home)
+    print(sunday.build(home))
+    if getattr(args, "save", False):
+        try:
+            print(f"saved: {sunday.save(home).relative_to(home)}")
+        except sunday.SaveRefused as err:
+            print(f"lifeos: {err}", file=sys.stderr)
+            return 2
     return 0
 
 
@@ -856,6 +863,7 @@ def build_parser():
     eg_p.add_argument("--task", help="only what left for this task (id or prefix)")
     eg_p.set_defaults(func=cmd_egress)
     sun_p = sub.add_parser("sunday", help="the numbers for the weekly review on one page: earn, seat speed, ratings, stale items, open mistakes")
+    sun_p.add_argument("--save", action="store_true", help="also keep the page as reports/week-YYYY-Www.md")
     sun_p.set_defaults(func=cmd_sunday)
 
     dx_p = sub.add_parser("dash-export", help="write the data files for a dashboard (numbers, runs, ratings, tasks, waiting list) to a folder")

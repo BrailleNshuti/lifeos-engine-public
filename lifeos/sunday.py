@@ -1,8 +1,14 @@
-"""`lifeos sunday`: the numbers for the weekly review on one page. Reads the logs, calls no model, writes nothing."""
+"""`lifeos sunday`: the numbers for the weekly review on one page. Reads the logs and calls no model. It writes nothing
+unless you pass `--save`, which keeps the page as `reports/week-YYYY-Www.md` so every week leaves a file."""
 import datetime as dt
 from pathlib import Path
 
-from . import earn, learn, mistakes, stale
+from . import earn, guard, learn, mistakes, stale
+from .store import atomic_write_bytes
+
+
+class SaveRefused(Exception):
+    pass
 
 WEEK_DAYS = 7
 
@@ -49,3 +55,23 @@ def build(home, today=None):
         "Next: read these, then run the weekly-review skill to write the review itself.",
     ]
     return "\n".join(parts)
+
+
+def week_file(home, today=None):
+    today = today or dt.date.today()
+    year, week, _ = today.isocalendar()
+    return Path(home) / "reports" / f"week-{year}-W{week:02d}.md"
+
+
+def save(home, today=None):
+    """Write the page to reports/week-YYYY-Www.md (a second run in the same week replaces that week's file). Refuses, and
+    writes nothing, when the page holds anything the guard would block."""
+    today = today or dt.date.today()
+    page = build(home, today)
+    blocks = [f for f in guard.scan_text(page) if f[1] == "BLOCK"]
+    if blocks:
+        raise SaveRefused(f"The page holds {len(blocks)} sensitive finding(s), so it was not saved. Fix the note or task that carries it.")
+    path = week_file(home, today)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    atomic_write_bytes(path, (page + chr(10)).encode("utf-8"))
+    return path
