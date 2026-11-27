@@ -582,6 +582,18 @@ def append_csv_row(path, values):
     return True
 
 
+def append_csv_row_creating(path, header, values):
+    """Append one row; if the file does not exist yet, create it with its header first. The check, the creation and the
+    append are one step under the store lock, so two writers meeting at a new file cannot lose a row or write the header twice."""
+    path = Path(path)
+    home = path.parent.parent if path.parent.name == "logs" else None
+    with store_lock(home):
+        if not path.exists():
+            path.parent.mkdir(parents=True, exist_ok=True)
+            atomic_write_bytes(path, (",".join(header) + "\n").encode("utf-8"))
+        return append_csv_row(path, values)
+
+
 def append_ledger_row(ledger, today, task_id, model, note):
     """Atomically append one valid CSV row, repairing a missing final newline first."""
     append_csv_row(ledger, [today.isoformat(), task_id, model, "", note])
