@@ -8,7 +8,7 @@ import subprocess
 import sys
 
 from . import __version__
-from . import commandsdoc, dashdata, egress, selfcheck, sunday, taskclose, waiting
+from . import commandsdoc, dashdata, egress, nextup, selfcheck, sunday, taskclose, waiting
 from . import backup, bakeoff, calibrate, arch, canary, completion, console, debate, decision, demo, digest, earn, experiment, prove, savings, selftest, cockpit, exam, export, governor, history, hooks, learn, lint, mistakes, numbers, panel, pipeline, redact, release, today, vocab, kaizen, lab, log, mcp, replay, router, runs, seats, schema, showcase, sortcsv, stale, timeline, study, verify
 from .delegate import run_delegate
 from .notes import post_notes, pre_notes
@@ -30,6 +30,13 @@ def cmd_task(args):
         path = new_task(home, " ".join(args.sentence), route=args.route, level=args.level, due=args.due or "")
         print(path.relative_to(home))
         print("Next: write the done_when line yourself.")
+    elif args.action == "block":
+        try:
+            path = taskclose.block(home, args.task, args.reason)
+        except taskclose.CloseError as err:
+            print(f"lifeos: {err}", file=sys.stderr)
+            return 2
+        print(f"blocked: {path.relative_to(home)}")
     elif args.action == "close":
         try:
             path = taskclose.close(home, args.task, args.proof, result=args.result or "")
@@ -657,6 +664,11 @@ def cmd_commands(args):
     return 0
 
 
+def cmd_next(args):
+    print(nextup.render(nextup.choose(find_home(args.home))))
+    return 0
+
+
 def cmd_waiting(args):
     home = find_home(args.home)
     try:
@@ -724,6 +736,9 @@ def build_parser():
     cl.add_argument("task", help="task id or prefix")
     cl.add_argument("--proof", required=True)
     cl.add_argument("--result", help="optional result text, written above the proof")
+    bl = task_sub.add_parser("block", help="pause a task on purpose, with the reason")
+    bl.add_argument("task", help="task id or prefix")
+    bl.add_argument("--reason", required=True)
     lst = task_sub.add_parser("list", help="list task files")
     lst.add_argument("--status", choices=["inbox", "doing", "done"])
     task.set_defaults(func=cmd_task)
@@ -885,6 +900,8 @@ def build_parser():
     hm_p = sub.add_parser("help-me", help="print the daily loop: make a task, ask, check, rate, review the week")
     hm_p.set_defaults(func=cmd_help_me)
 
+    nx_p = sub.add_parser("next", help="the one thing to do now, with the exact command (damaged files, overdue task, unrated answer, waiting item, next task)")
+    nx_p.set_defaults(func=cmd_next)
     wt_p = sub.add_parser("waiting", help="the waiting list: add an item, list them, mark one done (waiting.json, no hand editing)")
     wt_sub = wt_p.add_subparsers(dest="waiting_action", required=True)
     wt_add = wt_sub.add_parser("add", help="add one thing that is waiting")

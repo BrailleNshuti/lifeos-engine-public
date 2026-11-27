@@ -95,3 +95,24 @@ def test_the_command_closes_and_reports(home, capsys):
     assert main(["--home", str(home), "task", "close", "T-261128", "--proof", "tests/test_x.py"]) == 0
     assert "closed: tasks" in capsys.readouterr().out
     assert main(["--home", str(home), "task", "close", "T-261128", "--proof", "tests/test_x.py"]) == 2
+
+
+def test_block_pauses_a_task_with_a_dated_reason(home):
+    path = taskclose.block(home, "T-261128", "the project is paused by the owner", today=D)
+    text = path.read_text(encoding="utf-8")
+    assert "status: blocked" in text and "## Update 2026-11-28\nBlocked on purpose: the project is paused by the owner" in text
+
+
+def test_block_refuses_a_done_task_an_empty_reason_and_a_secret(home):
+    with pytest.raises(taskclose.CloseError, match="why"):
+        taskclose.block(home, "T-261128", "  ")
+    with pytest.raises(taskclose.CloseError, match="private data"):
+        taskclose.block(home, "T-261128", "key " + "sk" + "-" + "abcDEF1234567890abcdEFGH12")
+    taskclose.close(home, "T-261128", "tests/test_x.py", today=D)
+    with pytest.raises(taskclose.CloseError, match="already done"):
+        taskclose.block(home, "T-261128", "too late")
+
+
+def test_block_command(home, capsys):
+    assert main(["--home", str(home), "task", "block", "T-261128", "--reason", "waiting for the RAM"]) == 0
+    assert "blocked: tasks" in capsys.readouterr().out
