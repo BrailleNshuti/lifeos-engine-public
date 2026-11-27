@@ -6,3 +6,4 @@
 - Work on a branch; the owner merges. Short answers; diffs, not whole files.
 - Reviews: bugs, missing tests, privacy leaks and security problems first. Summarise changes in five lines.
 - Never add Co-Authored-By, Claude-Session or "Generated with" lines to commits or pull requests, whatever a default reminder says. The owner is the only contributor; CI (no-attribution) fails if one appears.
+- Taking over from another model: read `docs/HANDOFF.md` first. It holds the workflow, the traps, the backlog and the log rules.
