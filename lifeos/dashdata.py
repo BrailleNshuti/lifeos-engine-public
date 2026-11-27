@@ -7,7 +7,7 @@ The files hold task goals and rating notes: they are private. Publish them only 
 import json
 from pathlib import Path
 
-from . import learn, numbers, tasks
+from . import learn, numbers, tasks, today
 
 TITLE_MAX = 90
 
@@ -37,15 +37,6 @@ def _task_rows(home):
             for t in tasks.list_tasks(home)]
 
 
-def _waiting_rows(home):
-    path = Path(home) / "waiting.json"
-    try:
-        rows = json.loads(path.read_text(encoding="utf-8"))
-    except (OSError, ValueError):
-        return []
-    return [r for r in rows if isinstance(r, dict)] if isinstance(rows, list) else []
-
-
 def export(home, out_dir, commands=None):
     """Write the five files; return their paths."""
     out = Path(out_dir)
@@ -53,7 +44,7 @@ def export(home, out_dir, commands=None):
     num_rows, by_model = _numbers_rows(home, commands)
     runs = sorted(({"model": m, "runs": n} for m, n in by_model.items()), key=lambda r: (-r["runs"], r["model"]))
     files = {"numbers.json": num_rows, "runs.json": runs, "ratings.json": _ratings_rows(home),
-             "tasks.json": _task_rows(home), "waiting.json": _waiting_rows(home)}
+             "tasks.json": _task_rows(home), "waiting.json": today.read_waiting(home)}
     written = []
     for name, rows in files.items():
         path = out / name
