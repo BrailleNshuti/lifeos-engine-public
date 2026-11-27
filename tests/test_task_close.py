@@ -164,3 +164,14 @@ def test_a_front_matter_that_never_closes_is_refused(home):
         taskclose.close(home, "T-261128", "tests/test_x.py", today=D)
     with pytest.raises(taskclose.CloseError, match="front matter"):
         taskclose.block(home, "T-261128", "paused")
+
+
+# Codex's blind review of the round 5 code, finding 4 (confirmed by hand).
+def test_a_task_without_a_finish_line_cannot_be_closed(home):
+    path = home / "tasks" / "T-261128-demo.md"
+    for text in (TASK.replace("done_when: a made-up finish line that can be checked\n", ""),
+                 TASK.replace("done_when: a made-up finish line that can be checked", "done_when:")):
+        path.write_text(text, encoding="utf-8")
+        with pytest.raises(taskclose.CloseError, match="finish line"):
+            taskclose.close(home, "T-261128", "tests/test_x.py", today=D)
+        assert path.read_text(encoding="utf-8") == text

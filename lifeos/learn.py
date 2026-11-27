@@ -75,7 +75,7 @@ def add_rating(home, task_id, model, score, text, today=None, note="", kind=None
     if not 1 <= score <= 5:
         raise LearnError("The score is a whole number from 1 to 5.")
     note = " ".join(str(note or "").split())[:200]
-    if guard.scan_text(note):
+    if guard.findings(note):
         raise LearnError("The note looks like private data (rule 9). Rewrite it without the number or key.")
     path = _path(home)
     row = {"date": (today or dt.date.today()).isoformat(), "task": task_id, "model": model, "score": score,

@@ -69,3 +69,27 @@ def test_render_shows_the_rate_command_and_days_left(home):
 def test_days_left_wording():
     assert [today.days_left(d, TODAY) for d in ("2026-11-27", "2026-11-28", "2026-12-01", "2026-11-26", "anytime", "")] == \
         ["today", "tomorrow", "in 4 days", "1 days late", "", ""]
+
+
+# Codex's blind review of the round 5 code, finding 5 (confirmed by hand).
+def test_a_short_prefix_rating_does_not_hide_an_answer_on_another_task(home):
+    for tid in ("T-3-first", "T-30-second"):
+        (home / "tasks" / f"{tid}.md").write_text("---\nid: x\n---\n", encoding="utf-8")
+    runs(home, [{"task_id": "T-30-second", "model": "ollama", "date": "2026-11-25"}])
+    learn.add_rating(home, "T-3", "ollama", 4, "summarise a changelog")
+    assert [r["task"] for r in today.unrated(home, TODAY)] == ["T-30-second"]
+
+
+def test_a_prefix_that_picks_out_one_task_still_counts(home):
+    (home / "tasks" / "T-261120-a.md").write_text("---\nid: x\n---\n", encoding="utf-8")
+    runs(home, [{"task_id": "T-261120-a", "model": "gemini", "date": "2026-11-25"}])
+    learn.add_rating(home, "T-261120", "gemini", 4, "summarise a changelog")
+    assert today.unrated(home, TODAY) == []
+
+
+def test_rate_files_the_rating_under_the_full_task_id(home, monkeypatch):
+    from lifeos.cli import main
+    (home / "tasks" / "T-261120-a.md").write_text("---\nid: x\ngoal: g\n---\n", encoding="utf-8")
+    monkeypatch.setenv("LIFEOS_HOME", str(home))
+    assert main(["rate", "T-261120", "gemini", "4"]) == 0
+    assert learn.read_ratings(home)[-1]["task"] == "T-261120-a"

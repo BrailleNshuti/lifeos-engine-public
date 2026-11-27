@@ -135,6 +135,18 @@ def scan_text(text, private=(), allow_mark=True):
     return findings
 
 
+def findings(text):
+    """Findings for text typed or generated at run time (a note, a proof, a claim): the owner's private patterns are applied
+    and the `lifeos-guard: allow` marker is NOT honoured, because that marker is for reviewed repository files and must not
+    let a typed string exempt itself. All severities."""
+    return scan_text(text, private_patterns(), allow_mark=False)
+
+
+def blocking(text):
+    """The BLOCK findings of `findings(text)`."""
+    return [f for f in findings(text) if f[1] == "BLOCK"]
+
+
 def _split_tokens(text, allow_mark):
     """A token wrapped over two lines by an editor or a chat: join each pair of adjacent non-blank lines and keep only the
     matches that cross the line break (a token on one line is already reported by the line scan)."""

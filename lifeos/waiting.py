@@ -53,7 +53,7 @@ def add(home, item, who="you", when="anytime"):
     if len(item) > ITEM_MAX:
         raise WaitingError(f"Keep it under {ITEM_MAX} characters; put the detail in a task file.")
     for text in (item, who, when):
-        if [f for f in guard.scan_text(text) if f[1] == "BLOCK"]:
+        if guard.blocking(text):
             raise WaitingError("The text looks like private data (rule 9). Rewrite it without the number or key.")
     with store_lock(home):
         rows = read(home)

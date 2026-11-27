@@ -40,7 +40,7 @@ def add(home, word, meaning, example="", today=None):
     word, meaning, example = _clean(word, 80), _clean(meaning, 120), _clean(example, 200)
     if not word or not meaning:
         raise VocabError("A word and its meaning are both needed.")
-    if guard.scan_text(f"{word}\n{meaning}\n{example}"):
+    if guard.findings(f"{word}\n{meaning}\n{example}"):
         raise VocabError("This looks like private data (rule 9). Keep it out of the vocabulary list.")
     if any(r["word"].lower() == word.lower() and r["kind"] == "add" for r in _rows(home)):
         raise VocabError(f"'{word}' is already in the list.")
