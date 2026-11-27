@@ -84,6 +84,10 @@ def run_delegate(home, task_id, model=None, budget=6000, full=False, adapters=No
     if learned_note:
         reason = f"learned ({learned_note}) · {reason}"
     chain = [name for name in chain if name in adapters]
+    if not model:  # an explicit seat is never moved
+        chain, moved = seats.reroute(chain, task_text(path))
+        if moved:
+            reason += " · rerouted: " + moved
     if not chain:
         raise ask.ToolMissing("no open seat has a model on this computer.")
     if dry_run:

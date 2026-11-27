@@ -123,6 +123,19 @@ def seat_warning(model, text):
     return ""
 
 
+def reroute(chain, text):
+    """Put the seats that have a tool for the job ahead of those that do not (`CANNOT`), keeping each group's order.
+    Returns (chain, note). The chain is unchanged when the first seat can do the job, when no seat can, or when it has one
+    seat. Nothing is added or dropped, so a private chain stays private."""
+    if len(chain) < 2:
+        return list(chain), ""
+    capable = [s for s in chain if not seat_warning(s, text)]
+    incapable = [s for s in chain if seat_warning(s, text)]
+    if not capable or not incapable or chain[0] in capable:
+        return list(chain), ""
+    return capable + incapable, f"{chain[0]} has no tool for this job, so {capable[0]} goes first"
+
+
 def pick(text):
     """Return (model, reason). The reviewer and level stay with `kind`."""
     model, _reviewer, _level, reason = kind(text)
