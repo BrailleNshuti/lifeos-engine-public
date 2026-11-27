@@ -123,7 +123,7 @@ The Windows `os.replace` write failure (winerror 5) has never reproduced locally
 
 - Work in a loop: pick the next item, do steps 1 to 9 of section 4, merge, pick the next. Do not wait for the owner between items.
 - If a step fails twice in a row, stop that item, write what you tried and the exact error in the log, and move to the next item.
-- Keep a log in `STATE.md` under the bullet "Overnight log". After every merged item or every hour, whichever comes first, add one factual line: time, pull request number, what changed, what failed, what is next. Push it through a docs pull request.
+- Keep a log in `STATE.md`: add one short bullet under "Built" (a test fails when a bullet is longer than 400 characters). After every merged item or every hour, whichever comes first, add one factual line: time, pull request number, what changed, what failed, what is next. Push it through a docs pull request.
 - If you are near your own usage limit, finish the current merge, write the log line, and add "Next up: <item>" so the next model can start at once. Never leave an unpushed branch, uncommitted files or a half-merged pull request.
 - Heads-up for the end: before you stop, `git status` must be clean, `gh pr list --state open` must be empty or each open pull request must be listed in the log with its blocker, and `main` must be green.
 - A section "Needs the owner" in the log collects every decision that is his: for example the 44 old commits on `main` that carry a `Claude-Session:` link in their message (not a co-author), which can only be removed by a force-push he must approve.
@@ -178,4 +178,50 @@ rules as above. Mark an item done in the log with its pull request number. Items
 28. `docs/COMMANDS.md` generated from the parser, with a staleness test like the architecture graph.
 29. Cut release v0.5.1 from the Unreleased section once items 1 to 28 are merged: version bump, changelog move, tag. (owner: the tag and release publication)
 30. Tidy `STATE.md`: group the log lines under dated headings and keep each under 400 characters, with a test on line length.
+
+## 10. Round 4: thirty urgent items (added 2026-11-27, from what rounds 1 to 3 showed)
+
+Same workflow and rules as above. Order matters: A first, because every later group depends on trusting the files. Items marked (owner) need the owner's yes.
+
+### A. Trust the files (do these first)
+1. A self-check command: one command that checks the ledger chain, `ratings.csv`, every task file, `waiting.json` and the run records; prints what to fix; exits non-zero on damage.
+2. `lifeos task lint`: every task has a valid `status`, an `id` equal to its file name, a `done_when`, and a proof when it is `done`.
+3. A backup command and a restore command: a dated zip of the logs and tasks kept on this laptop only, with a test that a restore gives back identical bytes.
+4. A broken ledger chain names the first bad record and stops; it never repairs by itself.
+5. A two-process test for `lifeos rate` and `lifeos unrate` on the same file: no lost or doubled row.
+6. Count every `os.replace` retry in a small local counter file and show it in `doctor`, so the Windows error is measured, not guessed.
+7. `dash-export` writes all its files or none (stage in a folder, then rename).
+8. `ask` takes a `--run-id` and is idempotent on retry, as the MCP tools already are.
+
+### B. Seats and answers
+9. Classify seat failures (timeout, quota, sign-in, bad format) in the run record and show the split in `earn`.
+10. `lifeos ask --dry-run`: print exactly what would be sent (pack and task) and what the guard says, send nothing.
+11. `lifeos route` shows the seat with the best mean rating per kind, only when it has at least three ratings; advice, never a silent switch.
+12. `lifeos today` lists answers older than a day that have no rating yet.
+13. A local-seat retest script: three fixed public prompts for Qwen and Ollama, timings written to `docs/LIVE-CHECK.md`. (owner: run it after the RAM is in)
+14. A warm-up command: load a local model once before use, so the first call is not the slow one. (owner: decide after the retest)
+15. `doctor` shows each seat's rest-until time and last smoke test age.
+16. Gemini and Codex answers cut off mid-sentence are flagged by the free check.
+
+### C. Privacy
+17. The ledger stores a hash of the pack that was sent, so you can prove later what left without keeping the text.
+18. The guard also reads a seat's answer before it is saved to a task file; a secret in an answer is redacted and noted.
+19. `egress --task <id>`: what left for one task.
+20. A canary test: a fake secret planted in a task, a note and `me.md` must never reach any adapter's input.
+
+### D. Better checks
+21. Structured `done_when` parts the free check can test: a number, a file path that exists, a quoted line that is in the source.
+22. When two seats answer the same task, flag numbers that differ between them.
+23. `lifeos prove` adds the commit or pull request number when the proof is a merged change.
+
+### E. Cockpit and daily use
+24. `dash-export` also writes egress, latency, seats and the merged-PR list, so one command refreshes the whole cockpit.
+25. `scripts/refresh_cockpit.py` runs the export and prints the exact upload steps and dataset names.
+26. `today` shows waiting items with days left, from `waiting.json`.
+27. `sunday` writes `reports/week-YYYY-WW.md`, so every week leaves a file.
+
+### F. Test strength and release
+28. Cut v0.5.1 from Unreleased. (owner publishes the tag and release)
+29. Break-the-guard test: remove each guard pattern in turn and prove a test fails (every pattern is covered).
+30. Seeded property tests for CSV round trip, task id parsing and date windows, with the seed printed on failure.
 
