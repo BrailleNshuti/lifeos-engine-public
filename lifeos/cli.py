@@ -8,7 +8,7 @@ import subprocess
 import sys
 
 from . import __version__
-from . import commandsdoc, dashdata, egress, nextup, selfcheck, sunday, taskclose, waiting
+from . import commandsdoc, dashdata, egress, nextup, ratewalk, selfcheck, sunday, taskclose, waiting
 from . import backup, bakeoff, calibrate, arch, canary, completion, console, debate, decision, demo, digest, earn, experiment, prove, savings, selftest, cockpit, exam, export, governor, history, hooks, learn, lint, mistakes, numbers, panel, pipeline, redact, release, today, vocab, kaizen, lab, log, mcp, replay, router, runs, seats, schema, showcase, sortcsv, stale, timeline, study, verify
 from .delegate import run_delegate
 from .notes import post_notes, pre_notes
@@ -134,6 +134,12 @@ def cmd_panel(args):
 
 def cmd_rate(args):
     home = find_home(args.home)
+    if getattr(args, "walk", False):
+        ratewalk.walk(home)
+        return 0
+    if not (args.task and args.model and args.score is not None):
+        print("lifeos: give TASK MODEL SCORE, or use --walk to rate the answers that are still unrated", file=sys.stderr)
+        return 2
     try:
         from .context import task_file
         from .delegate import task_text
@@ -778,9 +784,10 @@ def build_parser():
     dele.set_defaults(func=cmd_delegate)
 
     rate_p = sub.add_parser("rate", help="rate a model's work on a task from 1 to 5 (feeds `learn` and `delegate --learned`)")
-    rate_p.add_argument("task")
-    rate_p.add_argument("model")
-    rate_p.add_argument("score", type=int)
+    rate_p.add_argument("task", nargs="?")
+    rate_p.add_argument("model", nargs="?")
+    rate_p.add_argument("score", type=int, nargs="?")
+    rate_p.add_argument("--walk", action="store_true", help="rate every answer `today` lists as unrated, at the prompt")
     rate_p.add_argument("--note", default="")
     rate_p.set_defaults(func=cmd_rate)
 

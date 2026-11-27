@@ -4,6 +4,7 @@ Dates are release dates. Newest first.
 
 ## [Unreleased]
 
+- New (round 5 item 7): `lifeos rate --walk` goes through every answer that `today` lists as unrated: it shows the task, the seat and the start of the answer, asks for a score (s skips, q stops) and a note (a 1 or a 2 needs one). No model call. `tests/test_rate_walk.py`.
 - Change (round 5 item 13): the `sunday` page and the file `--save` writes now list the waiting items with the days left or days late. `tests/test_sunday_save.py`.
 - Docs: round 5 of the backlog (20 items, each with the evidence behind it) added as section 11 of `docs/HANDOFF.md`.
 - New (round 5 items 10 and 11): `lifeos next` names the one thing to do now with its exact command (damaged files, overdue task, unrated answer, waiting item due within three days, next open task, in that order; read only); `lifeos task block ID --reason TEXT` pauses a task on purpose with a dated reason. `docs/DAILY.md` starts with both. `tests/test_next.py`, `tests/test_task_close.py`.
