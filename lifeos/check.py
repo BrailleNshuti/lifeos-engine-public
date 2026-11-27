@@ -18,6 +18,7 @@ PROMISE = re.compile(r"\b(?:i['’]?ll|i will|i am going to|i['’]?m going to)\
 QUOTE = re.compile("[\"\u201c]([^\"\u201c\u201d\n]{25,}?)[\"\u201d]")
 LONG_ANSWER = 8000  # characters
 QUOTE_MIN_SOURCE = 1500  # below this the task only points at pages; the quotes cannot be checked against it
+BACKTICK = re.compile(r"`([^`\n]{40,}?)`")  # only for verify-quotes: a long span with a space is a quoted line, a path is not
 URL = re.compile(r"https?://", re.I)
 DATE = re.compile(r"\b20\d\d-\d\d-\d\d\b|\b\d{1,2}\.\s?\d{1,2}\.\s?20\d\d\b|\b20\d\d\b")
 
@@ -50,13 +51,17 @@ def _done_when_flags(text, done_when):
     return flags
 
 
-def quote_report(text, source):
+def quote_report(text, source, backticks=False):
     """(found, missing): the quoted lines (25 characters or more) of an answer that are, and are not, in the source.
-    Case and spacing are ignored. No minimum length of the source here; `_quote_flags` adds that rule."""
+    Case and spacing are ignored. With `backticks` a long span in backticks that holds a space also counts as a quote.
+    No minimum length of the source here; `_quote_flags` adds that rule and never reads backticks."""
     haystack = _squash(source or "")
+    spans = [m.group(1) for m in QUOTE.finditer(text or "")]
+    if backticks:
+        spans += [m.group(1) for m in BACKTICK.finditer(text or "") if " " in m.group(1).strip()]
     found, missing = [], []
-    for match in QUOTE.finditer(text or ""):
-        (found if _squash(match.group(1)) in haystack else missing).append(match.group(1))
+    for span in spans:
+        (found if _squash(span) in haystack else missing).append(span)
     return found, missing
 
 
