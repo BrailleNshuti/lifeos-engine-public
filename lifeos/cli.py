@@ -8,7 +8,7 @@ import subprocess
 import sys
 
 from . import __version__
-from . import commandsdoc, dashdata, egress, sunday
+from . import commandsdoc, dashdata, egress, selfcheck, sunday
 from . import backup, bakeoff, calibrate, arch, canary, completion, console, debate, decision, demo, digest, earn, experiment, prove, savings, selftest, cockpit, exam, export, governor, history, hooks, learn, lint, mistakes, numbers, panel, pipeline, redact, release, today, vocab, kaizen, lab, log, mcp, replay, router, runs, seats, schema, showcase, sortcsv, stale, timeline, study, verify
 from .delegate import run_delegate
 from .notes import post_notes, pre_notes
@@ -644,6 +644,12 @@ def cmd_commands(args):
     return 0
 
 
+def cmd_selfcheck(args):
+    problems = selfcheck.run(find_home(args.home))
+    print(selfcheck.render(problems))
+    return selfcheck.exit_code(problems)
+
+
 def cmd_egress(args):
     home = find_home(args.home)
     print(egress.render(egress.report(home, days=args.days), args.days))
@@ -838,6 +844,8 @@ def build_parser():
     hm_p = sub.add_parser("help-me", help="print the daily loop: make a task, ask, check, rate, review the week")
     hm_p.set_defaults(func=cmd_help_me)
 
+    sc_p = sub.add_parser("selfcheck", help="check your own files: ledger chain, task files, ratings log, waiting list (reads only)")
+    sc_p.set_defaults(func=cmd_selfcheck)
     eg_p = sub.add_parser("egress", help="what left this laptop: calls, tokens and failures per cloud seat (counts only, never text)")
     eg_p.add_argument("--days", type=int, default=30)
     eg_p.set_defaults(func=cmd_egress)
