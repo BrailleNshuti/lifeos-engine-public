@@ -18,6 +18,8 @@ Read this first. Keep it short; every bullet stays under 400 characters (a test 
 - Data safety: two processes appending to a CSV log lost rows, and the creation race reproduced the Windows `os.replace` winerror 5 error; both fixed under the store lock (PR 97 and PR 100). New atomic files are 0644 (PR 94).
 - Tests: seat failure injection, crash recovery, a full disk, two processes, a big ledger, a shuffle script and a weekly Windows soak workflow (`.github/workflows/soak.yml`).
 
+- Round 4 (pull requests 117 to 127): `selfcheck`, `backup --restore`, all-or-none `dash-export`, a write-retry tally in `doctor`, unrated answers in `today`, failure causes in `earn`, `sunday --save`, a guard mutation test, seeded property tests, a canary test, and more (see CHANGELOG).
+
 ## Open
 
 - **Windows write error:** reproduced on demand only by racing unlocked writers (fixed). Ten full runs and 8,000 direct writes never fired the retry. Whether that caused every earlier failure is not proven; the weekly soak watches for it.
@@ -40,5 +42,6 @@ Read this first. Keep it short; every bullet stays under 400 characters (a test 
 
 ## Next
 
-- Use the engine on real tasks, rate every answer, and pick the next feature from the numbers (`lifeos earn`, `lifeos sunday`, `lifeos egress`).
-- Round 3 of the backlog is in `docs/HANDOFF.md` section 9; still open: error-message audit, the Grok wording experiment (needs the cloud), seat health age, the release.
+- **Continue from `docs/HANDOFF.md` section 10 ("Round 4 status").** Still open there: 13 and 14 (owner: after the RAM), 23 (needs the owner's answer: a proof line that names the pull request?), 28 (owner publishes v0.5.1).
+- Then write round 5 from what real use shows: run tasks, rate each answer, read `lifeos sunday` and `lifeos today`, and build what the numbers ask for.
+- Work flow that never changes: branch, tests first, `lifeos guard $(git ls-files)`, pull request, 12 green checks, plain merge. Never add Co-Authored-By or session lines. Keep this file under 400 characters per bullet (a test checks).
