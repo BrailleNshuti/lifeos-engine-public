@@ -4,6 +4,7 @@ Dates are release dates. Newest first.
 
 ## [Unreleased]
 
+- Fix and tests (round 3 items 3, 10, 13, 16): `redact` left the second half of a token that was split over two lines (the guard reported only the first line); the guard now reports both lines of a split token, so a redacted copy holds neither half. New tests: a lock held past its timeout gives an error that names the lock; a home with spaces, non-ASCII characters, a trailing separator or a relative path works for `doctor`, `earn` and `task new`; redact then guard finds nothing for every canary kind; no answer or prompt text reaches the run ledger. `tests/test_round3_batch_a.py`.
 - New: `lifeos unrate TASK [MODEL]` removes the last rating of a task (a mistake), under the store lock; `lifeos rate` warns when a score of 2 or less has no note. Tests first in `tests/test_unrate.py` (6 of 9 failed before). Items 21 and 22 of the round 3 backlog.
 - Docs: `docs/HANDOFF.md` section 9 lists thirty more items for the next round (reliability, privacy, seats and answer quality, documentation), each with a clear end; `STATE.md` logs round 2.
 - New: `lifeos delegate` now moves a seat that has no tool for the job (`seats.CANNOT`) behind the seats that do, and says so in the route reason ("rerouted: grok has no tool for this job, so gemini goes first"). Nothing is added or dropped, so a private chain stays local; an explicit seat is never moved; `ask` still only prints the hint. Tests first in `tests/test_seat_reroute.py` (6 of 8 failed before).
