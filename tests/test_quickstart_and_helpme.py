@@ -24,7 +24,11 @@ def test_the_first_screen_names_commands_that_exist():
     assert [c for c in found if c not in names] == []
 
 
-def test_the_quickstart_commands_that_are_safe_to_run_do_run(tmp_path, monkeypatch, capsys):
+def test_the_quickstart_commands_that_are_safe_to_run_do_run(tmp_path, demo, monkeypatch, capsys):
+    import shutil
+    home = tmp_path / "home"
+    shutil.copytree(demo, home)
+    monkeypatch.setenv("LIFEOS_HOME", str(home))
     monkeypatch.chdir(home)
     assert main(["demo"]) == 0
     assert main(["canary"]) == 0
