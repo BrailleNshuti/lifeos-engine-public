@@ -107,6 +107,7 @@ CANNOT = {
                           "2026-11-26). Name pages that allow it, or look it up yourself."),
         (r"\b(edit|modify|rename|commit|create a file|write to|save to)\b", "grok has no tools for files (only web_fetch): "
                           "it can answer in the reply, not change or save anything."),
+        (r"http://|https?://(?:localhost|127\.|10\.|192\.168\.|172\.(?:1[6-9]|2[0-9]|3[01])\.)", "grok can only fetch public https pages: a plain http or private address will not work and should not be sent."),
         (r"\b(run|execute)\b.{0,30}\b(test|tests|suite|command|script)", "grok has no shell (only web_fetch): "
                           "it cannot run anything."),
     ],

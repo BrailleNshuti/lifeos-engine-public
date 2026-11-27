@@ -45,3 +45,13 @@ def render(rows, days):
         lines.append(f"{r['seat']:<8} {r['calls']:>4} sent {r['failed']:>3} failed {r['blocked']:>3} blocked  "
                      f"{r['tokens']:>9,} tokens  last {r['last']}")
     return chr(10).join(lines)
+
+
+def over_share(home, today=None):
+    """One warning per cloud seat whose tokens in the last 7 days are above its weekly share (`seats.SHARES`)."""
+    out = []
+    for row in report(home, today=today, days=7):
+        share = seats.SHARES.get(row["seat"])
+        if share and row["tokens"] > share:
+            out.append(f"WARNING: {row['seat']} used {row['tokens']:,} tokens in the last 7 days; its weekly share is {share:,}.")
+    return out
