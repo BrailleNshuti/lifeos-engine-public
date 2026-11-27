@@ -290,3 +290,50 @@ Each item names the evidence. Same workflow and rules as above. Items marked (ow
 5. (owner) Ignore `.last-backup` in the notes repo, and decide whether old answers (three are unrated) get rated with `rate --walk` or are left.
 6. Real use: run five new real tasks across the seats, rate each one, and let `sunday` show the result before any new feature is chosen.
 7. (owner) After the RAM: Qwen retest, then v0.5.1 published, then v0.5.2 cut from rounds 5 and 6.
+
+
+## 13. Round 7: thirty items from a full scan (written 2026-11-28; the owner was away and asked for a deep scan)
+
+What the scan looked at: the installed package in a clean virtual environment, every command with `--help` and with no arguments (66 commands, no traceback), module and test coverage, function sizes (17 of 638 functions are over 60 lines; `build_parser` has 425), the real notes repo, the seat table, the first blind review of the new code (Gemini found five real bugs in it), and the owner's rules and deadlines in `now.md`. Same workflow and rules as above. Items marked (owner) need his yes or his hands.
+
+### A. Packaging and release
+1. Done: `lifeos demo` and `selftest` work after a plain `pip install` (the demo home is bundled; found in a clean virtual environment).
+2. Done: `python -m lifeos` works (the module had no `__main__`).
+3. The release checklist and a CI job install the built wheel into a clean environment and run `demo` and `selftest`, so the next packaging miss is caught before a release.
+4. A test that `lifeos.__version__`, `pyproject.toml` and the newest CHANGELOG heading agree.
+5. (owner) Publish v0.5.1 (tag at the merge of pull request 132, commit 60d6c53), then cut v0.5.2 from rounds 4 to 7.
+
+### B. Review the new code (rule 7, blind)
+6. Blind review of `nextup`, `ratewalk`, the read retries in `store` and `today.coverage` (Gemini now; Codex after its limit resets; Grok needs credits). Check each finding by hand; fix the real ones with a failing test first.
+7. Blind review of the `dash-export` rollback, `backup --restore` and `selfcheck`.
+8. `lifeos review` prints a plain summary when one reviewer fails and the others answer ("2 asked, 1 answered, codex rested") and uses an exit code that says partial, not failed.
+
+### C. Seat health
+9. Treat "out of credits" (HTTP 402, seen on Grok on 2026-11-27) as a resting reason in `seats`, `doctor` and the `delegate` chain, with the message and no retry.
+10. `seats` shows the age of each seat's last good call, so a seat that has not answered for weeks is visible.
+11. (owner) After the RAM: the Qwen retest and the warm-up decision.
+
+### D. The real-use loop (the aim of the project)
+12. Deadlines: read the `## Deadlines` section of `now.md` and show the next ones with the days left in `today` and `next`, so the owner's real outside dates are never found by accident.
+13. `today` warns when `now.md` says "updated" more than 14 days ago (it says 2026-11-13).
+14. `sunday` ends with one proposed small fix for the week (rule 11), chosen from the numbers: the kind with the lowest ratings, the unrated answers, the slowest seat, an unused part.
+15. `earn` writes the "did it earn its place" question for each unused part (`vocab`, `decide` and `debate` were never used in 30 days) so the Sunday review can answer it. (owner decides pause or remove)
+16. Run five more real tasks across the seats, rate each one, and keep the numbers in `sunday` (ongoing).
+
+### E. Quality and tests
+17. Split `build_parser` (425 lines) into one registration function per command group, with no change in behaviour (the help text is checked by the commands page test).
+18. Split `run_review` (217 lines) into steps; the existing tests must pass unchanged.
+19. A test that every module is imported by at least one test (the scan found `cockpit_page` the only one without), kept as a permanent check.
+20. A sample-per-flag test for the free answer check, like the guard's: each flag has a text that raises it and a near miss that does not.
+21. Seeded property tests for `days_left`, `sunday.week_file` and the ISO week around new year.
+22. `selfcheck` also reads predictions, experiments, vocabulary and decisions, not only the ledger, tasks, ratings and waiting list.
+23. A test that `task new` and `task close` refuse a secret on the command line the way the MCP tool does.
+
+### F. Documentation and the owner
+24. `docs/COCKPIT.md`: what the cockpit page shows, the seven datasets, and the exact refresh steps (today only the script's help says it).
+25. `docs/README.md`: an index of every document in `docs/` with one line each, so a new model finds the right one.
+26. `STATE.md` and this file get a "next 5 actions" block that a script (`scripts/open_items.py`) prints from the status lines, so the order is never guessed.
+27. (owner) Decide the 44 commits on public `main` that carry a session link in the message, the `dependabot[bot]` entry, and the 50 merged remote branches.
+28. (owner) Rate the three old unrated answers with `rate --walk`, or decide to leave them.
+29. (owner) Ignore `.last-backup` in the notes repo and add `lifeos next` to the morning routine.
+30. Keep the shuffled-order run (from a separate worktree) as a routine after every ten merged pull requests, and log the seed in `STATE.md`.
