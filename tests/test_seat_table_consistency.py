@@ -4,7 +4,6 @@ import shutil
 import pytest
 
 from lifeos import ask, delegate, seats
-from lifeos.ask import ADAPTERS
 
 
 def test_every_seat_in_the_cannot_table_is_a_real_seat():
@@ -34,7 +33,9 @@ def test_a_timeout_on_the_first_seat_falls_over_and_says_timeout(home):
     def slow(prompt):
         raise ask.AskError("codex failed: did not answer within 600 s")
 
-    out = delegate.run_delegate(home, "T-261116", adapters={**ADAPTERS, "codex": slow})
+    adapters = {name: (lambda prompt, name=name: f"ANSWER FROM {name}") for name in seats.CHAINS}  # no real model is ever called
+    adapters["codex"] = slow
+    out = delegate.run_delegate(home, "T-261116", adapters=adapters)
     assert out["tried"][0] == "codex" and len(out["tried"]) >= 2
     assert out["failed"][0]["kind"] == "timeout"
     assert "timeout" in out["reason"] and "fell back" in out["reason"]
