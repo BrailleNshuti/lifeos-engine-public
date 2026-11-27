@@ -4,6 +4,7 @@ Dates are release dates. Newest first.
 
 ## [Unreleased]
 
+- Test: T3 to T6 of the handoff backlog (36 cases, no production change): the local-model wait reaches the local call and the timeout message names it (`tests/test_ollama_timeout.py`); the task file's `kind:` line and the inputs of the free check on CRLF files, and the quote check at its 1,500-character and 25-character edges (`tests/test_kind_and_inputs.py`).
 - Tests: the `lifeos ask` CLI path now has an end-to-end fake-adapter check for its seat hint, free CHECK line and successful exit code.
 - Tests: direct coverage for the pre-call seat hint and post-call answer check, including missing task files that must never raise.
 - Docs: `docs/HANDOFF.md`, the document for the next model to continue the build: rules, workflow, traps, a test and feature backlog with a done-when for each, and how to log progress. `AGENTS.md` points to it.
