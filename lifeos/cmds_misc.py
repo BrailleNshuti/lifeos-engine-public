@@ -3,7 +3,7 @@ import datetime as dt
 import json
 from pathlib import Path
 import sys
-from . import vocab, lab, seats, sortcsv, study
+from . import diag, vocab, lab, seats, sortcsv, study
 from .check import QUOTE_MIN_SOURCE, quote_report, task_check_inputs
 from .ask import PROVIDERS, AskError, ToolMissing, provider_status
 from .guard import scan_paths, scan_staged, staged_files
@@ -175,6 +175,9 @@ def cmd_doctor(args):
         problems += flag != "ok"
         print(f"  {flag:<9} {name:<10} {lines:>3} lines  ~{tokens} tokens")
     print(f"Always-loaded core: ~{total} tokens per conversation that reads rules, me and now.")
+    retries = diag.stats(home)
+    if retries["recovered"] or retries["failed"]:
+        print(f"  windows   {retries['recovered']} write(s) needed a retry and worked, {retries['failed']} failed (last {retries['last']}); see logs/replace-retries.log")
     if total > CORE_TOKEN_CAP:
         print(f"  too big   core is ~{total} tokens, over the {CORE_TOKEN_CAP}-token cap. Trim rules, me or now.")
         problems += 1

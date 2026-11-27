@@ -15,10 +15,10 @@ def home(tmp_path, demo):
     return target
 
 
-def test_the_export_writes_five_json_files(home, tmp_path):
+def test_the_export_writes_seven_json_files(home, tmp_path):
     out = tmp_path / "out"
     written = dashdata.export(home, out, commands=56)
-    assert sorted(p.name for p in written) == ["numbers.json", "ratings.json", "runs.json", "tasks.json", "waiting.json"]
+    assert sorted(p.name for p in written) == ["egress.json", "latency.json", "numbers.json", "ratings.json", "runs.json", "tasks.json", "waiting.json"]
     for path in written:
         assert isinstance(json.loads(path.read_text(encoding="utf-8")), list)
 
@@ -67,3 +67,30 @@ def test_the_command_prints_what_it_wrote(home, tmp_path, capsys, monkeypatch):
     assert main(["dash-export", "--out", str(tmp_path / "o")]) == 0
     out = capsys.readouterr().out
     assert "numbers.json" in out and "private" in out.lower()
+
+
+def test_a_failure_while_staging_leaves_the_old_files_untouched_and_no_debris(home, tmp_path, monkeypatch):
+    out = tmp_path / "out"
+    dashdata.export(home, out, commands=56)
+    before = {p.name: p.read_bytes() for p in out.iterdir()}
+    real = dashdata.Path.write_bytes
+    calls = {"n": 0}
+
+    def flaky(self, data):
+        calls["n"] += 1
+        if calls["n"] == 4:
+            raise OSError("disk full")
+        return real(self, data)
+    monkeypatch.setattr(dashdata.Path, "write_bytes", flaky)
+    with pytest.raises(OSError):
+        dashdata.export(home, out, commands=56)
+    monkeypatch.undo()
+    assert {p.name: p.read_bytes() for p in out.iterdir()} == before
+
+
+def test_egress_and_latency_files_hold_counts_only(home, tmp_path):
+    out = tmp_path / "out"
+    dashdata.export(home, out, commands=56)
+    for name, keys in (("egress.json", {"seat", "sent", "failed", "tokens", "last"}), ("latency.json", {"seat", "ok", "failed", "median_s", "worst_s"})):
+        rows = json.loads((out / name).read_text(encoding="utf-8"))
+        assert all(set(r) == keys for r in rows)

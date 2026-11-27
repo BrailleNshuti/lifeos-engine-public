@@ -74,3 +74,12 @@ def test_the_cli_prints_the_table(home, capsys):
     assert main(["egress"]) == 0
     out = capsys.readouterr().out
     assert "codex" in out and "1,234" in out
+
+
+def test_egress_can_be_limited_to_one_task(tmp_path):
+    write_runs(tmp_path, [rec("claude", 1000, task_id="T-261127-a"), rec("claude", 500, task_id="T-261127-b"), rec("codex", 700, task_id="T-261127-a")])
+    rows = {r["seat"]: r for r in egress.report(tmp_path, today=TODAY, task="T-261127-a")}
+    assert rows["claude"]["tokens"] == 1000 and rows["codex"]["tokens"] == 700
+    assert egress.report(tmp_path, today=TODAY, task="T-999999") == []
+    assert "for T-261127-a" in egress.render(list(rows.values()), 30, task="T-261127-a")
+    assert "Nothing left this laptop for T-9 " in egress.render([], 30, task="T-9") + " "

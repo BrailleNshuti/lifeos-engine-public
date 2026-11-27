@@ -53,3 +53,39 @@ def test_cli(home, tmp_path, capsys):
     assert main(["backup", "--check", str(folder)]) == 0
     (folder / "logs" / "ledger.csv").write_text("bad", encoding="utf-8")
     assert main(["backup", "--check", str(folder)]) == 1
+
+
+def test_restore_gives_back_identical_bytes_and_keeps_what_it_replaced(home, tmp_path):
+    folder = backup.make(home, tmp_path / "out", today=D)
+    original = {p.name: p.read_bytes() for p in (home / "logs").iterdir()}
+    (home / "logs" / "ledger.csv").write_text("damaged", encoding="utf-8")
+    (home / "logs" / "extra.csv").write_text("new", encoding="utf-8")
+    aside = backup.restore(home, folder, now=dt.datetime(2026, 11, 28, 9, 0, 0))
+    assert {p.name: p.read_bytes() for p in (home / "logs").iterdir()} == original
+    assert aside.name == "logs.before-restore-20261128-090000"
+    assert (aside / "ledger.csv").read_text() == "damaged" and (aside / "extra.csv").exists()
+
+
+def test_a_backup_that_was_changed_is_refused_and_nothing_moves(home, tmp_path):
+    folder = backup.make(home, tmp_path / "out", today=D)
+    (folder / "logs" / "ledger.csv").write_text("tampered", encoding="utf-8")
+    before = (home / "logs" / "runs.jsonl").read_bytes()
+    with pytest.raises(backup.BackupError, match="does not match"):
+        backup.restore(home, folder)
+    assert (home / "logs" / "runs.jsonl").read_bytes() == before
+    assert not list(home.glob("logs.before-restore-*"))
+
+
+def test_restore_into_a_home_without_logs_works(home, tmp_path):
+    import shutil
+    folder = backup.make(home, tmp_path / "out", today=D)
+    shutil.rmtree(home / "logs")
+    assert backup.restore(home, folder) is None
+    assert (home / "logs" / "runs.jsonl").exists()
+
+
+def test_restore_command_reports_and_a_backup_inside_the_home_is_refused(home, tmp_path, capsys):
+    folder = backup.make(home, tmp_path / "out", today=D)
+    assert main(["--home", str(home), "backup", "--restore", str(folder)]) == 0
+    assert "Restored" in capsys.readouterr().out
+    assert main(["--home", str(home), "backup", "--restore", str(home / "logs")]) == 2

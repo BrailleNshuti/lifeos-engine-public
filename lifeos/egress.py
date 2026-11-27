@@ -8,13 +8,15 @@ from . import seats
 from .store import read_run_records
 
 
-def report(home, today=None, days=30):
+def report(home, today=None, days=30, task=None):
     today = today or dt.date.today()
     since = today - dt.timedelta(days=days)
     out = {}
     for r in read_run_records(Path(home)):
         seat = str(r.get("model") or "").split(":", 1)[0].strip()
         if seat not in seats.REMOTE:
+            continue
+        if task and not str(r.get("task_id") or "").startswith(task):
             continue
         try:
             day = dt.date.fromisoformat(str(r.get("date") or str(r.get("started_at") or "")[:10])[:10])
@@ -37,10 +39,11 @@ def report(home, today=None, days=30):
     return sorted(out.values(), key=lambda row: row["seat"])
 
 
-def render(rows, days):
+def render(rows, days, task=None):
+    where = f" for {task}" if task else ""
     if not rows:
-        return f"Nothing left this laptop in the last {days} days."
-    lines = [f"What left this laptop (last {days} days; counts only, never text)", ""]
+        return f"Nothing left this laptop{where} in the last {days} days."
+    lines = [f"What left this laptop{where} (last {days} days; counts only, never text)", ""]
     for r in rows:
         lines.append(f"{r['seat']:<8} {r['calls']:>4} sent {r['failed']:>3} failed {r['blocked']:>3} blocked  "
                      f"{r['tokens']:>9,} tokens  last {r['last']}")

@@ -68,3 +68,35 @@ def check(folder):
     errors += [f"{p.relative_to(folder).as_posix()}: not in the manifest" for p in _files(folder)
                if p.relative_to(folder).as_posix() not in known]
     return {"ok": not errors, "files": len(man["files"]), "head": man.get("head"), "errors": errors}
+
+
+def restore(home, folder, now=None):
+    """Put a checked backup's logs/ back into the home. The backup must pass `check` first; the logs/ it replaces are moved to
+    `logs.before-restore-<time>` inside the home, never deleted, so a restore can itself be undone. Returns the moved folder
+    (or None when the home had no logs/)."""
+    home, folder = Path(home).resolve(), Path(folder).resolve()
+    if folder == home or home in folder.parents:
+        raise BackupError("The backup folder must be outside your home.")
+    res = check(folder)
+    if not res["ok"]:
+        raise BackupError("The backup does not match its manifest, so nothing was restored: " + "; ".join(res["errors"][:3]))
+    stamp = (now or dt.datetime.now()).strftime("%Y%m%d-%H%M%S")
+    aside = None
+    live = home / "logs"
+    if live.exists():
+        aside = home / f"logs.before-restore-{stamp}"
+        if aside.exists():
+            raise BackupError(f"{aside.name} already exists; try again in a second.")
+        live.rename(aside)
+    try:
+        shutil.copytree(folder / "logs", live)
+        copied = {p.relative_to(home).as_posix(): _sha(p) for p in _files(home)}
+        wanted = json.loads((folder / MANIFEST).read_text(encoding="utf-8"))["files"]
+        if copied != wanted:
+            raise BackupError("The restored files do not match the manifest.")
+    except Exception:
+        shutil.rmtree(live, ignore_errors=True)
+        if aside is not None:
+            aside.rename(live)
+        raise
+    return aside

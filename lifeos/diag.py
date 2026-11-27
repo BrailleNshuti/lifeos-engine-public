@@ -12,6 +12,7 @@ import json
 import os
 import sys
 import threading
+from pathlib import Path
 
 ENV = "LIFEOS_REPLACE_DIAG"
 ERROR_MORE_DATA = 234
@@ -71,8 +72,46 @@ def _append(rec):
             out.write(json.dumps(rec, sort_keys=True) + "\n")
 
 
+TALLY = "replace-retries.log"
+
+
+def _home_of(dst):
+    """The nearest folder above `dst` that holds now.md and logs/ (the home folder), or None."""
+    for folder in Path(dst).resolve().parents:
+        if (folder / "now.md").exists() and (folder / "logs").is_dir():
+            return folder
+    return None
+
+
+def _tally(dst, outcome, attempts):
+    """One line in logs/replace-retries.log per retried or failed replace, so `doctor` can say how often it happens.
+    Counts only: the date, the outcome and the number of tries; never a path or any content. Never raises."""
+    try:
+        home = _home_of(dst)
+        if home is not None:
+            with open(home / "logs" / TALLY, "a", encoding="utf-8") as out:
+                out.write(f"{dt.date.today().isoformat()} {outcome} {attempts}"+chr(10))
+    except Exception:
+        return None
+
+
+def stats(home):
+    """{'recovered': n, 'failed': n, 'last': 'YYYY-MM-DD' or ''} from the tally file. Never raises."""
+    out = {"recovered": 0, "failed": 0, "last": ""}
+    try:
+        for line in (Path(home) / "logs" / TALLY).read_text(encoding="utf-8", errors="replace").splitlines():
+            parts = line.split()
+            if len(parts) == 3 and parts[1] in out:
+                out[parts[1]] += 1
+                out["last"] = max(out["last"], parts[0])
+    except OSError:
+        pass
+    return out
+
+
 def recovered(err, src, dst, attempts):
     """A replace that failed with a sharing violation and then worked. File only, no noise: it is how the retry is measured."""
+    _tally(dst, "recovered", attempts)
     try:
         _append({"event": "os.replace recovered", "time": _now(), "errno": err.errno,
                  "winerror": getattr(err, "winerror", None), "dst": str(dst), "attempts": attempts, "pid": os.getpid()})
@@ -94,6 +133,7 @@ def describe(err, src, dst, attempts=1):
 
 def report(err, src, dst, attempts=1):
     """Write the diagnostic line(s) for a replace that finally failed. Never raises, never retries."""
+    _tally(dst, "failed", attempts)
     try:
         rec = describe(err, src, dst, attempts)
         names = ", ".join(f"{h['pid']} {h['name']}" for h in rec["holders_dst"] + rec["holders_src"]) or "none seen"
