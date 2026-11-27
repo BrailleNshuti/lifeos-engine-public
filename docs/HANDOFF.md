@@ -312,7 +312,7 @@ What the scan looked at: the installed package in a clean virtual environment, e
 
 ### C. Seat health
 9. Done: "out of credits" (HTTP 402) is a resting reason in `seats`, `doctor` and the `delegate` chain, with the message and no retry (pull request 155).
-10. `seats` shows the age of each seat's last good call, so a seat that has not answered for weeks is visible.
+10. Done: `seats` shows the age of each seat's last good call, so a seat that has not answered for weeks is visible.
 11. (owner) After the RAM: the Qwen retest and the warm-up decision.
 
 ### D. The real-use loop (the aim of the project)

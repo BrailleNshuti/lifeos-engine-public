@@ -338,6 +338,26 @@ def _spend(records, now):
     return newest, tokens, calls
 
 
+def _last_good_days(records, now):
+    """Days since each seat's newest real successful call, across the full ledger."""
+    ages = {}
+    for rec in records or []:
+        if (rec.get("status") != "ok" or rec.get("command") not in ("ask", "review", "smoke", "debate")
+                or (rec.get("command") == "debate" and rec.get("source") == "manual")):
+            continue
+        seat = seat_name(rec.get("model"))
+        if not seat:
+            continue
+        finished = _finished(rec)
+        try:
+            day = finished.date() if finished else dt.date.fromisoformat(str(rec.get("date") or "")[:10])
+        except ValueError:
+            continue
+        age = max(0, (_aware(now).date() - day).days)
+        ages[seat] = min(ages.get(seat, age), age)
+    return ages
+
+
 def budget(records, now):
     """The one cloud budget. A seat's limit is the lower of its share and what the week has left."""
     _newest, tokens, calls = _spend(records, now)
@@ -481,10 +501,11 @@ def _other(seat):
 
 
 def table(records, now):
-    """One row per seat: what it is good at, 7-day spend against its one limit, rest, and who replaces it."""
+    """One row per seat: what it is good at, last success, 7-day spend, rest, and who replaces it."""
     now = _aware(now)
     resting = pressure(records, now)
     plan = budget(records, now)
+    last_good = _last_good_days(records, now)
     rows = []
     for seat in ("claude", "codex", "gemini", "grok", "qwen", "ollama"):
         info = plan["seats"].get(seat)
@@ -493,17 +514,19 @@ def table(records, now):
         rows.append({
             "seat": seat, "good_at": GOOD_AT[seat], "local": seat in LOCAL,
             "used": info["used"] if info else None, "limit": info["limit"] if info else None,
-            "calls": info["calls"] if info else None, "resting": resting.get(seat, ""), "replacement": replacement,
+            "calls": info["calls"] if info else None, "last_good_days": last_good.get(seat),
+            "resting": resting.get(seat, ""), "replacement": replacement,
         })
     return rows
 
 
 def render_table(rows):
-    lines = [f"{'seat':<8} {'7-day tokens':<16} {'state':<10} {'replacement':<12} good at"]
+    lines = [f"{'seat':<8} {'7-day tokens':<16} {'last good':<10} {'state':<10} {'replacement':<12} good at"]
     for row in rows:
         spend = "local, free" if row["limit"] is None else f"{row['used']}/{row['limit']}"
+        last = "never" if row["last_good_days"] is None else f"{row['last_good_days']}d"
         state = "resting" if row["resting"] else "open"
-        lines.append(f"{row['seat']:<8} {spend:<16} {state:<10} {row['replacement'] or '-':<12} {row['good_at']}")
+        lines.append(f"{row['seat']:<8} {spend:<16} {last:<10} {state:<10} {row['replacement'] or '-':<12} {row['good_at']}")
         if row["resting"]:
             lines.append(f"         {row['resting']}")
     return "\n".join(lines)
