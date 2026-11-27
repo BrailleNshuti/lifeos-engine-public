@@ -576,7 +576,9 @@ def append_csv_row(path, values):
     path = Path(path)
     if not path.exists():
         return False
-    atomic_write_bytes(path, _prepare_csv_row_bytes(path, values))
+    home = path.parent.parent if path.parent.name == "logs" else None  # the store lock lives in <home>/logs
+    with store_lock(home):  # read, add the row and replace as one step: two processes must not overwrite each other
+        atomic_write_bytes(path, _prepare_csv_row_bytes(path, values))
     return True
 
 
