@@ -62,3 +62,23 @@ def test_cli_rate_uses_a_kind_line_and_warns_about_a_missing_review(tmp_path, de
     captured = capsys.readouterr()
     assert "document review" in captured.out
     assert "review step" in captured.err  # the demo route names a Codex review and the file holds none
+
+
+@pytest.mark.parametrize("model,text,word", [
+    ("grok", "Edit lifeos/store.py and commit the change", "files"),
+    ("grok", "run the test suite and tell me what fails", "shell"),
+    ("qwen", "What is the latest news on the exam dates today", "web"),
+    ("ollama", "what is the price of bitcoin today", "web"),
+])
+def test_a_seat_is_warned_off_jobs_it_has_no_tool_for(model, text, word):
+    assert word in seats.seat_warning(model, text)
+
+
+@pytest.mark.parametrize("model,text", [
+    ("claude", "Edit lifeos/store.py and run the test suite"),
+    ("codex", "run the test suite and tell me what fails"),
+    ("gemini", "what is the latest news on the exam dates today"),
+    ("qwen", "sort these five goals into levels"),
+])
+def test_other_jobs_get_no_warning(model, text):
+    assert seats.seat_warning(model, text) == ""

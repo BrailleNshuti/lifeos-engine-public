@@ -4,6 +4,7 @@ Dates are release dates. Newest first.
 
 ## [Unreleased]
 
+- New: a table of what each seat has no tool for (`seats.CANNOT`), shown as a hint before `lifeos ask` and never as a block: Grok cannot read shop sites, change files or run commands; the local models have no web access. Tests first in `tests/test_seat_hints.py`.
 - Docs: `docs/DAILY.md`, one page for daily use: the five-step loop, which seat for which job, and what each failure seen in week one means.
 - New: `lifeos dash-export --out DIR` writes the five JSON files a dashboard needs (numbers, runs by seat, ratings with notes, tasks, and an optional hand-kept `waiting.json`). No model call. The files are private. Tests first in `tests/test_dashdata.py`.
 - Refactor: eleven command helpers moved from `lifeos/cli.py` to `lifeos/cmds_misc.py` (study, lab, doctor, vocab, guard, sort-csv and what they call), so `cli.py` drops from 1,241 to about 1,000 lines and has room for new commands. Same code, same behaviour; full suite 858 passed.
