@@ -1,0 +1,9 @@
+{
+  "enabledPlugins": {
+    "10x-team@anthropic-plugin-directory": true,
+    "frontend-design@anthropic-plugin-directory": true,
+    "16minds@anthropic-plugin-directory": true,
+    "0x@anthropic-plugin-directory": true,
+    "0bull@anthropic-plugin-directory": true
+  }
+}

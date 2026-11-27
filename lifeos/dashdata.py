@@ -1,13 +1,18 @@
 """The data files for a dashboard, from the home folder, in one command. No model call, nothing leaves the laptop.
 
-`lifeos dash-export --out DIR` writes five JSON lists a dashboard can load: numbers (counts only), runs by seat, ratings with
-their notes, tasks (id, status, due, goal) and an optional waiting list kept by hand in `waiting.json` in the home folder.
+`lifeos dash-export --out DIR` writes seven JSON lists a dashboard can load: numbers (counts only), runs by seat, ratings with
+their notes, tasks (id, status, due, goal), an optional waiting list kept by hand in `waiting.json` in the home folder, what
+left the laptop per cloud seat (counts only) and seat speed. All or none: the files are built in memory and staged in a
+side folder first, so a failure while writing never leaves a mix of new and old files.
 The files hold task goals and rating notes: they are private. Publish them only to a page only you can open.
 """
 import json
+import os
+import shutil
+import uuid
 from pathlib import Path
 
-from . import learn, numbers, tasks, today
+from . import earn, egress, learn, numbers, tasks, today
 
 TITLE_MAX = 90
 
@@ -37,17 +42,28 @@ def _task_rows(home):
             for t in tasks.list_tasks(home)]
 
 
+def _egress_rows(home):
+    return [{"seat": r["seat"], "sent": r["calls"], "failed": r["failed"], "tokens": r["tokens"], "last": r["last"]}
+            for r in egress.report(home)]
+
+
 def export(home, out_dir, commands=None):
-    """Write the five files; return their paths."""
+    """Write the seven files, all or none; return their paths."""
     out = Path(out_dir)
-    out.mkdir(parents=True, exist_ok=True)
     num_rows, by_model = _numbers_rows(home, commands)
     runs = sorted(({"model": m, "runs": n} for m, n in by_model.items()), key=lambda r: (-r["runs"], r["model"]))
     files = {"numbers.json": num_rows, "runs.json": runs, "ratings.json": _ratings_rows(home),
-             "tasks.json": _task_rows(home), "waiting.json": today.read_waiting(home)}
-    written = []
-    for name, rows in files.items():
-        path = out / name
-        path.write_text(json.dumps(rows, ensure_ascii=False, indent=1), encoding="utf-8")
-        written.append(path)
-    return written
+             "tasks.json": _task_rows(home), "waiting.json": today.read_waiting(home),
+             "egress.json": _egress_rows(home), "latency.json": earn.latency(home)}
+    payloads = {name: json.dumps(rows, ensure_ascii=False, indent=1).encode("utf-8") for name, rows in files.items()}
+    out.mkdir(parents=True, exist_ok=True)
+    stage = out / f".staging-{os.getpid()}-{uuid.uuid4().hex[:6]}"
+    stage.mkdir()
+    try:
+        for name, data in payloads.items():
+            (stage / name).write_bytes(data)
+        for name in payloads:
+            os.replace(stage / name, out / name)
+    finally:
+        shutil.rmtree(stage, ignore_errors=True)
+    return [out / name for name in payloads]

@@ -41,4 +41,4 @@ Written from the first week of real use (2026-11-26). Everything here ran on a r
 
 - Sunday: `lifeos earn`, `lifeos mistakes`, `lifeos stale`, then the weekly-review skill.
 - First Sunday of the month: the no-ai-exam and system-health skills.
-- Refresh the dashboard: `lifeos dash-export --out <folder>` and give the five files to Claude to upload.
+- Refresh the dashboard: `lifeos dash-export --out <folder>` and give the seven files to Claude to upload.
