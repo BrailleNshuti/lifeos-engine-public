@@ -4,6 +4,7 @@ Dates are release dates. Newest first.
 
 ## [Unreleased]
 
+- Fix: concurrent `ask` processes now take one locked task snapshot for the context pack, provider policy and answer checks, so a Windows task-file replacement cannot make the other process fail with `PermissionError`.
 - Fix: `backup --check` now reports malformed manifests and refuses manifest paths outside the backup's `logs/` tree instead of raising or reading the outside file.
 - Fix: `dash-export` now rolls back files already replaced when a later dashboard file cannot be installed, so its seven-file all-or-none promise also holds during the replacement phase.
 - Docs: `STATE.md` and `docs/HANDOFF.md` say exactly where round 4 stands and how the next model continues.
