@@ -8,7 +8,7 @@ import subprocess
 import sys
 
 from . import __version__
-from . import dashdata, egress, sunday
+from . import commandsdoc, dashdata, egress, sunday
 from . import backup, bakeoff, calibrate, arch, canary, completion, console, debate, decision, demo, digest, earn, experiment, prove, savings, selftest, cockpit, exam, export, governor, history, hooks, learn, lint, mistakes, numbers, panel, pipeline, redact, release, today, vocab, kaizen, lab, log, mcp, replay, router, runs, seats, schema, showcase, sortcsv, stale, timeline, study, verify
 from .delegate import run_delegate
 from .notes import post_notes, pre_notes
@@ -532,6 +532,9 @@ def cmd_ask(args):
         if not gate["allowed"] and not args.dry_run and not getattr(args, "force", False):
             print("lifeos: nothing was sent. Use --force to send anyway, or wait for the reset.", file=sys.stderr)
             return 4
+    if getattr(args, "failover", False):
+        return cmd_delegate(argparse.Namespace(home=args.home, task=args.task, model=args.model, budget=args.budget, full=args.full,
+                                               dry_run=args.dry_run, learned=False))
     try:
         result = run_ask(
             home, args.model, args.task, args.budget, args.dry_run,
@@ -631,6 +634,16 @@ def cmd_mcp(args):
     return 0
 
 
+def cmd_commands(args):
+    page = commandsdoc.render(build_parser())
+    if args.out:
+        Path(args.out).write_text(page, encoding="utf-8", newline="")
+        print(f"wrote {args.out}")
+    else:
+        print(page, end="")
+    return 0
+
+
 def cmd_egress(args):
     print(egress.render(egress.report(find_home(args.home), days=args.days), args.days))
     return 0
@@ -687,6 +700,7 @@ def build_parser():
     ask.add_argument("--run-id", help="explicit run_id for idempotent retry")
     ask.add_argument("--dry-run", action="store_true", help="show the pack and token cost; send nothing")
     ask.add_argument("--force", action="store_true", help="send even if the budget governor holds the call")
+    ask.add_argument("--failover", action="store_true", help="if this seat fails, let the next seat in its chain answer (like delegate; private tasks stay local)")
     ask.set_defaults(func=cmd_ask)
 
     dele = sub.add_parser("delegate", help="let LifeOS pick the best-fitting model for a task, run it, and print the answer")
@@ -813,6 +827,10 @@ def build_parser():
     vq_p = sub.add_parser("verify-quotes", help="check that the quoted lines of the latest answer in a task are really in its context (no model call)")
     vq_p.add_argument("task", help="task id or prefix")
     vq_p.set_defaults(func=cmd_verify_quotes)
+
+    cmd_p = sub.add_parser("commands", help="the list of commands as a page generated from the parser (docs/COMMANDS.md)")
+    cmd_p.add_argument("--out", help="write the page to this file")
+    cmd_p.set_defaults(func=cmd_commands)
 
     eg_p = sub.add_parser("egress", help="what left this laptop: calls, tokens and failures per cloud seat (counts only, never text)")
     eg_p.add_argument("--days", type=int, default=30)
