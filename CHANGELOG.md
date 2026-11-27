@@ -4,6 +4,7 @@ Dates are release dates. Newest first.
 
 ## [Unreleased]
 
+- New: `lifeos egress [--days N]` shows what left the laptop: per cloud seat the calls sent, failed and blocked by the guard, the tokens and the last call (counts only; a test proves no prompt, answer or error text reaches the report; local models never appear). Tests first in `tests/test_egress.py`.
 - New: `lifeos sunday` prints the numbers for the weekly review on one page (earn table, seat speed, the last 7 days of ratings, stale items, open mistakes); no model call, writes nothing. Test: random text of every kind never makes the free answer check raise (400 cases, its flags are always short strings), and `STATE.md` only names files that exist and pull requests merged in this history.
 - New: `lifeos verify-quotes TASK` checks the quoted lines of the latest answer against the task context (real over total, the missing lines, exit 1 if any is missing; no model call). Test: no command (`ask`, `delegate`, `guard`, with and without `--dry-run`) prints a secret or an IBAN from a task file whole, or sends it to a model.
 - New: `lifeos earn` now ends with a seat speed table from the run ledger: per seat, calls that answered, calls that failed, median and worst seconds (failed calls are counted but never timed). On the real ledger it showed Qwen at a 262 s median with 2 failures against Claude at 19 s. Tests first in `tests/test_earn_latency.py`.
