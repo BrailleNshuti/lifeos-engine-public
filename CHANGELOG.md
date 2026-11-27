@@ -4,7 +4,11 @@ Dates are release dates. Newest first.
 
 ## [Unreleased]
 
+<<<<<<< HEAD
 - New: the privacy guard also finds a known token format split over two lines (wrapped by an editor or a chat), e.g. a GitHub token or an AWS key cut anywhere; only matches that cross the line break are added, a blank line breaks the join, and ordinary wrapped prose is not flagged (13 cases in `tests/test_guard_split_token.py`, 6 failed before). Repo-wide scan: still no BLOCK.
+=======
+- New: `.github/workflows/soak.yml` runs the full suite three times on Windows every Sunday (and on demand) with the `os.replace` diagnostics on, and prints the recovered and failed counts in the job summary. Read-only, no secrets, 90-minute limit. Purpose: catch the rare winerror 5 write failure in CI, since a full run has not produced it on demand. Checked by `tests/test_soak_workflow.py`.
+>>>>>>> origin/main
 - New: `lifeos rate` ends with a `router:` line (what the ratings so far say about the default seat for that kind of work, or why the default stands); `lifeos today` shows the first five items of the hand-kept `waiting.json` and how many more there are, and `dash-export` reads the same file through one shared reader. Tests first in `tests/test_rate_hint_and_today_waiting.py` (6 of 6 failed before).
 - New: `lifeos egress [--days N]` shows what left the laptop: per cloud seat the calls sent, failed and blocked by the guard, the tokens and the last call (counts only; a test proves no prompt, answer or error text reaches the report; local models never appear). Tests first in `tests/test_egress.py`.
 - New: `lifeos sunday` prints the numbers for the weekly review on one page (earn table, seat speed, the last 7 days of ratings, stale items, open mistakes); no model call, writes nothing. Test: random text of every kind never makes the free answer check raise (400 cases, its flags are always short strings), and `STATE.md` only names files that exist and pull requests merged in this history.
