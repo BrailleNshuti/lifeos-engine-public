@@ -141,7 +141,25 @@ def failure_kinds(home, today=None, days=30):
     return out
 
 
-def render_latency(rows, days=30, why=None):
+def limit_days(home, today=None, days=30):
+    """{seat: [YYYY-MM-DD, ...]} the days a seat's call failed on a usage limit or quota, oldest first, one entry per day."""
+    today = today or dt.date.today()
+    since = today - dt.timedelta(days=days)
+    out = {}
+    for r in read_run_records(Path(home)):
+        seat = str(r.get("model") or "").split(":", 1)[0].strip()
+        if not seat or r.get("status") in ("ok", "blocked", None) or failure_kind(r) != "quota":
+            continue
+        try:
+            day = dt.date.fromisoformat(str(r.get("date") or str(r.get("started_at") or "")[:10])[:10])
+        except ValueError:
+            continue
+        if since < day <= today and day.isoformat() not in out.setdefault(seat, []):
+            out[seat].append(day.isoformat())
+    return {seat: sorted(d) for seat, d in out.items() if d}
+
+
+def render_latency(rows, days=30, why=None, limits=None):
     if not rows:
         return f"No timed calls in the last {days} days."
     lines = [f"Seat speed (last {days} days; seconds of calls that answered)", ""]
@@ -152,4 +170,7 @@ def render_latency(rows, days=30, why=None):
         kinds = (why or {}).get(r["seat"])
         if kinds:
             lines.append("         why: " + ", ".join(f"{n} {k}" for k, n in sorted(kinds.items(), key=lambda kv: (-kv[1], kv[0]))))
+        hit = (limits or {}).get(r["seat"])
+        if hit:
+            lines.append("         usage limit hit on: " + ", ".join(hit))
     return "\n".join(lines)

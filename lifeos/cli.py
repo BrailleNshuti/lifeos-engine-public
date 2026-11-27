@@ -398,7 +398,7 @@ def cmd_earn(args):
     home = find_home(args.home)
     print(earn.render(earn.review(home, days=args.days)))
     print()
-    print(earn.render_latency(earn.latency(home, days=args.days), args.days, why=earn.failure_kinds(home, days=args.days)))
+    print(earn.render_latency(earn.latency(home, days=args.days), args.days, why=earn.failure_kinds(home, days=args.days), limits=earn.limit_days(home, days=args.days)))
     return 0
 
 
@@ -582,6 +582,9 @@ def cmd_ask(args):
         print(f"[dry run: about {result[1]} tokens, nothing sent]", file=sys.stderr)
     else:
         print(f"{args.model} answered; result appended to {result.relative_to(home)}")
+        line = egress.share_line(home, args.model)
+        if line:
+            print(line)
         for line in post_notes(result):
             print(line)
     return 0
