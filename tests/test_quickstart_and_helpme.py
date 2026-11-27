@@ -25,7 +25,7 @@ def test_the_first_screen_names_commands_that_exist():
 
 
 def test_the_quickstart_commands_that_are_safe_to_run_do_run(tmp_path, monkeypatch, capsys):
-    monkeypatch.chdir(tmp_path)
+    monkeypatch.chdir(home)
     assert main(["demo"]) == 0
     assert main(["canary"]) == 0
     assert main(["numbers", "--html", str(tmp_path / "numbers.html")]) == 0
