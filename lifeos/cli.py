@@ -20,7 +20,7 @@ from .labcard import LabRefused
 from .store import append_run_record, new_run_id, read_run_records, utc_now_iso
 from .tasks import list_tasks, new_task
 from .week import build_redteam_pack, draft_weekly_review, render_markdown, week_numbers
-from .cmds_misc import cmd_verify_quotes, cmd_study, cmd_lab, cmd_doctor, cmd_vocab, cmd_guard, cmd_sort_csv  # noqa: F401  (handlers kept out of cli.py to stay under its size budget)
+from .cmds_misc import cmd_help_me, cmd_verify_quotes, cmd_study, cmd_lab, cmd_doctor, cmd_vocab, cmd_guard, cmd_sort_csv  # noqa: F401  (handlers kept out of cli.py to stay under its size budget)
 
 
 
@@ -645,7 +645,10 @@ def cmd_commands(args):
 
 
 def cmd_egress(args):
-    print(egress.render(egress.report(find_home(args.home), days=args.days), args.days))
+    home = find_home(args.home)
+    print(egress.render(egress.report(home, days=args.days), args.days))
+    for warning in egress.over_share(home):
+        print(warning)
     return 0
 
 
@@ -831,6 +834,9 @@ def build_parser():
     cmd_p = sub.add_parser("commands", help="the list of commands as a page generated from the parser (docs/COMMANDS.md)")
     cmd_p.add_argument("--out", help="write the page to this file")
     cmd_p.set_defaults(func=cmd_commands)
+
+    hm_p = sub.add_parser("help-me", help="print the daily loop: make a task, ask, check, rate, review the week")
+    hm_p.set_defaults(func=cmd_help_me)
 
     eg_p = sub.add_parser("egress", help="what left this laptop: calls, tokens and failures per cloud seat (counts only, never text)")
     eg_p.add_argument("--days", type=int, default=30)

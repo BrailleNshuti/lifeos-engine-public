@@ -16,6 +16,7 @@ HEDGE = r"probably|should work|should be fine|i assume|i think|might|maybe|likel
 
 PROMISE = re.compile(r"\b(?:i['’]?ll|i will|i am going to|i['’]?m going to)\s+(?:now\s+)?(?:save|record|write|store|log)\b", re.I)
 QUOTE = re.compile("[\"\u201c]([^\"\u201c\u201d\n]{25,}?)[\"\u201d]")
+LONG_ANSWER = 8000  # characters
 QUOTE_MIN_SOURCE = 1500  # below this the task only points at pages; the quotes cannot be checked against it
 URL = re.compile(r"https?://", re.I)
 DATE = re.compile(r"\b20\d\d-\d\d-\d\d\b|\b\d{1,2}\.\s?\d{1,2}\.\s?20\d\d\b|\b20\d\d\b")
@@ -86,6 +87,8 @@ def check_answer(text, done_when="", source=""):
         flags.append("link without a date (rule 6)")
     if len(re.findall(HEDGE, text, re.I)) >= 2:
         flags.append("mostly guesses, not evidence")
+    if len(text) > LONG_ANSWER:
+        flags.append(f"very long answer ({len(text):,} characters): ask for the short version")
     if not re.search(r"next", text, re.I):
         flags.append("no next step")
     if PROMISE.search(text) and len(text) < 600:

@@ -22,6 +22,8 @@ TOKEN_PATTERNS = [
     ("AWS access key", re.compile(r"\bAKIA[0-9A-Z]{16}\b")),
     ("Google API key", re.compile(r"\bAIza[0-9A-Za-z_\-]{35}\b")),
     ("Private key", re.compile(r"-----BEGIN (?:[A-Z]+ )?PRIVATE KEY-----")),
+    ("Basic authorization header", re.compile(r"(?i)\bauthorization\s*:\s*basic\s+[A-Za-z0-9+/=_-]{12,}")),
+    ("Long key or secret value", re.compile(r"(?i)\b(?:key|secret|client_secret)\s*[:=]\s*[\x27\x22]?[A-Fa-f0-9]{32,}\b")),
     ("JSON web token", re.compile(r"\beyJ[A-Za-z0-9_-]{8,}\.eyJ[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}")),
     ("Social security number", re.compile(r"(?<![\d-])\d{3}-\d{2}-\d{4}(?![\d-])")),
 ]
