@@ -28,11 +28,27 @@ def read_waiting(home):
     return [r for r in rows if isinstance(r, dict) and r.get("item")] if isinstance(rows, list) else []
 
 
+def _stems(home):
+    return sorted(p.stem for p in (Path(home) / "tasks").glob("T-*.md"))
+
+
+def rated_as(rated_task, task, stems):
+    """True when a rating filed under `rated_task` is for the answer on `task`: the same id, or a prefix that picks out exactly
+    that task among the task files (a short prefix such as T-3 must not cover T-30). With no task file at all the prefix is taken as written."""
+    if rated_task == task:
+        return True
+    if not task.startswith(rated_task):
+        return False
+    matches = [s for s in stems if s.startswith(rated_task)]
+    return not matches or matches == [task]  # no task file to compare with: the prefix is taken at its word
+
+
 def unrated(home, today=None, min_age_days=1):
     """Answers a seat gave at least `min_age_days` ago that have no rating yet: [{task, seat, date}], oldest first, one per
     task and seat. Rule 11 needs the numbers, and a rating given a week late is a guess. Reads only; never raises."""
     today = today or dt.date.today()
     rated = {(str(r.get("task") or ""), str(r.get("model") or "")) for r in learn.read_ratings(home)}
+    stems = _stems(home)
     seen, out = set(), []
     for r in read_run_records(Path(home)):
         seat = str(r.get("model") or "").split(":", 1)[0].strip()
@@ -46,7 +62,7 @@ def unrated(home, today=None, min_age_days=1):
         if (today - day).days < min_age_days or (task, seat) in seen:
             continue
         seen.add((task, seat))
-        if any(m == seat and (task == t or task.startswith(t)) for t, m in rated):
+        if any(m == seat and rated_as(t, task, stems) for t, m in rated):
             continue
         out.append({"task": task, "seat": seat, "date": day.isoformat()})
     return sorted(out, key=lambda row: (row["date"], row["task"]))
@@ -56,6 +72,7 @@ def coverage(home):
     """{seat: {"answered": n, "rated": n}}: distinct (task, seat) answers in the ledger and how many have a rating. A seat with
     many answers and few ratings has not been judged yet, however good it feels. Review runs are left out. Never raises."""
     rated = {(str(r.get("task") or ""), str(r.get("model") or "")) for r in learn.read_ratings(home)}
+    stems = _stems(home)
     answered = set()
     for r in read_run_records(Path(home)):
         seat = str(r.get("model") or "").split(":", 1)[0].strip()
@@ -66,7 +83,7 @@ def coverage(home):
     for task, seat in answered:
         row = out.setdefault(seat, {"answered": 0, "rated": 0})
         row["answered"] += 1
-        row["rated"] += any(m == seat and (task == t or task.startswith(t)) for t, m in rated)
+        row["rated"] += any(m == seat and rated_as(t, task, stems) for t, m in rated)
     return dict(sorted(out.items()))
 
 
