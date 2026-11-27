@@ -21,17 +21,25 @@ def _path(home):
 
 
 def read(home):
-    """The entries, [] when the file does not exist. Raises WaitingError when it is damaged (so nothing overwrites it)."""
+    """The entries, [] when the file does not exist. Raises WaitingError when the file is damaged or any entry lacks a text
+    `item`, so that add and remove can never write back a list with an entry silently dropped."""
     path = _path(home)
-    if not path.exists():
-        return []
     try:
-        rows = json.loads(read_bytes_retry(path).decode("utf-8-sig"))
-    except (OSError, ValueError) as err:
+        raw = read_bytes_retry(path).decode("utf-8-sig")
+    except FileNotFoundError:
+        return []
+    except (OSError, UnicodeError) as err:
+        raise WaitingError(f"Could not read {FILE} ({err}). Nothing was changed.") from None
+    try:
+        rows = json.loads(raw)
+    except ValueError as err:
         raise WaitingError(f"{FILE} is not valid JSON ({err}). Fix it by hand; nothing was changed.") from None
     if not isinstance(rows, list):
         raise WaitingError(f"{FILE} should hold a list. Nothing was changed.")
-    return [r for r in rows if isinstance(r, dict) and str(r.get("item") or "").strip()]
+    for number, row in enumerate(rows, 1):
+        if not isinstance(row, dict) or not isinstance(row.get("item"), str) or not row["item"].strip():
+            raise WaitingError(f"{FILE} entry {number} has no text 'item'. Fix it by hand; nothing was changed.")
+    return rows
 
 
 def _write(home, rows):
