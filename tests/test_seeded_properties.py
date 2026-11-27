@@ -35,7 +35,8 @@ def test_csv_rows_round_trip_whatever_the_text(tmp_path, seed):
     rows = [[f"2026-11-{rng.randint(1, 28):02d}", f"T-{rng.randint(100000, 999999)}", word(rng)] for _ in range(25)]
     for row in rows:
         store.append_csv_row_creating(path, header, row)
-    back = list(csv.reader(path.open(encoding="utf-8", newline="")))
+    with path.open(encoding="utf-8", newline="") as fh:
+        back = list(csv.reader(fh))
     assert back[0] == header, f"seed {seed}"
     assert len(back) == len(rows) + 1, f"seed {seed}"
     for want, got in zip(rows, back[1:]):
