@@ -530,6 +530,8 @@ def cmd_ask(args):
         return 2
     except AskError as error:
         print(f"lifeos: {error}", file=sys.stderr)
+        if error.answer:  # the model answered but saving failed: show it so it is not lost
+            print(error.answer)
         return 3
     if args.dry_run:
         print(result[0])

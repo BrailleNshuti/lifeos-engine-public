@@ -53,9 +53,10 @@ class Blocked(Exception):
 class AskError(RuntimeError):
     """The model call failed."""
 
-    def __init__(self, message, run_id=None):
+    def __init__(self, message, run_id=None, answer=None):
         super().__init__(message)
         self.run_id = run_id
+        self.answer = answer  # set when the model did answer but the answer could not be saved: never lose it silently
 
 
 class ToolMissing(FileNotFoundError):
@@ -837,7 +838,10 @@ def run_ask(home, model, task_id, budget=6000, dry_run=False, adapters=None, tod
             **base_rec, "finished_at": utc_now_iso(), "duration_ms": elapsed_ms,
             "status": "ok", "flags": len(flags),
         }
-        record_result(home, path, expected_model, text, day, note, run_id=rid, run_record=run_rec)
+        try:
+            record_result(home, path, expected_model, text, day, note, run_id=rid, run_record=run_rec)
+        except OSError as err:
+            raise AskError(f"the answer arrived but was not saved: {redact_error(err)}", run_id=rid, answer=text) from None
         return path
 
 
