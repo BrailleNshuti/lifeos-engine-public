@@ -31,7 +31,7 @@ Written from the first week of real use (2026-11-26). Everything here ran on a r
 |---|---|---|
 | `grok failed: Error: max turns reached` | the seat ran out of its 3 turns | name the pages to fetch in *Context*, at most two |
 | Grok answer says "I'll save..." with no content | the seat has no write tool | rerun; the engine now tells it to answer in the reply |
-| `ollama did not answer within 240 s` | local model too slow | try another seat, or set `LIFEOS_TIMEOUT` |
+| `ollama did not answer within 240 s` | local model too slow | use `lifeos delegate <task>` instead of `ask`: it tries the next seat in the chain by itself (never a cloud seat for private tasks); or set `LIFEOS_TIMEOUT` |
 | `budget governor` holds the call | weekly budget or call count near its limit | wait for the reset, or `--force` once if it matters |
 | `BLOCKED` by the guard | the text looks like an ID, key or card | remove it or use a local seat |
 | CI `proof` or `trailers` fails on a PR | a test failed, or a Co-Authored-By line slipped in | read the log, fix, push again; never add trailers |
