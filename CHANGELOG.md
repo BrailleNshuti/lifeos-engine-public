@@ -4,6 +4,7 @@ Dates are release dates. Newest first.
 
 ## [Unreleased]
 
+- Tests: direct coverage for the pre-call seat hint and post-call answer check, including missing task files that must never raise.
 - Docs: `docs/HANDOFF.md`, the document for the next model to continue the build: rules, workflow, traps, a test and feature backlog with a done-when for each, and how to log progress. `AGENTS.md` points to it.
 - New: the privacy guard now also blocks a JSON web token, a US-style social security number (nnn-nn-nnnn), a tax or social security number after its label (Steuer-ID, tax id, ...) and a stated PIN ("PIN is nnnn"). Found by probing with made-up values; nothing blocked a bare number, so ordinary digits, dates, ISBNs and version strings are unchanged (19 new cases in `tests/test_guard_more.py`, 9 of them harmless look-alikes).
 - New: a table of what each seat has no tool for (`seats.CANNOT`), shown as a hint before `lifeos ask` and never as a block: Grok cannot read shop sites, change files or run commands; the local models have no web access. Tests first in `tests/test_seat_hints.py`.
