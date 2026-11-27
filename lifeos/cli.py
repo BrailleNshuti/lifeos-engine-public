@@ -8,7 +8,7 @@ import subprocess
 import sys
 
 from . import __version__
-from . import dashdata
+from . import dashdata, egress
 from . import backup, bakeoff, calibrate, arch, canary, completion, console, debate, decision, demo, digest, earn, experiment, prove, savings, selftest, cockpit, exam, export, governor, history, hooks, learn, lint, mistakes, numbers, panel, pipeline, redact, release, today, vocab, kaizen, lab, log, mcp, replay, router, runs, seats, schema, showcase, sortcsv, stale, timeline, study, verify
 from .delegate import run_delegate
 from .notes import post_notes, pre_notes
@@ -619,6 +619,11 @@ def cmd_mcp(args):
     return 0
 
 
+def cmd_egress(args):
+    print(egress.render(egress.report(find_home(args.home), days=args.days), args.days))
+    return 0
+
+
 def cmd_dash_export(args):
     commands = len(next(a for a in build_parser()._actions if isinstance(a, argparse._SubParsersAction)).choices)
     for path in dashdata.export(find_home(args.home), args.out, commands=commands):
@@ -786,6 +791,10 @@ def build_parser():
     vq_p = sub.add_parser("verify-quotes", help="check that the quoted lines of the latest answer in a task are really in its context (no model call)")
     vq_p.add_argument("task", help="task id or prefix")
     vq_p.set_defaults(func=cmd_verify_quotes)
+
+    eg_p = sub.add_parser("egress", help="what left this laptop: calls, tokens and failures per cloud seat (counts only, never text)")
+    eg_p.add_argument("--days", type=int, default=30)
+    eg_p.set_defaults(func=cmd_egress)
 
     dx_p = sub.add_parser("dash-export", help="write the data files for a dashboard (numbers, runs, ratings, tasks, waiting list) to a folder")
     dx_p.add_argument("--out", required=True, help="folder to write the five JSON files to (they are private)")
