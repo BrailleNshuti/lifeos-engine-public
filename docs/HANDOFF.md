@@ -325,7 +325,7 @@ What the scan looked at: the installed package in a clean virtual environment, e
 ### E. Quality and tests
 17. Split `build_parser` (425 lines) into one registration function per command group, with no change in behaviour (the help text is checked by the commands page test).
 18. Split `run_review` (217 lines) into steps; the existing tests must pass unchanged.
-19. A test that every module is imported by at least one test (the scan found `cockpit_page` the only one without), kept as a permanent check.
+19. Done: a permanent AST check requires every shipped module to be imported by at least one test; it found and closed four direct-import gaps (`bakeoff`, `exam`, `showcase`, `cockpit_page`).
 20. A sample-per-flag test for the free answer check, like the guard's: each flag has a text that raises it and a near miss that does not.
 21. Seeded property tests for `days_left`, `sunday.week_file` and the ISO week around new year.
 22. `selfcheck` also reads predictions, experiments, vocabulary and decisions, not only the ledger, tasks, ratings and waiting list.

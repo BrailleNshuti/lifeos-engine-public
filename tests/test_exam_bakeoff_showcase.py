@@ -5,7 +5,7 @@ import shutil
 
 import pytest
 
-from lifeos import mcp
+from lifeos import bakeoff, exam, mcp, showcase
 from lifeos.cli import main
 
 
@@ -17,6 +17,7 @@ def home(tmp_path, demo):
 
 
 def test_exam_generate_draft_and_record_score(home, capsys):
+    assert "MONTHLY NO-AI EXAM" in exam.generate_monthly_exam(home, month="2026-11")
     # 1. Print exam to stdout
     assert main(["--home", str(home), "exam", "--month", "2026-11"]) == 0
     out = capsys.readouterr().out
@@ -44,6 +45,7 @@ def test_exam_generate_draft_and_record_score(home, capsys):
 
 
 def test_bakeoff_blind_pair_and_scorecard(home, capsys):
+    assert set(bakeoff.blind_pair("2026-Q4", "Decision Memo", "claude", "chatgpt")) == {"X", "Y", "blind_hash"}
     scores = json.dumps({
         "X": {"t1": [5, 5, 4, 4], "t2": [5, 4, 4, 4], "t3": [4, 4, 4, 4]},
         "Y": {"t1": [3, 4, 3, 4], "t2": [3, 3, 4, 4], "t3": [4, 3, 3, 4]},
@@ -63,6 +65,7 @@ def test_bakeoff_blind_pair_and_scorecard(home, capsys):
 
 
 def test_showcase_generates_and_drafts_weekly_post(home, capsys):
+    assert "#AIEngineering" in showcase.generate_weekly_post(home, week="2026-W46")
     assert main(["--home", str(home), "showcase", "--week", "2026-W46", "--draft"]) == 0
     rel = capsys.readouterr().out.strip().replace("\\", "/")
     assert rel == "reviews/post-2026-W46.md"

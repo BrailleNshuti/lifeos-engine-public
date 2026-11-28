@@ -4,6 +4,7 @@ Dates are release dates. Newest first.
 
 ## [Unreleased]
 
+- Test (round 7 item 19): a permanent AST check requires every shipped module to be imported by at least one test; direct smoke coverage closes the four gaps in `bakeoff`, `exam`, `showcase` and the logic-free cockpit template. `tests/test_module_import_coverage.py`.
 - Fix (round 7 item 8): a blind review with one successful and one failed reviewer now returns and prints the usable result with a plain summary (`2 asked, 1 answered, claude rested`) and exits 4 for partial instead of raising as a full failure; replaying its run id gives the same summary without another model call, and the MCP tool reports the same partial result. Fully failed reviews still exit 3. `tests/test_ask.py`, `tests/test_durable_kernel.py`, `tests/test_mcp.py`.
 - Change (round 7 item 10): `lifeos seats` shows how many days ago each seat last completed a real call, or `never`; old successful calls remain visible outside the seven-day spend window, while failed and manually pasted debate answers do not count. `tests/test_seats.py`.
 - Docs: audit the round 7 handoff against the repository and mark the already-proved release, version, deadline and stale-note checks done.
