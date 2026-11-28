@@ -26,6 +26,22 @@ def test_task_new_and_missing_home(tmp_path, capsys):
     assert main(["--home", str(tmp_path / "nope"), "week"]) == 2
 
 
+def test_task_commands_refuse_secrets_from_the_command_line(tmp_path, capsys):
+    iban = "DE89 3704 " + "0044 0532 0130 00"
+    (tmp_path / "now.md").write_text("# Now", encoding="utf-8")
+    assert main(["--home", str(tmp_path), "task", "new", "Pay", "rent", "to", iban]) == 2
+    assert not (tmp_path / "tasks").exists()
+
+    tasks = tmp_path / "tasks"
+    tasks.mkdir()
+    task = tasks / "T-261128-demo.md"
+    original = "---\nid: T-261128-demo\ndone_when: tests pass\nstatus: inbox\n---\n## Proof\n"
+    task.write_text(original, encoding="utf-8")
+    assert main(["--home", str(tmp_path), "task", "close", task.stem, "--proof", f"tests/a.py {iban}"]) == 2
+    assert task.read_text(encoding="utf-8") == original
+    assert "private data" in capsys.readouterr().err
+
+
 def test_doctor_fails_when_core_exceeds_token_cap(demo, tmp_path, capsys):
     home = tmp_path / "home"
     shutil.copytree(demo, home)

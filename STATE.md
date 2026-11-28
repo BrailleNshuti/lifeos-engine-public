@@ -25,6 +25,7 @@ Read this first. Keep it short; every bullet stays under 400 characters (a test 
 - A permanent test-import gate covers all 75 shipped modules, including the separate cockpit template, so a new or forgotten module cannot sit outside direct test collection unnoticed.
 - The free answer check has trigger and near-miss samples for all 16 flag families; changes to refusal, evidence, dates, hedges, truncation, length, next steps, promises, `done_when` or quote checks now have explicit false-positive coverage.
 - Seeded properties now exercise deadline wording, Sunday filenames and ISO week boundaries around New Year, with `LIFEOS_SEED` replay for any failure.
+- CLI task creation now rejects private text before writing, matching the MCP boundary; task closing already rejects a private proof without changing the file.
 
 ## Open
 

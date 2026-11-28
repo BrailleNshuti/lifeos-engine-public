@@ -14,7 +14,7 @@ from .delegate import run_delegate
 from .notes import post_notes, pre_notes
 from .ask import ADAPTERS, MINIMAL, PROVIDERS, AskError, Blocked, ToolMissing, provider_status, run_ask, run_review
 from .context import build_pack, explain_pack, render_explanation
-from .guard import scan_paths, scan_staged, staged_files
+from .guard import blocking, scan_paths, scan_staged, staged_files
 from .home import CORE_FILES, HomeError, estimate_tokens, find_home
 from .labcard import LabRefused
 from .store import append_run_record, new_run_id, read_run_records, utc_now_iso
@@ -27,7 +27,10 @@ from .cmds_misc import cmd_help_me, cmd_verify_quotes, cmd_study, cmd_lab, cmd_d
 def cmd_task(args):
     home = find_home(args.home)
     if args.action == "new":
-        path = new_task(home, " ".join(args.sentence), route=args.route, level=args.level, due=args.due or "")
+        sentence = " ".join(args.sentence)
+        if blocking(sentence):
+            raise ValueError("The task sentence looks like private data (rule 9). No task file was created.")
+        path = new_task(home, sentence, route=args.route, level=args.level, due=args.due or "")
         print(path.relative_to(home))
         print("Next: write the done_when line yourself.")
     elif args.action == "block":
