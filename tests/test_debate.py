@@ -554,7 +554,7 @@ def test_run_rests_a_seat_that_hit_a_usage_limit_and_records_the_failure(home):
         raise ask.AskError("You have hit your usage limit. Try again in 90 minutes.")
 
     fakes = {"claude": Scripted(ANSWERS["claude"]), "codex": Scripted(limited), "gemini": Scripted(ANSWERS["gemini"])}
-    rows = debate.run(home, did, execute=True, adapters=fakes, today=TODAY, rounds=1)
+    rows = debate.run(home, did, execute=True, adapters=fakes, today=dt.date.today(), rounds=1)
     assert [r["status"] for r in rows if r["seat"] == "codex"] == ["failed"]
     now = dt.datetime.now(dt.timezone.utc)
     assert "codex" in seats.pressure(read_run_records(home), now)  # debate spend and rests are seen by the budget
@@ -590,7 +590,8 @@ def test_run_needs_two_answers_to_continue(home):
 
 def test_the_budget_counts_debate_spend(home):
     did = begin(home)["id"]
-    debate.run(home, did, execute=True, adapters={s: Scripted(ANSWERS[s]) for s in SEATS}, today=TODAY, rounds=1)
+    debate.run(home, did, execute=True, adapters={s: Scripted(ANSWERS[s]) for s in SEATS},
+               today=dt.date.today(), rounds=1)
     newest, tokens, calls = seats._spend(read_run_records(home), dt.datetime.now(dt.timezone.utc))
     assert calls.get("claude") == 1 and tokens.get("claude", 0) > 0
 

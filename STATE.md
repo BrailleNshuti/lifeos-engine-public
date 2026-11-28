@@ -23,6 +23,7 @@ Read this first. Keep it short; every bullet stays under 400 characters (a test 
 - Seat health includes the age of every seat's last successful real call across the full ledger, so an open but stale or never-used seat is visible instead of looking healthy by omission.
 - Blind reviews preserve usable answers when another reviewer fails: the CLI names who answered or rested, records and replays the partial group without another call, and distinguishes partial (exit 4) from fully failed (exit 3).
 - A permanent test-import gate covers all 75 shipped modules, including the separate cockpit template, so a new or forgotten module cannot sit outside direct test collection unnoticed.
+- The free answer check has trigger and near-miss samples for all 16 flag families; changes to refusal, evidence, dates, hedges, truncation, length, next steps, promises, `done_when` or quote checks now have explicit false-positive coverage.
 
 ## Open
 
