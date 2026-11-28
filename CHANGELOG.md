@@ -4,6 +4,7 @@ Dates are release dates. Newest first.
 
 ## [Unreleased]
 
+- Fix (round 7 item 23): `task new` now refuses private command-line text before creating a file, matching the MCP tool; a CLI regression also proves `task close` leaves its task unchanged when the proof contains a secret. `tests/test_cli.py`.
 - Test (round 7 item 21): seeded properties cover date-distance wording, Sunday report filenames and ISO week boundaries across New Year. `tests/test_seeded_properties.py`.
 - Test (round 7 item 20): all 16 free answer-check flag families now have a triggering sample and a close near miss, covering refusals, unsupported success, stale links, hedging, truncation, overlong answers, missing next steps, save promises, structured `done_when` requirements and unverifiable quotes. Four debate/governor spend and rest tests now use the actual run day, so their seven-day window cannot expire at midnight. `tests/test_check_flag_samples.py`, `tests/test_debate.py`, `tests/test_governor.py`.
 - Test (round 7 item 19): a permanent AST check requires every shipped module to be imported by at least one test; direct smoke coverage closes the four gaps in `bakeoff`, `exam`, `showcase` and the logic-free cockpit template. `tests/test_module_import_coverage.py`.
