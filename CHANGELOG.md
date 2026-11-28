@@ -4,6 +4,7 @@ Dates are release dates. Newest first.
 
 ## [Unreleased]
 
+- New (round 7 item 22): `selfcheck` now validates predictions, experiments, vocabulary and decision records as well as the ledger, tasks, ratings and waiting list; it names bad headers, short rows, dates, kinds and decision front matter without changing the files. `tests/test_selfcheck.py`.
 - Fix (round 7 item 23): `task new` now refuses private command-line text before creating a file, matching the MCP tool; a CLI regression also proves `task close` leaves its task unchanged when the proof contains a secret. `tests/test_cli.py`.
 - Test (round 7 item 21): seeded properties cover date-distance wording, Sunday report filenames and ISO week boundaries across New Year. `tests/test_seeded_properties.py`.
 - Test (round 7 item 20): all 16 free answer-check flag families now have a triggering sample and a close near miss, covering refusals, unsupported success, stale links, hedging, truncation, overlong answers, missing next steps, save promises, structured `done_when` requirements and unverifiable quotes. Four debate/governor spend and rest tests now use the actual run day, so their seven-day window cannot expire at midnight. `tests/test_check_flag_samples.py`, `tests/test_debate.py`, `tests/test_governor.py`.
