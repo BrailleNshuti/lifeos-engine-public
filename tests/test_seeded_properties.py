@@ -11,7 +11,7 @@ import string
 
 import pytest
 
-from lifeos import egress, store
+from lifeos import egress, store, sunday, today, week
 from lifeos.context import task_file
 
 SEEDS = [int(os.environ["LIFEOS_SEED"])] if os.environ.get("LIFEOS_SEED") else [1, 2, 3, 4, 5, 6, 7, 8]
@@ -82,3 +82,33 @@ def test_the_thirty_day_window_includes_exactly_the_days_inside_it(tmp_path, see
     rows = egress.report(tmp_path, today=today, days=30)
     got = rows[0]["calls"] if rows else 0
     assert got == expect, f"seed {seed}: expected {expect} calls in the window, got {got}"
+
+
+@pytest.mark.parametrize("seed", SEEDS)
+def test_days_left_matches_date_distance(seed):
+    rng = random.Random(seed)
+    base = dt.date(2024, 1, 1) + dt.timedelta(days=rng.randint(0, 1_500))
+    for _ in range(50):
+        gap = rng.randint(-800, 800)
+        expected = {0: "today", 1: "tomorrow"}.get(gap, f"in {gap} days" if gap > 0 else f"{-gap} days late")
+        assert today.days_left(base + dt.timedelta(days=gap), base) == expected, f"seed {seed}, gap {gap}"
+
+
+@pytest.mark.parametrize("seed", SEEDS)
+def test_sunday_file_uses_the_dates_iso_week(tmp_path, seed):
+    rng = random.Random(seed)
+    for _ in range(50):
+        day = dt.date(2020, 1, 1) + dt.timedelta(days=rng.randint(0, 3_650))
+        iso = day.isocalendar()
+        assert sunday.week_file(tmp_path, day).name == f"week-{iso.year}-W{iso.week:02d}.md", f"seed {seed}, day {day}"
+
+
+@pytest.mark.parametrize("seed", SEEDS)
+def test_week_bounds_round_trip_across_new_year(seed):
+    rng = random.Random(seed)
+    for year in range(2020, 2031):
+        day = dt.date(year, 12, 25) + dt.timedelta(days=rng.randint(0, 13))
+        iso = day.isocalendar()
+        start, end = week.week_bounds(today=day)
+        assert start <= day <= end and start.weekday() == 0 and end - start == dt.timedelta(days=6), f"seed {seed}, day {day}"
+        assert week.week_bounds(f"{iso.year}-W{iso.week:02d}") == (start, end), f"seed {seed}, day {day}"
