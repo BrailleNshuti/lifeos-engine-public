@@ -26,6 +26,7 @@ Read this first. Keep it short; every bullet stays under 400 characters (a test 
 - The free answer check has trigger and near-miss samples for all 16 flag families; changes to refusal, evidence, dates, hedges, truncation, length, next steps, promises, `done_when` or quote checks now have explicit false-positive coverage.
 - Seeded properties now exercise deadline wording, Sunday filenames and ISO week boundaries around New Year, with `LIFEOS_SEED` replay for any failure.
 - CLI task creation now rejects private text before writing, matching the MCP boundary; task closing already rejects a private proof without changing the file.
+- `selfcheck` now covers all core owner data: ledger, tasks, ratings, waiting, predictions, experiments, vocabulary and decisions; damage is named but never repaired automatically.
 
 ## Open
 

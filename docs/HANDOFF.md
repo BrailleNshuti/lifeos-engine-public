@@ -328,7 +328,7 @@ What the scan looked at: the installed package in a clean virtual environment, e
 19. Done: a permanent AST check requires every shipped module to be imported by at least one test; it found and closed four direct-import gaps (`bakeoff`, `exam`, `showcase`, `cockpit_page`).
 20. Done: all 16 free answer-check flag families have a triggering sample and a close near miss, including `done_when`, quote, truncation and save-promise checks.
 21. Done: seeded property tests cover `days_left`, `sunday.week_file` and the ISO week around new year.
-22. `selfcheck` also reads predictions, experiments, vocabulary and decisions, not only the ledger, tasks, ratings and waiting list.
+22. Done: `selfcheck` also validates predictions, experiments, vocabulary and decisions, not only the ledger, tasks, ratings and waiting list.
 23. Done: `task new` and `task close` refuse a secret on the command line the way the MCP tool does, without creating or changing a task.
 
 ### F. Documentation and the owner
@@ -354,14 +354,14 @@ Run `git pull`, then `gh pr list` and `lifeos selfcheck` and `lifeos today` in t
 - Packaging: after a plain `pip install` the demo and `selftest` work (the demo home is bundled in `lifeos/_demo_home`, kept identical to `examples/demo-home` by a test).
 - Blind review (rule 7) of the new code: Gemini and Codex each reviewed `task close` and `waiting`; 10 of 10 findings were real and are fixed.
 - The cockpit page (a private page, not in this repo) was redesigned and its data refreshed; refresh it with `python scripts/refresh_cockpit.py`.
-- Round 7 (section 13): the 30-item list from a full scan is written. Items 6, 8 to 10, 19 to 21 and 23 are complete; the confirmed blind-review findings are fixed.
+- Round 7 (section 13): the 30-item list from a full scan is written. Items 6, 8 to 10 and 19 to 23 are complete; the confirmed blind-review findings are fixed.
 
 ### Open at the time of writing
 - No engine pull request was open before the round 7 item 21 test branch. Notes repo pull requests 64 and 65 are merged.
 
 ### Not done (in order of value)
 1. Round 7 item 7: blind-review the `dash-export` rollback, `backup --restore` and `selfcheck`; check each finding by hand and write a failing test before each real fix.
-2. Round 7 items 14, 15, 17, 18 and 22 (see section 13). Items 3, 4, 12, 13, 19 to 21 and 23 are already built and covered by tests or CI.
+2. Round 7 items 14, 15, 17 and 18 (see section 13). Items 3, 4, 12, 13 and 19 to 23 are already built and covered by tests or CI.
 3. Run real tasks across the seats and rate them (`rate --walk`); `sunday` shows how few answers are rated.
 
 ### Owner's items (never do these without his word)

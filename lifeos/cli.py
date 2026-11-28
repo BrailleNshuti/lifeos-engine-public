@@ -927,7 +927,7 @@ def build_parser():
     wt_done = wt_sub.add_parser("done", help="remove an entry by its number in `waiting list`")
     wt_done.add_argument("number", type=int)
     wt_p.set_defaults(func=cmd_waiting)
-    sc_p = sub.add_parser("selfcheck", help="check your own files: ledger chain, task files, ratings log, waiting list (reads only)")
+    sc_p = sub.add_parser("selfcheck", help="check your own files: ledger, tasks, ratings, waiting, predictions, experiments, vocabulary, decisions (read only)")
     sc_p.set_defaults(func=cmd_selfcheck)
     eg_p = sub.add_parser("egress", help="what left this laptop: calls, tokens and failures per cloud seat (counts only, never text)")
     eg_p.add_argument("--days", type=int, default=30)

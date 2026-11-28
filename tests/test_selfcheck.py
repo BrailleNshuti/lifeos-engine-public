@@ -1,6 +1,8 @@
 """`lifeos selfcheck`: damage in your own files is named, never repaired. Made-up data only."""
 import json
 
+import pytest
+
 from lifeos import selfcheck
 from lifeos.cli import main
 
@@ -90,3 +92,44 @@ def test_files_with_a_bom_and_bad_bytes_do_not_crash_it(tmp_path):
     (home / "logs" / "ratings.csv").write_bytes(b"\xef\xbb\xbfdate,task,model,score\n2026-12-01,T-261201-demo,claude,4\n\xff\xfe\n")
     (home / "waiting.json").write_bytes(b"\xef\xbb\xbf[]")
     selfcheck.run(home)
+
+
+@pytest.mark.parametrize(("area", "name", "content"), [
+    ("predictions", "predictions.csv", "when,id,kind,value,text\n2026-12-01,P-001,predict,70,claim\n"),
+    ("experiments", "experiments.csv", "date,id,kind,metric,value,text\n2026-12-01,E-001,start\n"),
+    ("vocabulary", "vocab.csv", "date,word,kind,value,text\nnot-a-date,Haus,add,house,example\n"),
+])
+def test_other_csv_data_damage_is_named_and_unchanged(tmp_path, area, name, content):
+    home = home_with_task(tmp_path)
+    path = home / "logs" / name
+    path.write_text(content, encoding="utf-8")
+    before = path.read_bytes()
+    found = selfcheck.run(home)
+    assert any(p["area"] == area and name in p["where"] for p in found)
+    assert path.read_bytes() == before
+
+
+def test_a_damaged_decision_is_named_and_unchanged(tmp_path):
+    home = home_with_task(tmp_path)
+    folder = home / "decisions"
+    folder.mkdir()
+    path = folder / "D-261201-demo.md"
+    path.write_text("# no front matter\n", encoding="utf-8")
+    before = path.read_bytes()
+    found = selfcheck.run(home)
+    assert any(p["area"] == "decisions" and path.name in p["where"] for p in found)
+    assert path.read_bytes() == before
+
+
+def test_sound_predictions_experiments_vocabulary_and_decisions_pass(tmp_path):
+    home = home_with_task(tmp_path)
+    (home / "logs" / "predictions.csv").write_text("date,id,kind,value,text\n2026-12-01,P-001,predict,70,claim\n", encoding="utf-8")
+    (home / "logs" / "experiments.csv").write_text("date,id,kind,metric,value,text\n2026-12-01,E-001,start,proofs,1,{}\n", encoding="utf-8")
+    (home / "logs" / "vocab.csv").write_text("date,word,kind,value,text\n2026-12-01,Haus,add,house,example\n", encoding="utf-8")
+    folder = home / "decisions"
+    folder.mkdir()
+    (folder / "D-261201-demo.md").write_text(
+        "---\nid: D-261201-demo\ntitle: Choose a demo\ndate: 2026-12-01\nrevisit: -\nprediction: -\n---\n# Choose a demo\n",
+        encoding="utf-8",
+    )
+    assert selfcheck.run(home) == []
