@@ -20,7 +20,7 @@ def home(tmp_path, demo):
 def spend(home, model, tokens, n=1, status="ok", error=None, finished="2026-11-20T10:00:00Z"):
     for i in range(n):
         rec = {"run_id": f"R-{model}-{tokens}-{i}-{status}", "command": "ask", "status": status, "model": model,
-               "tokens": tokens, "budget": 6000, "full": False, "parent_run_id": None, "date": "2026-11-20",
+               "tokens": tokens, "budget": 6000, "full": False, "parent_run_id": None, "date": finished[:10],
                "started_at": finished, "finished_at": finished}
         if error:
             rec["error"] = error
@@ -59,7 +59,7 @@ def test_a_seat_resting_after_a_usage_limit_is_held(home):
 
 
 def test_cli_holds_a_spent_seat_and_force_overrides(home, capsys, monkeypatch):
-    spend(home, "claude", 40_000, n=3)
+    spend(home, "claude", 40_000, n=3, finished=dt.datetime.now(dt.timezone.utc).isoformat())
     monkeypatch.setenv("LIFEOS_HOME", str(home))
     called = []
     monkeypatch.setattr(cli, "run_ask", lambda *a, **k: called.append(a) or home / "tasks" / "x.md")
@@ -70,7 +70,7 @@ def test_cli_holds_a_spent_seat_and_force_overrides(home, capsys, monkeypatch):
 
 
 def test_cli_dry_run_reports_but_does_not_hold(home, capsys, monkeypatch):
-    spend(home, "claude", 40_000, n=3)
+    spend(home, "claude", 40_000, n=3, finished=dt.datetime.now(dt.timezone.utc).isoformat())
     monkeypatch.setenv("LIFEOS_HOME", str(home))
     assert main(["ask", "codex", "T-261116", "--dry-run"]) == 0
     assert "budget governor" in capsys.readouterr().err
